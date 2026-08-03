@@ -32,6 +32,61 @@ function mapCourseRow(course) {
     }
 }
 
+function mapCourseContentRow(course) {
+    return {
+        id: course.id,
+        title: course.title,
+        originalTitle: course.original_title,
+        instructor: course.instructor,
+        folderPath: course.folder_path,
+        sourceType: course.source_type,
+        courseUrl: course.course_url,
+        lastAccessed: course.last_accessed,
+        totalDuration: course.total_duration,
+        totalVideos: course.total_videos,
+        completedVideos: course.completed_videos,
+        completionPercentage: course.completion_percentage,
+        order: course.order,
+    }
+}
+
+function mapModuleContentRow(mod) {
+    return {
+        id: mod.id,
+        courseId: mod.course_id,
+        parentModuleId: mod.parent_module_id,
+        title: mod.title,
+        originalTitle: mod.original_title,
+        folderPath: mod.folder_path,
+        order: mod.order,
+        totalDuration: mod.total_duration,
+        totalVideos: mod.total_videos,
+        completedVideos: mod.completed_videos,
+    }
+}
+
+function mapVideoContentRow(video) {
+    return {
+        id: video.id,
+        courseId: video.course_id,
+        moduleId: video.module_id,
+        title: video.title,
+        originalTitle: video.original_title,
+        fileName: video.file_name,
+        filePath: video.file_path,
+        duration: video.duration,
+        order: video.order,
+        isCompleted: video.is_completed === 1,
+        watchProgress: video.watch_progress,
+        lastWatchedPosition: video.last_watched_position,
+        lastWatchedAt: video.last_watched_at,
+        youtubeId: video.youtube_id,
+        url: video.url,
+        hasTranscript: video.has_transcript === 1,
+        hasSummary: video.has_summary === 1,
+    }
+}
+
 // GET /api/courses
 router.get('/', (req, res) => {
     try {
@@ -47,6 +102,36 @@ router.get('/', (req, res) => {
 
         const courses = getAll(query, params)
         res.json(courses.map(mapCourseRow))
+    } catch (err) {
+        res.status(500).json({ error: err.message })
+    }
+})
+
+// GET /api/courses/:id/content
+// Single round-trip payload for opening a course player page.
+router.get('/:id/content', (req, res) => {
+    try {
+        const course = getOne('SELECT * FROM courses WHERE id = ?', [req.params.id])
+        if (!course) return res.status(404).json({ error: 'Course not found' })
+
+        const now = new Date().toISOString()
+        course.last_accessed = now
+        run('UPDATE courses SET last_accessed = ? WHERE id = ?', [now, req.params.id])
+
+        const modules = getAll(
+            'SELECT * FROM modules WHERE course_id = ? ORDER BY "order" ASC',
+            [req.params.id]
+        )
+        const videos = getAll(
+            'SELECT * FROM videos WHERE course_id = ? ORDER BY module_id ASC, "order" ASC',
+            [req.params.id]
+        )
+
+        res.json({
+            course: mapCourseContentRow(course),
+            modules: modules.map(mapModuleContentRow),
+            videos: videos.map(mapVideoContentRow),
+        })
     } catch (err) {
         res.status(500).json({ error: err.message })
     }
@@ -162,7 +247,8 @@ router.post('/recalculate-progress', (req, res) => {
 // POST /api/courses/refresh-library — prune renamed/deleted folders and import new folders
 router.post('/refresh-library', async (req, res) => {
     try {
-        const result = await bootstrapLibrary()
+        const generateThumbnails = req.query.thumbnails === '1' || req.body?.generateThumbnails === true
+        const result = await bootstrapLibrary({ generateThumbnails })
         res.json({ success: true, ...result })
     } catch (err) {
         res.status(500).json({ error: err.message })

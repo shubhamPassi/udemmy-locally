@@ -18,7 +18,7 @@ import { initDatabase, closeDatabase, getDb, getDataDir, getAll, getOne, run, tr
 import { streamVideo, streamTranscodedVideo, streamWebmVideo, streamMpegtsVideo, streamCompatibleVideo, setAllowedRoots, addAllowedRoot } from './services/videoStreamer.js'
 import { repairPaths } from './services/pathRepair.js'
 import { parseMp4Duration } from './utils/mp4Parser.js'
-import { bootstrapLibrary } from './services/libraryBootstrap.js'
+import { bootstrapLibrary, configureDefaultLibraryRoot } from './services/libraryBootstrap.js'
 import coursesRouter from './routes/courses.js'
 import modulesRouter from './routes/modules.js'
 import videosRouter from './routes/videos.js'
@@ -40,6 +40,7 @@ const __dirname = path.dirname(__filename)
 
 const app = express()
 const DEFAULT_PORT = 9474
+const STARTUP_MAINTENANCE_DELAY_MS = Number(process.env.TUTIN_STARTUP_MAINTENANCE_DELAY_MS || 5000)
 
 // ============================================
 // MIDDLEWARE
@@ -135,23 +136,16 @@ async function start() {
     // Initialize database (async because sql.js loads WASM)
     await initDatabase()
 
+    // Register the primary library path before accepting requests. Heavy library
+    // maintenance runs after listen so app launch is not gated by Google Drive I/O.
+    try {
+        configureDefaultLibraryRoot()
+    } catch (err) {
+        console.error('[LibraryBootstrap] Root configuration error:', err.message)
+    }
+
     // Load allowed roots from settings
     loadAllowedRoots()
-
-    // Configure and auto-import the primary local course library.
-    try {
-        await bootstrapLibrary()
-        loadAllowedRoots()
-    } catch (err) {
-        console.error('[LibraryBootstrap] Error:', err.message)
-    }
-
-    // Repair missing file paths (for courses missing filesystem paths)
-    try {
-        repairPaths()
-    } catch (err) {
-        console.error('[PathRepair] Error:', err.message)
-    }
 
     // Find available port and start
     const port = await findAvailablePort(DEFAULT_PORT)
@@ -167,10 +161,12 @@ async function start() {
         console.log('  ║                                          ║')
         console.log('  ╚══════════════════════════════════════════╝')
         console.log('')
+
+        scheduleStartupMaintenance()
     })
 
     // Background job: Scan videos periodically and fix missing/invalid durations silently
-    setInterval(async () => {
+    const durationRepairTimer = setInterval(async () => {
         try {
             const videos = getAll('SELECT id, file_path, duration, course_id FROM videos WHERE (duration < 1 OR duration > 36000) AND file_path IS NOT NULL')
             if (videos.length === 0) return
@@ -204,6 +200,26 @@ async function start() {
             console.error('[BackgroundJob] Error fixing durations:', err.message)
         }
     }, 60 * 60 * 1000) // Run every 1 hour
+    durationRepairTimer.unref?.()
+}
+
+function scheduleStartupMaintenance() {
+    const timer = setTimeout(async () => {
+        try {
+            await bootstrapLibrary({ generateThumbnails: false })
+            loadAllowedRoots()
+        } catch (err) {
+            console.error('[LibraryBootstrap] Background error:', err.message)
+        }
+
+        try {
+            repairPaths()
+        } catch (err) {
+            console.error('[PathRepair] Background error:', err.message)
+        }
+    }, STARTUP_MAINTENANCE_DELAY_MS)
+
+    timer.unref?.()
 }
 
 function loadAllowedRoots() {

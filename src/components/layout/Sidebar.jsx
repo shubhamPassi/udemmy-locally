@@ -12,6 +12,18 @@ import { useSidebar } from '../../contexts/SidebarContext'
 import { useState, useEffect } from 'react'
 import { getAllCourses, getInstructorAvatarAsync } from '../../utils/db'
 
+function scheduleAfterFirstPaint(callback) {
+    const run = () => {
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(callback, { timeout: 2500 })
+        } else {
+            window.setTimeout(callback, 1000)
+        }
+    }
+
+    return window.setTimeout(run, 250)
+}
+
 function Sidebar() {
     const { isExpanded, isMobileOpen, closeMobileSidebar, setIsExpanded } = useSidebar()
     const location = useLocation()
@@ -19,6 +31,16 @@ function Sidebar() {
 
     // Load unique instructors for the sidebar
     useEffect(() => {
+        if (!isExpanded) {
+            setInstructors([])
+            return
+        }
+
+        let isCancelled = false
+        const timer = scheduleAfterFirstPaint(() => {
+            loadInstructors()
+        })
+
         async function loadInstructors() {
             try {
                 const courses = await getAllCourses()
@@ -35,13 +57,19 @@ function Sidebar() {
                         }
                     })
                 )
-                setInstructors(instructorData)
+                if (!isCancelled) {
+                    setInstructors(instructorData)
+                }
             } catch (err) {
                 console.error('Failed to load instructors:', err)
             }
         }
-        loadInstructors()
-    }, [location.pathname]) // Reload when navigating
+
+        return () => {
+            isCancelled = true
+            window.clearTimeout(timer)
+        }
+    }, [isExpanded, location.pathname]) // Reload when navigating
 
     const navItems = [
         { path: '/', icon: Home, label: 'Home' },

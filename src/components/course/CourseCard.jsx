@@ -4,6 +4,18 @@ import { formatDuration, deleteCourse, getInstructorAvatarAsync, updateCourse } 
 import { useState, useEffect } from 'react'
 import { useNotification } from '../../contexts/NotificationContext'
 
+function scheduleAfterFirstPaint(callback) {
+    const run = () => {
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(callback, { timeout: 2500 })
+        } else {
+            window.setTimeout(callback, 800)
+        }
+    }
+
+    return window.setTimeout(run, 150)
+}
+
 function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
     const navigate = useNavigate()
     const [showMenu, setShowMenu] = useState(false)
@@ -15,6 +27,8 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
     // Load instructor avatar
     useEffect(() => {
         let isMounted = true
+        let timer = null
+
         async function loadAvatar() {
             if (course.instructor) {
                 const avatar = await getInstructorAvatarAsync(course.instructor)
@@ -23,8 +37,15 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
                 }
             }
         }
-        loadAvatar()
-        return () => { isMounted = false }
+
+        if (course.instructor) {
+            timer = scheduleAfterFirstPaint(loadAvatar)
+        }
+
+        return () => {
+            isMounted = false
+            if (timer) window.clearTimeout(timer)
+        }
     }, [course.instructor])
 
     function handleInstructorClick(e) {

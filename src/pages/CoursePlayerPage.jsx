@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ChevronLeft, Menu } from 'lucide-react'
-import { getCourse, getModulesByCourse, getVideosByModule, updateCourse, getInstructorAvatarAsync, buildModuleTree } from '../utils/db'
+import { getCourse, getCourseContent, getInstructorAvatarAsync, buildModuleTree } from '../utils/db'
 import { useSettings } from '../contexts/SettingsContext'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import VideoPlayer from '../components/player/VideoPlayer'
@@ -37,18 +37,30 @@ function getAllVideosFlat(mods) {
     return list
 }
 
-/**
- * Fetch all modules for a course with their videos attached, and build the tree.
- */
-async function fetchModulesWithVideos(courseId) {
-    const modulesData = await getModulesByCourse(courseId)
-    const modulesWithVideos = await Promise.all(
-        modulesData.map(async (module) => {
-            const videos = await getVideosByModule(module.id)
-            return { ...module, videos }
-        })
-    )
-    return { flat: modulesWithVideos, tree: buildModuleTree(modulesWithVideos) }
+function buildModulesWithVideos(modulesData, videosData) {
+    const videosByModule = new Map()
+
+    for (const video of videosData) {
+        if (!videosByModule.has(video.moduleId)) {
+            videosByModule.set(video.moduleId, [])
+        }
+        videosByModule.get(video.moduleId).push(video)
+    }
+
+    return modulesData.map(module => ({
+        ...module,
+        videos: videosByModule.get(module.id) || [],
+    }))
+}
+
+async function fetchCourseContent(courseId) {
+    const content = await getCourseContent(courseId)
+    const modulesWithVideos = buildModulesWithVideos(content.modules || [], content.videos || [])
+    return {
+        course: content.course,
+        flat: modulesWithVideos,
+        tree: buildModuleTree(modulesWithVideos),
+    }
 }
 
 function CoursePlayerPage() {
@@ -167,20 +179,15 @@ function CoursePlayerPage() {
     async function loadCourseData() {
         try {
             setIsLoading(true)
+            setError(null)
 
-            // Get course
-            const courseData = await getCourse(courseId)
+            const { course: courseData, flat: modulesWithVideos, tree: moduleTree } = await fetchCourseContent(courseId)
             if (!courseData) {
                 setError('Course not found')
                 return
             }
             setCourse(courseData)
 
-            // Update last accessed
-            await updateCourse(courseId, { lastAccessed: new Date().toISOString() })
-
-            // Get modules with videos
-            const { flat: modulesWithVideos, tree: moduleTree } = await fetchModulesWithVideos(courseId)
             setModules(moduleTree)
 
             // Only set first video if no video is currently selected
@@ -251,12 +258,9 @@ function CoursePlayerPage() {
     // Lightweight refresh - only updates modules/videos data without reloading video player
     async function refreshModulesOnly() {
         try {
-            // Get updated modules with videos
-            const { flat: modulesWithVideos, tree: moduleTree } = await fetchModulesWithVideos(courseId)
+            const { course: courseData, flat: modulesWithVideos, tree: moduleTree } = await fetchCourseContent(courseId)
             setModules(moduleTree)
 
-            // Update course data (for progress stats) without affecting loading state
-            const courseData = await getCourse(courseId)
             if (courseData) {
                 setCourse(courseData)
             }

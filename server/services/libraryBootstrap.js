@@ -48,10 +48,22 @@ function generateThumbnailData(videoPath) {
     }
 }
 
-function courseExists(folderPath) {
-    const normalized = normalizePathForCompare(folderPath)
+function getExistingCoursePathSet() {
     const courses = getAll('SELECT id, folder_path FROM courses WHERE folder_path IS NOT NULL')
-    return courses.some(course => normalizePathForCompare(course.folder_path) === normalized)
+    return new Set(courses.map(course => normalizePathForCompare(course.folder_path)))
+}
+
+export function configureDefaultLibraryRoot() {
+    const libraryPath = path.resolve(DEFAULT_LIBRARY_PATH)
+
+    run(
+        `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        ['root_folder_path', JSON.stringify(libraryPath), new Date().toISOString()]
+    )
+
+    addAllowedRoot(libraryPath)
+    return libraryPath
 }
 
 export function pruneMissingLibraryCourses(libraryPath = path.resolve(DEFAULT_LIBRARY_PATH)) {
@@ -194,16 +206,13 @@ function saveModulesRecursive(modules, courseId, parentModuleId) {
     }
 }
 
-export async function bootstrapLibrary() {
-    const libraryPath = path.resolve(DEFAULT_LIBRARY_PATH)
+export async function bootstrapLibrary(options = {}) {
+    const {
+        generateThumbnails = false,
+        pruneMissing = true,
+    } = options
 
-    run(
-        `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-        ['root_folder_path', JSON.stringify(libraryPath), new Date().toISOString()]
-    )
-
-    addAllowedRoot(libraryPath)
+    const libraryPath = configureDefaultLibraryRoot()
 
     if (!fs.existsSync(libraryPath)) {
         console.warn(`[LibraryBootstrap] Library path not found: ${libraryPath}`)
@@ -211,11 +220,15 @@ export async function bootstrapLibrary() {
         return { libraryPath, imported: 0, skipped: 0, failed: 0 }
     }
 
-    const pruneResult = pruneMissingLibraryCourses(libraryPath)
+    const pruneResult = pruneMissing
+        ? pruneMissingLibraryCourses(libraryPath)
+        : { removed: 0, removedCourses: [] }
 
     const entries = fs.readdirSync(libraryPath, { withFileTypes: true })
         .filter(entry => entry.isDirectory())
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+
+    const existingCoursePaths = getExistingCoursePathSet()
 
     let imported = 0
     let skipped = 0
@@ -223,9 +236,10 @@ export async function bootstrapLibrary() {
 
     for (const entry of entries) {
         const folderPath = path.join(libraryPath, entry.name)
+        const normalizedFolderPath = normalizePathForCompare(folderPath)
         addAllowedRoot(folderPath)
 
-        if (courseExists(folderPath)) {
+        if (existingCoursePaths.has(normalizedFolderPath)) {
             skipped++
             continue
         }
@@ -238,6 +252,7 @@ export async function bootstrapLibrary() {
             }
 
             saveCourseStructure(courseStructure)
+            existingCoursePaths.add(normalizedFolderPath)
             imported++
             console.log(`[LibraryBootstrap] Imported: ${courseStructure.title}`)
         } catch (err) {
@@ -246,7 +261,9 @@ export async function bootstrapLibrary() {
         }
     }
 
-    ensureCourseThumbnails(libraryPath)
+    if (generateThumbnails) {
+        ensureCourseThumbnails(libraryPath)
+    }
 
     const existingRoot = getOne('SELECT value FROM settings WHERE key = ?', ['root_folder_path'])
     if (!existingRoot?.value) {

@@ -43,6 +43,18 @@ const defaultSettings = {
 
 const SettingsContext = createContext(null)
 
+function scheduleAfterFirstPaint(callback) {
+    const run = () => {
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(callback, { timeout: 2500 })
+        } else {
+            window.setTimeout(callback, 1000)
+        }
+    }
+
+    return window.setTimeout(run, 250)
+}
+
 export function SettingsProvider({ children }) {
     const [settings, setSettings] = useState(() => {
         try {
@@ -136,17 +148,21 @@ export function SettingsProvider({ children }) {
 
     // Initial load from server
     useEffect(() => {
-        import('../utils/api.js').then(api => {
-            api.get('/api/settings').then(serverSettings => {
-                if (serverSettings && Object.keys(serverSettings).length > 0) {
-                    setSettings(prev => ({ ...prev, ...serverSettings }))
-                }
-            }).catch(err => {
-                console.warn('Initial settings load from server failed:', err.message)
-            }).finally(() => {
-                isInitializedRef.current = true
+        const timer = scheduleAfterFirstPaint(() => {
+            import('../utils/api.js').then(api => {
+                api.get('/api/settings').then(serverSettings => {
+                    if (serverSettings && Object.keys(serverSettings).length > 0) {
+                        setSettings(prev => ({ ...prev, ...serverSettings }))
+                    }
+                }).catch(err => {
+                    console.warn('Initial settings load from server failed:', err.message)
+                }).finally(() => {
+                    isInitializedRef.current = true
+                })
             })
         })
+
+        return () => window.clearTimeout(timer)
     }, [])
 
     // Track dark mode state to re-apply accent colors when theme changes

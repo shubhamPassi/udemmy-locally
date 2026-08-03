@@ -982,6 +982,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         
         // Skip for external links for now
         if (video.youtubeId || video.url?.startsWith('http')) return
+        if (!showCCMenu && !captionsEnabled) return
 
         fetch(`${SERVER_URL}/api/transcripts/${video.id}/languages`)
             .then(res => res.json())
@@ -996,7 +997,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             .catch(err => console.error('Failed to fetch dub languages:', err))
         */
             
-    }, [video?.id, showCCMenu, showAudioMenu]) // Re-fetch when menus open
+    }, [video?.id, showCCMenu, captionsEnabled]) // Re-fetch when captions become relevant
 
     // Sync selected language with settings
     useEffect(() => {

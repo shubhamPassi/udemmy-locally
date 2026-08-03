@@ -3,15 +3,15 @@ import { Sun, Moon, Settings, Menu, Search, X, FolderOpen, Youtube, HardDrive, C
 import { useTheme } from '../../contexts/ThemeContext'
 import { useSidebar } from '../../contexts/SidebarContext'
 import { useSearch } from '../../contexts/SearchContext'
-import { useState } from 'react'
-import SettingsModal from '../settings/SettingsModal'
-import YouTubeImportModal from '../course/YouTubeImportModal'
-import GoogleDriveImportModal from '../course/GoogleDriveImportModal'
-import ExternalLinkImportModal from '../course/ExternalLinkImportModal'
-import { scanCourseFolder, pickFolder } from '../../utils/fileSystem'
+import { lazy, Suspense, useState } from 'react'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useNotification } from '../../contexts/NotificationContext'
 import { useImport } from '../../contexts/ImportContext'
+
+const SettingsModal = lazy(() => import('../settings/SettingsModal'))
+const YouTubeImportModal = lazy(() => import('../course/YouTubeImportModal'))
+const GoogleDriveImportModal = lazy(() => import('../course/GoogleDriveImportModal'))
+const ExternalLinkImportModal = lazy(() => import('../course/ExternalLinkImportModal'))
 
 function Header() {
     const { settings } = useSettings()
@@ -32,6 +32,7 @@ function Header() {
 
     async function handleImportClick() {
         try {
+            const { scanCourseFolder, pickFolder } = await import('../../utils/fileSystem')
             const handle = await pickFolder()
             if (handle) {
                 const courseData = await scanCourseFolder(handle, settings.autoDetectThumbnails)
@@ -197,41 +198,47 @@ function Header() {
                 </div>
             </header>
 
-            {/* Settings Modal */}
-            <SettingsModal
-                isOpen={showSettings}
-                onClose={() => setShowSettings(false)}
-            />
+            <Suspense fallback={null}>
+                {showSettings && (
+                    <SettingsModal
+                        isOpen={showSettings}
+                        onClose={() => setShowSettings(false)}
+                    />
+                )}
 
-            {/* YouTube Import Modal */}
-            <YouTubeImportModal
-                isOpen={showYouTubeModal}
-                onClose={() => setShowYouTubeModal(false)}
-                onImport={(data) => {
-                    setShowYouTubeModal(false)
-                    dispatchYouTube(data)
-                }}
-            />
+                {showYouTubeModal && (
+                    <YouTubeImportModal
+                        isOpen={showYouTubeModal}
+                        onClose={() => setShowYouTubeModal(false)}
+                        onImport={(data) => {
+                            setShowYouTubeModal(false)
+                            dispatchYouTube(data)
+                        }}
+                    />
+                )}
 
-            {/* Google Drive Import Modal */}
-            <GoogleDriveImportModal
-                isOpen={showGoogleDriveModal}
-                onClose={() => setShowGoogleDriveModal(false)}
-                onImport={(data) => {
-                    setShowGoogleDriveModal(false)
-                    dispatchGoogleDrive(data)
-                }}
-            />
+                {showGoogleDriveModal && (
+                    <GoogleDriveImportModal
+                        isOpen={showGoogleDriveModal}
+                        onClose={() => setShowGoogleDriveModal(false)}
+                        onImport={(data) => {
+                            setShowGoogleDriveModal(false)
+                            dispatchGoogleDrive(data)
+                        }}
+                    />
+                )}
 
-            {/* External Link Import Modal */}
-            <ExternalLinkImportModal
-                isOpen={showExternalLinkModal}
-                onClose={() => setShowExternalLinkModal(false)}
-                onImport={(data) => {
-                    setShowExternalLinkModal(false)
-                    dispatchExternalLink(data)
-                }}
-            />
+                {showExternalLinkModal && (
+                    <ExternalLinkImportModal
+                        isOpen={showExternalLinkModal}
+                        onClose={() => setShowExternalLinkModal(false)}
+                        onImport={(data) => {
+                            setShowExternalLinkModal(false)
+                            dispatchExternalLink(data)
+                        }}
+                    />
+                )}
+            </Suspense>
         </>
     )
 }

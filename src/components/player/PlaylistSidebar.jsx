@@ -1,14 +1,15 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { lazy, Suspense, useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import {
     ChevronDown, ChevronRight, ChevronLeft, Check,
     Pencil, GripVertical, Folder, FolderOpen
 } from 'lucide-react'
 import { formatDuration, markVideoComplete, updateModule, updateVideo } from '../../utils/db'
-import EditModuleModal from './EditModuleModal'
-import NotesPanel from './NotesPanel'
-import BulkEditPlaylist from './BulkEditPlaylist'
-import AISummaryPanel from './AISummaryPanel'
 import { useNotification } from '../../contexts/NotificationContext'
+
+const EditModuleModal = lazy(() => import('./EditModuleModal'))
+const NotesPanel = lazy(() => import('./NotesPanel'))
+const BulkEditPlaylist = lazy(() => import('./BulkEditPlaylist'))
+const AISummaryPanel = lazy(() => import('./AISummaryPanel'))
 
 /**
  * Collect all videos from a module tree recursively
@@ -405,11 +406,13 @@ function PlaylistSidebar({
                     {/* Playlist Tab */}
                     <div className={`flex-1 overflow-hidden flex-col ${activeTab === 'playlist' ? 'flex' : 'hidden'}`}>
                         {isBulkEditing ? (
-                            <BulkEditPlaylist
-                                modules={modules}
-                                onSave={handleBulkSave}
-                                onCancel={() => setIsBulkEditing(false)}
-                            />
+                            <Suspense fallback={null}>
+                                <BulkEditPlaylist
+                                    modules={modules}
+                                    onSave={handleBulkSave}
+                                    onCancel={() => setIsBulkEditing(false)}
+                                />
+                            </Suspense>
                         ) : (
                             <div className="flex-1 overflow-y-auto">
                                 {modules.map(module => renderModule(module, 0))}
@@ -420,27 +423,35 @@ function PlaylistSidebar({
                     {/* Notes Tab */}
                     <div className={`flex-1 overflow-hidden flex-col ${activeTab === 'notes' ? 'flex' : 'hidden'}`}>
                         <div className="h-full overflow-y-auto">
-                            <NotesPanel
-                                video={currentVideo}
-                                courseId={courseId}
-                                currentTime={currentTime}
-                                onSeek={onSeek}
-                                isCollapsed={false}
-                                hideHeader={true}
-                            />
+                            {activeTab === 'notes' && (
+                                <Suspense fallback={null}>
+                                    <NotesPanel
+                                        video={currentVideo}
+                                        courseId={courseId}
+                                        currentTime={currentTime}
+                                        onSeek={onSeek}
+                                        isCollapsed={false}
+                                        hideHeader={true}
+                                    />
+                                </Suspense>
+                            )}
                         </div>
                     </div>
 
                     {/* AI Tab */}
                     <div className={`flex-1 overflow-hidden flex-col ${activeTab === 'ai' ? 'flex' : 'hidden'}`}>
                         <div className="h-full overflow-y-auto">
-                            <AISummaryPanel
-                                video={currentVideo}
-                                courseId={courseId}
-                                onSeek={onSeek}
-                                onVideoDataChange={onVideoDataChange}
-                                currentTime={currentTime}
-                            />
+                            {activeTab === 'ai' && (
+                                <Suspense fallback={null}>
+                                    <AISummaryPanel
+                                        video={currentVideo}
+                                        courseId={courseId}
+                                        onSeek={onSeek}
+                                        onVideoDataChange={onVideoDataChange}
+                                        currentTime={currentTime}
+                                    />
+                                </Suspense>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -478,14 +489,18 @@ function PlaylistSidebar({
             {sidebarContent}
 
             {/* Edit Module Modal */}
-            <EditModuleModal
-                module={editingModule}
-                isOpen={!!editingModule}
-                onClose={() => setEditingModule(null)}
-                onSave={() => {
-                    onRefresh?.()
-                }}
-            />
+            <Suspense fallback={null}>
+                {editingModule && (
+                    <EditModuleModal
+                        module={editingModule}
+                        isOpen={!!editingModule}
+                        onClose={() => setEditingModule(null)}
+                        onSave={() => {
+                            onRefresh?.()
+                        }}
+                    />
+                )}
+            </Suspense>
         </>
     )
 }

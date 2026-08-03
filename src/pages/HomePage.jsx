@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
 import { Grid, List, SortAsc, ChevronDown, FolderOpen, Search } from 'lucide-react'
 import { getAllCourses, addCourse, addModule, addVideo, setInstructorAvatar, recalculateAllCoursesProgress } from '../utils/db'
 import { useSettings } from '../contexts/SettingsContext'
@@ -7,14 +7,24 @@ import { useNotification } from '../contexts/NotificationContext'
 import { useImport } from '../contexts/ImportContext'
 import CourseCard from '../components/course/CourseCard'
 import LoadingSpinner from '../components/common/LoadingSpinner'
-import ImportPreviewModal from '../components/course/ImportPreviewModal'
-import EditCourseModal from '../components/course/EditCourseModal'
-import SyncPreviewModal from '../components/course/SyncPreviewModal'
 import { getDriveVideoUrl } from '../utils/googleDrive'
-import { 
-    syncCoursePreview, applySyncChanges, pickFolder, scanCourseFolder 
-} from '../utils/fileSystem'
 import * as api from '../utils/api'
+
+const ImportPreviewModal = lazy(() => import('../components/course/ImportPreviewModal'))
+const EditCourseModal = lazy(() => import('../components/course/EditCourseModal'))
+const SyncPreviewModal = lazy(() => import('../components/course/SyncPreviewModal'))
+
+function scheduleAfterFirstPaint(callback) {
+    const run = () => {
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(callback, { timeout: 3000 })
+        } else {
+            window.setTimeout(callback, 1200)
+        }
+    }
+
+    return window.setTimeout(run, 500)
+}
 
 function HomePage() {
     const [courses, setCourses] = useState([])
@@ -41,6 +51,14 @@ function HomePage() {
     // Load courses on mount
     useEffect(() => {
         loadCourses()
+    }, [])
+
+    useEffect(() => {
+        const timer = scheduleAfterFirstPaint(() => {
+            import('./CoursePlayerPage').catch(() => {})
+        })
+
+        return () => window.clearTimeout(timer)
     }, [])
 
     // Debounce search
@@ -200,6 +218,7 @@ function HomePage() {
     // Course sync handlers
     async function handleSyncCourse(course) {
         try {
+            const { pickFolder, scanCourseFolder, syncCoursePreview } = await import('../utils/fileSystem')
             const folderPath = course.folderPath || course.folder_path
             let scannedData = null
 
@@ -241,6 +260,7 @@ function HomePage() {
 
         try {
             setIsApplyingSync(true)
+            const { applySyncChanges } = await import('../utils/fileSystem')
             const result = await applySyncChanges(syncPreview.course.id, syncPreview)
             console.log('Sync applied:', result)
             
@@ -591,30 +611,35 @@ function HomePage() {
                 </div>
             )}
 
-            {/* Import Preview Modal */}
-            <ImportPreviewModal
-                courseStructure={importData}
-                onConfirm={handleImportConfirm}
-                onCancel={() => setImportData(null)}
-                existingCourseNames={courses.map(c => c.title)}
-            />
+            <Suspense fallback={null}>
+                {importData && (
+                    <ImportPreviewModal
+                        courseStructure={importData}
+                        onConfirm={handleImportConfirm}
+                        onCancel={() => setImportData(null)}
+                        existingCourseNames={courses.map(c => c.title)}
+                    />
+                )}
 
-            {/* Edit Course Modal */}
-            <EditCourseModal
-                course={editingCourse}
-                isOpen={!!editingCourse}
-                onClose={() => setEditingCourse(null)}
-                onSave={loadCourses}
-            />
+                {editingCourse && (
+                    <EditCourseModal
+                        course={editingCourse}
+                        isOpen={!!editingCourse}
+                        onClose={() => setEditingCourse(null)}
+                        onSave={loadCourses}
+                    />
+                )}
 
-            {/* Sync Preview Modal */}
-            <SyncPreviewModal
-                preview={syncPreview}
-                isOpen={!!syncPreview}
-                onConfirm={handleConfirmSync}
-                onCancel={() => setSyncPreview(null)}
-                isApplying={isApplyingSync}
-            />
+                {syncPreview && (
+                    <SyncPreviewModal
+                        preview={syncPreview}
+                        isOpen={!!syncPreview}
+                        onConfirm={handleConfirmSync}
+                        onCancel={() => setSyncPreview(null)}
+                        isApplying={isApplyingSync}
+                    />
+                )}
+            </Suspense>
         </div>
     )
 }

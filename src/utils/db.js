@@ -23,6 +23,10 @@ export async function getCourse(courseId) {
     return api.get(`/api/courses/${courseId}`)
 }
 
+export async function getCourseContent(courseId) {
+    return api.get(`/api/courses/${courseId}/content`)
+}
+
 export async function getAllCourses() {
     return api.get(`/api/courses`)
 }
