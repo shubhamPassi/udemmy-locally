@@ -54,6 +54,35 @@ function courseExists(folderPath) {
     return courses.some(course => normalizePathForCompare(course.folder_path) === normalized)
 }
 
+export function pruneMissingLibraryCourses(libraryPath = path.resolve(DEFAULT_LIBRARY_PATH)) {
+    const courses = getAll(
+        `SELECT id, title, folder_path FROM courses
+         WHERE source_type = 'local' AND folder_path IS NOT NULL`
+    )
+    let removed = 0
+    const removedCourses = []
+
+    transaction(() => {
+        for (const course of courses) {
+            const relative = path.relative(libraryPath, course.folder_path)
+            const isInsideLibrary = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+
+            if (!isInsideLibrary || fs.existsSync(course.folder_path)) continue
+
+            run('DELETE FROM courses WHERE id = ?', [course.id])
+            removed++
+            removedCourses.push({
+                id: course.id,
+                title: course.title,
+                folderPath: course.folder_path,
+            })
+            console.log(`[LibraryBootstrap] Removed missing course: ${course.title} (${course.folder_path})`)
+        }
+    })
+
+    return { removed, removedCourses }
+}
+
 function saveCourseStructure(courseStructure) {
     const now = new Date().toISOString()
     const courseId = generateId('course_')
@@ -182,6 +211,8 @@ export async function bootstrapLibrary() {
         return { libraryPath, imported: 0, skipped: 0, failed: 0 }
     }
 
+    const pruneResult = pruneMissingLibraryCourses(libraryPath)
+
     const entries = fs.readdirSync(libraryPath, { withFileTypes: true })
         .filter(entry => entry.isDirectory())
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
@@ -223,8 +254,8 @@ export async function bootstrapLibrary() {
     }
 
     saveDatabaseSync()
-    console.log(`[LibraryBootstrap] Library: ${libraryPath}; imported=${imported}; skipped=${skipped}; failed=${failed}`)
-    return { libraryPath, imported, skipped, failed }
+    console.log(`[LibraryBootstrap] Library: ${libraryPath}; imported=${imported}; skipped=${skipped}; failed=${failed}; removed=${pruneResult.removed}`)
+    return { libraryPath, imported, skipped, failed, ...pruneResult }
 }
 
 function ensureCourseThumbnails(libraryPath) {

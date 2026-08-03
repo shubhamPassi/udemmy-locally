@@ -15,7 +15,7 @@ import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { initDatabase, closeDatabase, getDb, getDataDir, getAll, getOne, run, transaction, saveDatabase } from './database.js'
-import { streamVideo, streamTranscodedVideo, setAllowedRoots, addAllowedRoot } from './services/videoStreamer.js'
+import { streamVideo, streamTranscodedVideo, streamWebmVideo, streamMpegtsVideo, streamCompatibleVideo, setAllowedRoots, addAllowedRoot } from './services/videoStreamer.js'
 import { repairPaths } from './services/pathRepair.js'
 import { parseMp4Duration } from './utils/mp4Parser.js'
 import { bootstrapLibrary } from './services/libraryBootstrap.js'
@@ -82,6 +82,9 @@ app.get('/api/health', (req, res) => {
 
 app.get('/video/*filePath', streamVideo)
 app.get('/video-transcoded/*filePath', streamTranscodedVideo)
+app.get('/video-webm/*filePath', streamWebmVideo)
+app.get('/video-mpegts/*filePath', streamMpegtsVideo)
+app.get('/video-compatible/*filePath', streamCompatibleVideo)
 
 // ============================================
 // MOUNT ROUTES

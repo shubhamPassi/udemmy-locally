@@ -72,12 +72,52 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     const progressIntervalRef = useRef(null)
     const controlsTimeoutRef = useRef(null)
     const mpegtsPlayerRef = useRef(null)
+    const fallbackAttemptRef = useRef(0)
 
     const isTs = useMemo(() => {
         if (!videoUrl) return false
         const path = video?.filePath || videoUrl
-        return path.toLowerCase().endsWith('.ts') || path.toLowerCase().includes('.ts?')
+        return path.toLowerCase().endsWith('.ts') ||
+            path.toLowerCase().includes('.ts?') ||
+            videoUrl.includes('/video-mpegts/')
     }, [videoUrl, video])
+
+    const getFallbackUrl = useCallback((attempt) => {
+        if (!video?.filePath) return null
+
+        const fallbackPath = attempt === 1
+            ? 'video-mpegts'
+            : attempt === 2
+                ? 'video-webm'
+                : attempt === 3
+                    ? 'video-transcoded'
+                    : 'video-compatible'
+
+        return {
+            fallbackPath,
+            fallbackUrl: `${SERVER_URL}/${fallbackPath}/${encodeURIComponent(video.filePath)}`,
+        }
+    }, [video?.filePath])
+
+    const tryNextPlaybackFallback = useCallback((reason, mediaEl = null) => {
+        if (!video?.filePath || fallbackAttemptRef.current >= 4) return false
+
+        fallbackAttemptRef.current += 1
+        const next = getFallbackUrl(fallbackAttemptRef.current)
+        if (!next) return false
+
+        console.warn(`Video playback failed; retrying via FFmpeg ${next.fallbackPath} fallback:`, reason)
+        setError(null)
+        setIsLoading(true)
+        setVideoUrl(next.fallbackUrl)
+
+        if (mediaEl) {
+            mediaEl.src = next.fallbackUrl
+            mediaEl.load()
+        }
+
+        return true
+    }, [getFallbackUrl, video?.filePath])
 
     // Handle mpegts.js for .ts files
     useEffect(() => {
@@ -122,6 +162,9 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                     const isFatal = info?.fatal === true
                     if (isFatal) {
                         console.error('mpegts fatal error:', type, detail, info)
+                        if (videoUrl.includes('/video-mpegts/') && tryNextPlaybackFallback(`MPEG-TS error: ${type} (${detail})`)) {
+                            return
+                        }
                         setError(`Playback error: ${type} (${detail})`)
                         setIsLoading(false)
                     } else {
@@ -134,7 +177,10 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                     player.play().catch(err => console.log('mpegts play error:', err))
                 }
             } else {
-                setError('mpegts.js is not supported in this browser.')
+                if (!tryNextPlaybackFallback('mpegts.js is not supported in this browser.')) {
+                    setError('mpegts.js is not supported in this browser.')
+                    setIsLoading(false)
+                }
             }
         }
 
@@ -150,7 +196,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                 mpegtsPlayerRef.current = null
             }
         }
-    }, [videoUrl, isTs])
+    }, [videoUrl, isTs, tryNextPlaybackFallback])
 
     /* [DUB FEATURE HIDDEN] — dub audio loading effect disabled
     // Load dub audio when selectedDubLang changes
@@ -197,6 +243,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         }
         setIsPlaying(false)
         setIsLoading(true)
+        fallbackAttemptRef.current = 0
 
         // Store autoplay intent — actual play() deferred to handleLoadedMetadata
         pendingAutoPlayRef.current = !!(video?.id && autoPlay)
@@ -266,6 +313,15 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             // Server mode: use filePath for streaming
             if (video.filePath) {
                 const url = await getVideoUrl(video.filePath)
+                fallbackAttemptRef.current = url.includes('/video-compatible/')
+                    ? 4
+                    : url.includes('/video-transcoded/')
+                        ? 3
+                        : url.includes('/video-webm/')
+                            ? 2
+                            : url.includes('/video-mpegts/')
+                                ? 1
+                                : 0
                 setVideoUrl(url)
             } else {
                 // No file path available — video needs path repair
@@ -1146,8 +1202,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
 
                         const videoError = e.target.error
                         let errorMessage = 'Failed to load video.'
-                        const canUseTranscodedFallback = video?.filePath && !videoUrl?.includes('/video-transcoded/')
-
                         if (videoError) {
                             switch (videoError.code) {
                                 case 1: // MEDIA_ERR_ABORTED
@@ -1167,16 +1221,11 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                             }
                         }
 
-                        if (canUseTranscodedFallback) {
-                            console.warn('Native video playback failed; retrying via FFmpeg fallback:', errorMessage)
-                            setError(null)
-                            setIsLoading(true)
-                            setVideoUrl(`${SERVER_URL}/video-transcoded/${encodeURIComponent(video.filePath)}`)
-                            e.currentTarget.load()
+                        if (tryNextPlaybackFallback(errorMessage, e.currentTarget)) {
                             return
                         }
 
-                        setError(errorMessage)
+                        setError(`${errorMessage} TutIn tried MPEG-TS, WebM, and MP4 fallbacks; this file may need a cached compatible copy to finish generating.`)
                         setIsLoading(false)
                     }}
                 >

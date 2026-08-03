@@ -10,6 +10,8 @@ export default [
             'dist/**',
             'node_modules/**',
             'server/node_modules/**',
+            '.venv/**',
+            '.venv*/**',
             'coverage/**',
             '*.log',
         ],

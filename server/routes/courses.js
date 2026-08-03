@@ -1,5 +1,6 @@
 import express from 'express'
 import { getAll, getOne, run, transaction } from '../database.js'
+import { bootstrapLibrary } from '../services/libraryBootstrap.js'
 
 const router = express.Router()
 
@@ -153,6 +154,16 @@ router.post('/recalculate-progress', (req, res) => {
         })
 
         res.json({ success: true, coursesUpdated: courses.length })
+    } catch (err) {
+        res.status(500).json({ error: err.message })
+    }
+})
+
+// POST /api/courses/refresh-library — prune renamed/deleted folders and import new folders
+router.post('/refresh-library', async (req, res) => {
+    try {
+        const result = await bootstrapLibrary()
+        res.json({ success: true, ...result })
     } catch (err) {
         res.status(500).json({ error: err.message })
     }
