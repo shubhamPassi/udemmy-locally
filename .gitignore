@@ -63,11 +63,19 @@ mynotes.md
 # Script artifacts
 scripts/output/
 
+# Desktop build artifacts
+build/
+release/
+release-exe/
+release-portable/
+TutIn-Desktop/
+
 # ML Models cache
 models/
 
 # One-off scripts
-scripts/
+scripts/*
+!scripts/generate-icons.mjs
 scratch/
 fixOrder.mjs
 

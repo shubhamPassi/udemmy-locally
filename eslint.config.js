@@ -18,7 +18,22 @@ export default [
     },
     js.configs.recommended,
     {
-        files: ['src/**/*.{js,jsx}', 'server/**/*.js', 'python/**/*.js', '*.js'],
+        files: ['electron/**/*.cjs'],
+        languageOptions: {
+            ecmaVersion: 'latest',
+            sourceType: 'commonjs',
+            globals: {
+                ...globals.node,
+                ...globals.es2024,
+            },
+        },
+        rules: {
+            'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+            'no-empty': 'off',
+        },
+    },
+    {
+        files: ['src/**/*.{js,jsx}', 'server/**/*.js', 'python/**/*.js', 'scripts/**/*.mjs', '*.js'],
         languageOptions: {
             ecmaVersion: 'latest',
             sourceType: 'module',
