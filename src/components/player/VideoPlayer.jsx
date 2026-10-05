@@ -397,6 +397,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     function handleTimeUpdate() {
         if (videoRef.current) {
             const element = videoRef.current
+            if (element.readyState < 1 || element.seeking) return
             localBookmarkRef.current = { id: video.id, time: element.currentTime, duration: element.duration }
             writePlaybackBookmark(video.id, element.currentTime, element.duration)
             setCurrentTime(videoRef.current.currentTime)
@@ -530,6 +531,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
 
     async function saveProgress() {
         if (!videoRef.current || !video) return
+        if (videoRef.current.readyState < 1 || videoRef.current.seeking) return
 
         try {
             const isEmbedded = video?.youtubeId || video?.driveFileId || 

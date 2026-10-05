@@ -107,7 +107,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
         {isYouTube ? <div ref={host} className="w-full h-full" /> : fallback ? <>
             <iframe className="w-full h-full" src={`https://drive.google.com/file/d/${driveId}/preview`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={video.title} />
             <p className="absolute bottom-0 inset-x-0 p-2 text-xs bg-black/90 text-white">Drive preview does not expose playback time. Enable downloads for this file or import its local copy to use automatic resume.</p>
-        </> : <video ref={native} className="w-full h-full" controls playsInline autoPlay={autoPlay}
+        </> : <video ref={native} className="w-full h-full" controls playsInline crossOrigin="anonymous" autoPlay={autoPlay}
             src={`https://drive.usercontent.google.com/download?id=${encodeURIComponent(driveId)}&export=download&confirm=t`}
             onLoadedMetadata={event => {
                 const element = event.currentTarget
