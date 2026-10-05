@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { updateVideoProgress, updateVideo, markVideoComplete, formatDuration } from '../../utils/db'
+import { updateVideoProgress, updateVideo, markVideoComplete } from '../../utils/db'
 import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks'
 import { IS_BROWSER_MODE } from '../../utils/api'
 
@@ -25,7 +25,6 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
     const nativeReady = useRef(false)
     const lastCachedSecond = useRef(null)
     const [fallback, setFallback] = useState(false), [error, setError] = useState('')
-    const [savedTime, setSavedTime] = useState(position.current)
     const callbacks = useRef({ onTimeUpdate, onComplete, onNext, onAspectRatioChange })
     callbacks.current = { onTimeUpdate, onComplete, onNext, onAspectRatioChange }
     const isYouTube = !!(video.youtubeId || /youtu(?:be\.com|\.be)/.test(video.url || ''))
@@ -38,7 +37,6 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
         if (force || lastCachedSecond.current !== second) {
             lastCachedSecond.current = second
             writePlaybackBookmark(video.id, position.current, duration.current)
-            setSavedTime(position.current)
         }
         if (force || Date.now() - lastPersist.current > 10000) {
             lastPersist.current = Date.now()
@@ -110,7 +108,6 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
         return () => { cancelled = true; clearInterval(timer); remember(true); player.current?.destroy?.(); player.current = null }
     }, [video.id])
     return <div className="w-full h-full relative bg-black">
-        <div className="relative w-full h-full" style={{ height: !fallback && savedTime > 0 ? 'calc(100% - 24px)' : '100%' }}>
         {isYouTube ? <div ref={host} className="w-full h-full" /> : fallback ? <>
             <iframe className="w-full h-full" src={`https://drive.google.com/file/d/${driveId}/preview`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={video.title} />
             <p className="absolute bottom-0 inset-x-0 p-2 text-xs bg-black/90 text-white">Drive preview does not expose playback time. Enable downloads for this file or import its local copy to use automatic resume.</p>
@@ -130,8 +127,6 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
             onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext) callbacks.current.onNext?.() }}
             onError={event => { console.warn('Drive direct playback failed:', event.currentTarget.error?.code, event.currentTarget.error?.message); setFallback(true) }} />}
         {error && <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p>}
-        </div>
-        {!fallback && savedTime > 0 && <div className="h-6 px-2 flex items-center text-xs text-neutral-400 bg-black" aria-live="off">Saved at {formatDuration(savedTime)}</div>}
     </div>
 })
 export default ResumableEmbedPlayer
