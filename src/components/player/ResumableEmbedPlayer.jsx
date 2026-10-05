@@ -121,7 +121,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
             onPause={event => sampleNative(event, true)}
             onSeeked={event => sampleNative(event, true)}
             onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext) callbacks.current.onNext?.() }}
-            onError={() => setFallback(true)} />}
+            onError={event => { console.warn('Drive direct playback failed:', event.currentTarget.error?.code, event.currentTarget.error?.message); setFallback(true) }} />}
         {error && <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p>}
         {!fallback && savedTime > 0 && <span className="absolute top-2 left-2 pointer-events-none text-xs text-white bg-black/70 rounded px-2 py-1">Saved at {formatDuration(savedTime)}</span>}
     </div>
