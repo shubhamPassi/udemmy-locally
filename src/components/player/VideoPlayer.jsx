@@ -676,6 +676,8 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
 
     // Keyboard shortcuts
     useEffect(() => {
+        // Embedded players and the native Drive player provide their own controls.
+        if (video?.youtubeId || video?.driveFileId || /youtu(?:be\.com|\.be)|drive\.google\.com/.test(video?.url || '')) return
         function handleKeyDown(e) {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return
             if (!settings.keyboardShortcuts) return
@@ -788,7 +790,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
 
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [currentTime, duration, settings.keyboardShortcuts])
+    }, [currentTime, duration, settings.keyboardShortcuts, video?.id])
 
     // Auto-hide controls
     const hasOpenMenu = showSettingsMenu || showCCMenu || showSpeedMenu || showAudioMenu
