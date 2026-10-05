@@ -376,10 +376,10 @@ function CoursePlayerPage() {
     return (
         <div className="-mx-4 -my-6 relative overflow-hidden">
             {/* Main Content */}
-            <div className={`relative z-10 flex h-[calc(100vh-64px)]`}>
+            <div className="course-layout relative z-10 flex h-[calc(100vh-64px)]">
                 {/* Video Player Area — padding-right tracks sidebar width exactly */}
                 <div
-                    className="flex-1 flex flex-col overflow-y-auto min-w-0"
+                    className="course-video-area flex-1 flex flex-col overflow-y-auto min-w-0"
                     style={{
                         paddingRight: sidebarCollapsed ? 0 : sidebarWidth,
                         transition: 'padding-right 0.3s ease'
@@ -390,7 +390,7 @@ function CoursePlayerPage() {
                             {/* Player wrapper */}
                             <div
                                 ref={setPlayerWrapperEl}
-                                className="bg-transparent relative sticky top-0 z-20 mx-4 mt-4 rounded-xl overflow-hidden"
+                                className="course-video-frame bg-transparent relative sticky top-0 z-20 mx-4 mt-4 rounded-xl overflow-hidden"
                                 style={{ height: playerHeight }}
                             >
                                 <div className="relative z-10 w-full h-full">

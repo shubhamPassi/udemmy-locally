@@ -334,7 +334,8 @@ function PlaylistSidebar({
         <>
             <div
                 className={`
-                    fixed right-0 top-[64px] bottom-0 
+                    course-playlist-panel
+                    fixed right-0 top-[64px] bottom-0
                     bg-white dark:bg-dark-surface 
                     border-l border-light-border dark:border-dark-border
                     flex flex-col
@@ -347,7 +348,7 @@ function PlaylistSidebar({
                 {/* Resize Handle */}
                 <div
                     onMouseDown={handleResizeStart}
-                    className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-10 group"
+                    className="course-playlist-resize absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-10 group"
                     title="Drag to resize"
                 >
                     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-light-border dark:bg-dark-border rounded group-hover:bg-primary/50 transition-colors" />
@@ -480,6 +481,7 @@ function PlaylistSidebar({
             <button
                 onClick={onToggle}
                 className="
+                    course-playlist-toggle
                     fixed top-1/2 -translate-y-1/2
                     w-6 h-12 
                     bg-light-surface dark:bg-dark-surface 

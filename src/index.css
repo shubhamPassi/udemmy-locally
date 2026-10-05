@@ -525,3 +525,49 @@ a:focus:not(:focus-visible) {
   -moz-appearance: textfield;
   /* Firefox */
 }
+
+  /* Phones and tablets use an inline playlist below the video and its title. */
+  @media (max-width: 1023px) {
+    .course-layout {
+      flex-direction: column;
+      height: auto;
+      min-height: calc(100svh - 64px);
+    }
+
+    .course-video-area {
+      flex: none;
+      width: 100%;
+      overflow: visible;
+      padding-right: 0 !important;
+    }
+
+    .course-video-frame {
+      position: relative;
+      top: auto;
+      margin: 0;
+      width: 100%;
+      border-radius: 0;
+    }
+
+    .course-playlist-panel {
+      position: relative;
+      top: auto;
+      bottom: auto;
+      right: auto;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: min(70svh, 36rem);
+      min-height: 24rem;
+      flex-shrink: 0;
+      transform: none !important;
+      will-change: auto !important;
+      z-index: auto;
+      border-left: 0;
+      border-top-width: 1px;
+    }
+
+    .course-playlist-resize,
+    .course-playlist-toggle {
+      display: none;
+    }
+  }

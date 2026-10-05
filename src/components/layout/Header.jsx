@@ -87,7 +87,7 @@ function Header() {
 
                     {/* Center: Search Bar (only on homepage) */}
                     {isHomePage && (
-                        <div className="w-full max-w-md mx-4">
+                        <div className="min-w-0 flex-1 max-w-md mx-2 sm:mx-4">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                                 <input
