@@ -86,6 +86,76 @@ function HomePage() {
         }
     }
 
+    async function resolveCourseThumbnail(courseStructure, preferredThumbnail = courseStructure.thumbnailData) {
+        if (courseStructure.thumbnailSource !== 'generated') {
+            return preferredThumbnail
+        }
+
+        try {
+            showNotification(`Looking for a Udemy thumbnail for "${courseStructure.title}"...`, 'info')
+            const result = await api.post('/api/data/course-thumbnail', { title: courseStructure.title })
+            return result.base64 || preferredThumbnail
+        } catch (err) {
+            console.warn('Udemy course thumbnail lookup failed:', err)
+            return preferredThumbnail
+        }
+    }
+
+    async function saveCourseStructureToDatabase(courseStructure, overrides = {}) {
+        const thumbnailData = await resolveCourseThumbnail(
+            courseStructure,
+            overrides.thumbnailData || courseStructure.thumbnailData
+        )
+        const courseData = {
+            ...courseStructure,
+            ...overrides,
+            thumbnailData,
+            folderPath: courseStructure.folderPath || courseStructure.path
+        }
+
+        const savedCourse = await addCourse(courseData)
+
+        async function saveModulesRecursive(modules, parentModuleId = null) {
+            for (let i = 0; i < modules.length; i++) {
+                const module = modules[i]
+                const savedModule = await addModule({
+                    courseId: savedCourse.id,
+                    parentModuleId,
+                    title: module.title,
+                    originalTitle: module.originalTitle,
+                    order: i,
+                    totalDuration: module.totalDuration,
+                    totalVideos: module.totalVideos || module.videos?.length || 0,
+                    folderPath: module.folderPath
+                })
+
+                const videos = module.videos || []
+                for (let j = 0; j < videos.length; j++) {
+                    const video = videos[j]
+                    await addVideo({
+                        courseId: savedCourse.id,
+                        moduleId: savedModule.id,
+                        title: video.title,
+                        originalTitle: video.originalTitle,
+                        fileName: video.fileName,
+                        relativePath: video.relativePath,
+                        filePath: video.filePath,
+                        duration: video.duration,
+                        order: j,
+                        fileHandle: video.fileHandle
+                    })
+                }
+
+                if (module.subModules && module.subModules.length > 0) {
+                    await saveModulesRecursive(module.subModules, savedModule.id)
+                }
+            }
+        }
+
+        await saveModulesRecursive(courseData.modules || [])
+        return savedCourse
+    }
+
     // Search and sort courses
     const filteredCourses = useMemo(() => {
         let result = [...courses]
@@ -152,59 +222,12 @@ function HomePage() {
     async function handleImportConfirm(editedData) {
         try {
             console.log('Saving course to database:', editedData)
-
-            const courseData = {
-                ...importData,
+            await saveCourseStructureToDatabase(importData, {
                 title: editedData.title,
                 instructor: editedData.instructor,
                 thumbnailData: editedData.thumbnailData,
-                folderPath: importData.folderPath || importData.path // Support both scanner and pick-folder results
-            }
-
-            const savedCourse = await addCourse(courseData)
-            console.log('Course saved:', savedCourse.id)
-
-            // Recursively save modules and their sub-modules
-            async function saveModulesRecursive(modules, parentModuleId = null) {
-                for (let i = 0; i < modules.length; i++) {
-                    const module = modules[i]
-                    const savedModule = await addModule({
-                        courseId: savedCourse.id,
-                        parentModuleId,
-                        title: module.title,
-                        originalTitle: module.originalTitle,
-                        order: i,
-                        totalDuration: module.totalDuration,
-                        totalVideos: module.totalVideos || module.videos?.length || 0,
-                        folderPath: module.folderPath
-                    })
-
-                    // Save videos for this module
-                    const videos = module.videos || []
-                    for (let j = 0; j < videos.length; j++) {
-                        const video = videos[j]
-                        await addVideo({
-                            courseId: savedCourse.id,
-                            moduleId: savedModule.id,
-                            title: video.title,
-                            originalTitle: video.originalTitle,
-                            fileName: video.fileName,
-                            relativePath: video.relativePath,
-                            filePath: video.filePath,
-                            duration: video.duration,
-                            order: j,
-                            fileHandle: video.fileHandle
-                        })
-                    }
-
-                    // Recursively save sub-modules
-                    if (module.subModules && module.subModules.length > 0) {
-                        await saveModulesRecursive(module.subModules, savedModule.id)
-                    }
-                }
-            }
-
-            await saveModulesRecursive(editedData.modules)
+                modules: editedData.modules,
+            })
 
             console.log('Import complete!')
             setImportData(null)
@@ -224,13 +247,13 @@ function HomePage() {
 
             if (folderPath) {
                 try {
-                    scannedData = await scanCourseFolder(folderPath, settings.autoDetectThumbnails)
+                    scannedData = await scanCourseFolder(folderPath, false)
                 } catch (e) {
                     console.log('Failed to scan stored path, asking user to re-locate:', e)
                     if (confirm('Course folder not found at: ' + folderPath + '\n\nWould you like to re-locate it?')) {
                         const newHandle = await pickFolder()
                         if (newHandle) {
-                            scannedData = await scanCourseFolder(newHandle, settings.autoDetectThumbnails)
+                            scannedData = await scanCourseFolder(newHandle, false)
                         }
                     }
                 }
@@ -239,7 +262,7 @@ function HomePage() {
                 if (confirm('No folder path stored for this course. Please select its folder to sync.')) {
                     const handle = await pickFolder()
                     if (handle) {
-                        scannedData = await scanCourseFolder(handle, settings.autoDetectThumbnails)
+                        scannedData = await scanCourseFolder(handle, false)
                     }
                 }
             }
@@ -292,12 +315,44 @@ function HomePage() {
         if (!pendingImport) return
         const data = pendingImport
         clearImport()
+        if (data.type === 'collection' && Array.isArray(data.courses)) {
+            ;(async () => {
+                try {
+                    const existingPaths = new Set(courses.map(c => c.folderPath || c.folder_path).filter(Boolean))
+                    const existingTitles = new Set(courses.map(c => c.title).filter(Boolean))
+                    const freshCourses = data.courses.filter(course => {
+                        const folderPath = course.folderPath || course.path
+                        return !existingPaths.has(folderPath) && !existingTitles.has(course.title)
+                    })
+
+                    if (freshCourses.length === 0) {
+                        showNotification('All courses in that folder are already loaded.', 'info')
+                        return
+                    }
+
+                    if (!confirm(`Import ${freshCourses.length} courses from the selected folder?`)) return
+
+                    showNotification(`Importing ${freshCourses.length} courses...`, 'info')
+                    for (const course of freshCourses) {
+                        await saveCourseStructureToDatabase(course)
+                    }
+
+                    const failedCount = data.failed?.length || 0
+                    showNotification(`Imported ${freshCourses.length} courses${failedCount ? `; ${failedCount} folders skipped` : ''}.`, 'success')
+                    loadCourses()
+                } catch (err) {
+                    console.error('Failed to import collection:', err)
+                    showNotification('Failed to import courses: ' + err.message, 'error')
+                }
+            })()
+            return
+        }
         const dupe = courses.find(c => c.title === data.title || c.originalTitle === data.title)
         if (dupe) {
             if (!confirm(`A course named "${data.title}" already exists. Import anyway?`)) return
         }
         setImportData(data)
-    }, [pendingImport])
+    }, [pendingImport, courses, clearImport, showNotification])
 
     // Handle YouTube import
     useEffect(() => {

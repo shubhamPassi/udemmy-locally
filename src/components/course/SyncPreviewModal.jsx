@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
     X, Plus, Minus, ArrowRight, CheckCircle2, AlertTriangle,
-    FolderSync, Video, FolderOpen, RefreshCw
+    FolderSync, FolderOpen, RefreshCw
 } from 'lucide-react'
 import { formatDuration } from '../../utils/db'
 
@@ -15,8 +15,7 @@ function SyncPreviewModal({ preview, isOpen, onConfirm, onCancel, isApplying }) 
         preview.moved.length > 0 ||
         (preview.updated?.length || 0) > 0 ||
         preview.newModules.length > 0 ||
-        preview.removedModules.length > 0 ||
-        preview.thumbnailChanged
+        preview.removedModules.length > 0
 
     const tabs = [
         { id: 'summary', label: 'Summary' },
@@ -153,16 +152,6 @@ function SyncPreviewModal({ preview, isOpen, onConfirm, onCancel, isApplying }) 
                                             count={preview.updated.length}
                                             detail="duration fixed"
                                             onClick={() => setActiveTab('updated')}
-                                        />
-                                    )}
-                                    {preview.thumbnailChanged && (
-                                        <SummaryRow
-                                            icon={<RefreshCw className="w-4 h-4" />}
-                                            color="text-info"
-                                            bgColor="bg-info/10"
-                                            label="New thumbnail detected"
-                                            count={1}
-                                            detail="will be updated"
                                         />
                                     )}
                                     <SummaryRow

@@ -269,8 +269,8 @@ export async function recalculateAllCoursesProgress(mode) {
     return api.post('/api/courses/recalculate-progress', { mode })
 }
 
-export async function detectAllDurations() {
-    return api.post('/api/data/detect-durations')
+export async function detectAllDurations(options = {}) {
+    return api.post('/api/data/detect-durations', options)
 }
 
 export async function getRecentlyWatchedVideos(limit = 10) {

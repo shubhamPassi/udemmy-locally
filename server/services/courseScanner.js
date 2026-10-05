@@ -23,6 +23,11 @@ const SUBTITLE_EXTENSIONS = new Set(['.srt', '.vtt', '.ass', '.ssa'])
 
 // Folder names managed by TutIn — skip during module scanning
 const MANAGED_FOLDERS = new Set(['Captions', 'Dubs'])
+const MODULE_NAME_PATTERNS = [
+    /^\s*\d+[\s._\-\u2013\u2014)]/,
+    /^\s*(?:section|module|chapter|part|lesson)\s*\d*/i,
+    /^\s*(?:introduction|intro|getting started|setup|bonus|conclusion)\s*$/i,
+]
 
 /**
  * Check if a filename is a video file
@@ -30,6 +35,64 @@ const MANAGED_FOLDERS = new Set(['Captions', 'Dubs'])
 function isVideoFile(fileName) {
     const ext = path.extname(fileName).toLowerCase()
     return VIDEO_EXTENSIONS.has(ext)
+}
+
+function directoryHasVideos(dirPath, maxDepth = Infinity, currentDepth = 0) {
+    if (currentDepth > maxDepth) return false
+    try {
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+        for (const entry of entries) {
+            const fullPath = path.join(dirPath, entry.name)
+            if (entry.isFile() && isVideoFile(entry.name)) return true
+            if (entry.isDirectory() && !MANAGED_FOLDERS.has(entry.name) && directoryHasVideos(fullPath, maxDepth, currentDepth + 1)) {
+                return true
+            }
+        }
+    } catch {}
+    return false
+}
+
+function countDirectVideos(dirPath) {
+    try {
+        return fs.readdirSync(dirPath, { withFileTypes: true })
+            .filter(entry => entry.isFile() && isVideoFile(entry.name))
+            .length
+    } catch {
+        return 0
+    }
+}
+
+function isLikelyModuleFolder(name) {
+    return MODULE_NAME_PATTERNS.some(pattern => pattern.test(name))
+}
+
+export function detectCourseFolders(selectionPath) {
+    if (!fs.existsSync(selectionPath)) {
+        throw new Error(`Folder not found: ${selectionPath}`)
+    }
+
+    const entries = fs.readdirSync(selectionPath, { withFileTypes: true })
+        .filter(entry => entry.isDirectory() && !MANAGED_FOLDERS.has(entry.name))
+        .sort((a, b) => naturalSort(a.name, b.name))
+
+    const directVideoCount = countDirectVideos(selectionPath)
+    const childCourseCandidates = entries
+        .map(entry => ({
+            name: entry.name,
+            folderPath: path.join(selectionPath, entry.name),
+        }))
+        .filter(entry => directoryHasVideos(entry.folderPath))
+
+    if (directVideoCount > 0 || childCourseCandidates.length < 2) {
+        return [selectionPath]
+    }
+
+    const likelyModuleCount = childCourseCandidates.filter(entry => isLikelyModuleFolder(entry.name)).length
+    const moduleRatio = likelyModuleCount / childCourseCandidates.length
+
+    return moduleRatio >= 0.7
+        ? [selectionPath]
+        : childCourseCandidates.map(entry => entry.folderPath)
 }
 
 /**
@@ -104,6 +167,73 @@ function cleanVideoTitle(name) {
     return cleaned || base
 }
 
+function escapeXml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;')
+}
+
+function wrapTitle(value, maxLineLength = 22, maxLines = 3) {
+    const words = String(value || 'Course').replace(/\s+/g, ' ').trim().split(' ')
+    const lines = []
+    let current = ''
+
+    for (const word of words) {
+        const next = current ? `${current} ${word}` : word
+        if (next.length > maxLineLength && current) {
+            lines.push(current)
+            current = word
+        } else {
+            current = next
+        }
+        if (lines.length === maxLines) break
+    }
+
+    if (current && lines.length < maxLines) lines.push(current)
+    return lines.length ? lines : ['Course']
+}
+
+function generateCourseCover(title, totalVideos) {
+    const normalizedTitle = cleanCourseTitle(title)
+    let hash = 0
+    for (let i = 0; i < normalizedTitle.length; i++) {
+        hash = ((hash << 5) - hash + normalizedTitle.charCodeAt(i)) | 0
+    }
+
+    const palettes = [
+        ['#1f2937', '#0f766e', '#f97316'],
+        ['#111827', '#2563eb', '#22c55e'],
+        ['#18181b', '#7c3aed', '#06b6d4'],
+        ['#172554', '#db2777', '#facc15'],
+        ['#052e16', '#0891b2', '#f59e0b'],
+    ]
+    const palette = palettes[Math.abs(hash) % palettes.length]
+    const lines = wrapTitle(normalizedTitle)
+    const text = lines
+        .map((line, index) => `<text x="64" y="${210 + index * 58}" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="700" fill="#ffffff">${escapeXml(line)}</text>`)
+        .join('')
+    const videoLabel = `${totalVideos || 0} videos`
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${palette[0]}"/><stop offset="0.62" stop-color="${palette[1]}"/><stop offset="1" stop-color="${palette[2]}"/></linearGradient>
+<pattern id="grid" width="72" height="72" patternUnits="userSpaceOnUse"><path d="M 72 0 L 0 0 0 72" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2"/></pattern>
+</defs>
+<rect width="1280" height="720" fill="url(#bg)"/>
+<rect width="1280" height="720" fill="url(#grid)" opacity="0.45"/>
+<circle cx="1070" cy="160" r="170" fill="rgba(255,255,255,0.12)"/>
+<circle cx="1130" cy="540" r="240" fill="rgba(0,0,0,0.18)"/>
+<text x="64" y="96" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="rgba(255,255,255,0.72)">TutIn Course</text>
+${text}
+<text x="64" y="648" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="600" fill="rgba(255,255,255,0.78)">${escapeXml(videoLabel)}</text>
+</svg>`
+
+    return `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`
+}
+
 let hasFfprobe = null
 
 async function checkFfprobe() {
@@ -124,7 +254,7 @@ function isValidDuration(duration) {
 /**
  * Get video duration using ffprobe (if available), falling back to MP4 header parsing
  */
-async function getVideoDuration(filePath) {
+export async function getVideoDuration(filePath) {
     // Try ffprobe first if available
     const ffprobeAvailable = await checkFfprobe()
     if (ffprobeAvailable) {
@@ -473,13 +603,16 @@ export async function scanCourseFolder(folderPath, onProgress, autoDetectThumbna
 
     const totalDuration = modules.reduce((sum, m) => sum + m.totalDuration, 0)
 
+    const generatedThumbnail = generateCourseCover(courseName, totalVideos)
+
     return {
         title: cleanCourseTitle(courseName),
         originalTitle: courseName,
         folderPath,
         totalDuration,
         totalVideos,
-        thumbnailData: thumbnailBase64,
+        thumbnailData: thumbnailBase64 || generatedThumbnail,
+        thumbnailSource: thumbnailBase64 ? 'local' : 'generated',
         modules,
     }
 }

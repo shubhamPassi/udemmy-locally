@@ -366,11 +366,14 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                 updateVideo(video.id, { duration: roundedDuration }).then(() => {
                     // Recalculate the parent course's total duration
                     if (courseId) {
-                        getVideosByCourse(courseId).then(videos => {
+                        Promise.all([getVideosByCourse(courseId), getCourse(courseId)]).then(([videos, currentCourse]) => {
                             const totalDuration = videos.reduce((sum, v) => {
                                 return sum + (v.id === video.id ? roundedDuration : (v.duration || 0))
                             }, 0)
-                            updateCourse(courseId, { totalDuration })
+                            const currentCourseTotal = Number(currentCourse?.totalDuration || 0)
+                            if (totalDuration > currentCourseTotal) {
+                                updateCourse(courseId, { totalDuration })
+                            }
                         }).catch(err => console.warn('Failed to update course duration:', err))
                     }
                 }).catch(err => console.warn('Failed to persist video duration:', err))

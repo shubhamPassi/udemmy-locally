@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { Play, Clock, Video, MoreVertical, Pencil, Trash2, RefreshCw, Link2 } from 'lucide-react'
+import { Play, Clock, Video, Pencil, Trash2, RefreshCw, Link2 } from 'lucide-react'
 import { formatDuration, deleteCourse, getInstructorAvatarAsync, updateCourse } from '../../utils/db'
 import { useState, useEffect } from 'react'
 import { useNotification } from '../../contexts/NotificationContext'
@@ -18,7 +18,6 @@ function scheduleAfterFirstPaint(callback) {
 
 function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
     const navigate = useNavigate()
-    const [showMenu, setShowMenu] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
     const [isSyncing, setIsSyncing] = useState(false)
     const [instructorAvatar, setInstructorAvatar] = useState(null)
@@ -79,27 +78,25 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
         try {
             setIsDeleting(true)
             await deleteCourse(course.id)
+            showNotification(`Deleted "${course.title}".`, 'success')
             onRefresh?.()
         } catch (err) {
             console.error('Failed to delete course:', err)
             showNotification('Failed to delete course: ' + err.message, 'error')
         } finally {
             setIsDeleting(false)
-            setShowMenu(false)
         }
     }
 
     function handleEdit(e) {
         e.preventDefault()
         e.stopPropagation()
-        setShowMenu(false)
         onEdit?.(course)
     }
 
     async function handleSync(e) {
         e.preventDefault()
         e.stopPropagation()
-        setShowMenu(false)
         if (onSync) {
             setIsSyncing(true)
             try {
@@ -127,6 +124,38 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
     const wrapperProps = isExternalCourse 
         ? { href: course.courseUrl, target: '_blank', rel: 'noopener noreferrer', onClick: handleExternalClick }
         : { to: `/course/${course.id}` }
+    const actions = (
+        <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+                onClick={handleEdit}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
+                title="Edit course"
+                aria-label="Edit course"
+            >
+                <Pencil className="w-4 h-4" />
+            </button>
+            {isLocalCourse && (
+                <button
+                    onClick={handleSync}
+                    disabled={isSyncing}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
+                    title="Sync course"
+                    aria-label="Sync course"
+                >
+                    <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                </button>
+            )}
+            <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="p-2 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-full transition-colors text-red-500 dark:text-red-400"
+                title="Delete course"
+                aria-label="Delete course"
+            >
+                <Trash2 className="w-4 h-4" />
+            </button>
+        </div>
+    )
 
     if (viewMode === 'list') {
         return (
@@ -189,14 +218,7 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
                     </span>
                 </div>
 
-                {/* Edit Button for List View */}
-                <button
-                    onClick={handleEdit}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
-                    title="Edit course metadata and progress"
-                >
-                    <Pencil className="w-4 h-4" />
-                </button>
+                {actions}
             </CardWrapper>
         )
     }
@@ -243,52 +265,12 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
                         {formattedDuration}
                     </div>
 
-                    {/* Menu button */}
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="relative">
-                            <button
-                                onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    setShowMenu(!showMenu)
-                                }}
-                                className="p-2 bg-white/90 dark:bg-black/40 backdrop-blur-md hover:bg-white dark:hover:bg-black/60 rounded-full text-gray-800 dark:text-white transition-colors border border-gray-200 dark:border-white/10 shadow-sm"
-                            >
-                                <MoreVertical className="w-4 h-4" />
-                            </button>
-
-                            {showMenu && (
-                                <div
-                                    className="absolute right-0 top-full mt-1 w-40 glass rounded-lg shadow-2xl border border-gray-100 dark:border-white/10 py-1 z-20"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <button
-                                        className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-2"
-                                        onClick={handleEdit}
-                                    >
-                                        <Pencil className="w-3 h-3" />
-                                        Edit
-                                    </button>
-                                    {isLocalCourse && (
-                                        <button
-                                            className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-2"
-                                            onClick={handleSync}
-                                            disabled={isSyncing}
-                                        >
-                                            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-                                            {isSyncing ? 'Scanning...' : 'Sync'}
-                                        </button>
-                                    )}
-                                    <button
-                                        className="w-full px-3 py-2 text-left text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center gap-2"
-                                        onClick={handleDelete}
-                                        disabled={isDeleting}
-                                    >
-                                        <Trash2 className="w-3 h-3" />
-                                        {isDeleting ? 'Deleting...' : 'Delete'}                                    </button>
-                                </div>
-                            )}
-                        </div>
+                    {/* Quick actions */}
+                    <div
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 dark:bg-black/45 border border-gray-200 dark:border-white/10 rounded-full backdrop-blur-md shadow-sm"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {actions}
                     </div>
                 </div>
 

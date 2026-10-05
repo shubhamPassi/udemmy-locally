@@ -14,6 +14,281 @@ import { getAll, run, transaction, saveDatabase, getDb } from '../database.js'
 import { parseMp4Duration } from '../utils/mp4Parser.js'
 
 const router = express.Router()
+const MAX_THUMBNAIL_BYTES = 6 * 1024 * 1024
+const UDEMY_ORIGIN = 'https://www.udemy.com'
+
+function sanitizeCourseThumbnailQuery(title) {
+    return String(title || '')
+        .replace(/[^\p{L}\p{N}\s._+\-:&()]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+}
+
+async function fetchImageAsDataUrl(url, timeoutMs = 6000) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+    try {
+        const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 TutIn/4.0',
+                Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+            },
+        })
+        if (!response.ok) throw new Error(`Image request failed: ${response.status}`)
+
+        const contentType = response.headers.get('content-type') || 'image/jpeg'
+        if (!contentType.startsWith('image/')) {
+            throw new Error(`Unexpected thumbnail content type: ${contentType}`)
+        }
+
+        const length = Number(response.headers.get('content-length') || 0)
+        if (length > MAX_THUMBNAIL_BYTES) {
+            throw new Error('Thumbnail is too large')
+        }
+
+        const arrayBuffer = await response.arrayBuffer()
+        if (arrayBuffer.byteLength > MAX_THUMBNAIL_BYTES) {
+            throw new Error('Thumbnail is too large')
+        }
+
+        const buffer = Buffer.from(arrayBuffer)
+        return `data:${contentType.split(';')[0]};base64,${buffer.toString('base64')}`
+    } finally {
+        clearTimeout(timer)
+    }
+}
+
+function decodeHtmlEntities(value) {
+    return String(value || '')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\\u002F/g, '/')
+}
+
+function normalizeUdemyImageUrl(value) {
+    const decoded = decodeHtmlEntities(value)
+        .replace(/\\\//g, '/')
+        .trim()
+
+    if (!decoded) return null
+    if (decoded.startsWith('//')) return `https:${decoded}`
+    if (decoded.startsWith('/')) return `${UDEMY_ORIGIN}${decoded}`
+    if (decoded.startsWith('http://') || decoded.startsWith('https://')) return decoded
+    return null
+}
+
+async function fetchText(url, timeoutMs = 8000) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+    try {
+        const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 TutIn/4.0',
+                Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+            },
+        })
+        if (!response.ok) throw new Error(`Udemy request failed: ${response.status}`)
+        return await response.text()
+    } finally {
+        clearTimeout(timer)
+    }
+}
+
+function extractUdemyImageFromHtml(html) {
+    const patterns = [
+        /!\[[^\]]*]\((https?:\/\/[^)]+(?:udemycdn|udemy)[^)]+\.(?:jpg|jpeg|png|webp)[^)]*)\)/i,
+        /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+        /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+        /"image_750x422"\s*:\s*"([^"]+)"/i,
+        /"image_480x270"\s*:\s*"([^"]+)"/i,
+        /"image_240x135"\s*:\s*"([^"]+)"/i,
+        /"image"\s*:\s*"([^"]+course[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+    ]
+
+    for (const pattern of patterns) {
+        const match = html.match(pattern)
+        const imageUrl = normalizeUdemyImageUrl(match?.[1])
+        if (imageUrl) return imageUrl
+    }
+
+    return null
+}
+
+function extractUdemyCourseUrlFromSearch(html) {
+    const hrefMatches = [...html.matchAll(/href=["']([^"']*\/course\/[^"']+)["']/gi)]
+    for (const match of hrefMatches) {
+        const rawUrl = decodeHtmlEntities(match[1])
+        if (rawUrl.includes('/course/')) {
+            return rawUrl.startsWith('http') ? rawUrl : `${UDEMY_ORIGIN}${rawUrl}`
+        }
+    }
+
+    const urlMatches = [...html.matchAll(/"url"\s*:\s*"([^"]*\/course\/[^"]+)"/gi)]
+    for (const match of urlMatches) {
+        const rawUrl = decodeHtmlEntities(match[1]).replace(/\\\//g, '/')
+        if (rawUrl.includes('/course/')) {
+            return rawUrl.startsWith('http') ? rawUrl : `${UDEMY_ORIGIN}${rawUrl}`
+        }
+    }
+
+    return null
+}
+
+function extractDuckDuckGoUdemyCourseUrl(html) {
+    const matches = [...html.matchAll(/[?&]uddg=([^"&]+udemy\.com%2Fcourse%2F[^"&]+)/gi)]
+    for (const match of matches) {
+        try {
+            const decoded = decodeURIComponent(decodeHtmlEntities(match[1]))
+            if (decoded.startsWith('https://www.udemy.com/course/')) return decoded
+        } catch {}
+    }
+
+    const visibleMatches = [...html.matchAll(/www\.udemy\.com\/course\/[a-z0-9\-_/]+/gi)]
+    for (const match of visibleMatches) {
+        return `https://${match[0].replace(/\/$/, '')}/`
+    }
+
+    return null
+}
+
+function isAllowedUdemyImageUrl(url) {
+    try {
+        const parsed = new URL(url)
+        return parsed.hostname === 'www.udemy.com' ||
+            parsed.hostname === 'udemy.com' ||
+            parsed.hostname.endsWith('.udemy.com') ||
+            parsed.hostname === 'udemycdn.com' ||
+            parsed.hostname.endsWith('.udemycdn.com')
+    } catch {
+        return false
+    }
+}
+
+function buildUdemySlugCandidates(title) {
+    const rawNormalized = String(title || '')
+        .toLowerCase()
+        .replace(/\b20\d{2}\b/g, ' ')
+        .replace(/\bzero\s*to\s*mastery\b/g, 'zero to mastery')
+        .replace(/\bzerotomastery\b/g, 'zero to mastery')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+    const normalized = rawNormalized
+        .replace(/\b(?:in|edition|completed|incompleted)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+
+    const words = normalized.split(/\s+/).filter(Boolean)
+    const candidates = new Set()
+    const rawWords = rawNormalized.split(/\s+/).filter(Boolean)
+    if (rawWords.length) candidates.add(rawWords.join('-'))
+    if (words.length) {
+        candidates.add(words.join('-'))
+        candidates.add(words.filter(word => word !== 'udemy').join('-'))
+
+        const ztmIndex = words.findIndex((word, index) =>
+            word === 'zero' && words[index + 1] === 'to' && words[index + 2] === 'mastery'
+        )
+        if (ztmIndex > 0) {
+            const beforeZtm = words.slice(0, ztmIndex)
+            candidates.add([...beforeZtm, 'zero', 'to', 'mastery'].join('-'))
+            candidates.add(beforeZtm.join('-'))
+        }
+    }
+
+    return [...candidates]
+        .filter(Boolean)
+        .map(slug => `${UDEMY_ORIGIN}/course/${slug}/`)
+}
+
+async function discoverUdemyCourseUrl(query) {
+    const searchUrls = [
+        `${UDEMY_ORIGIN}/courses/search/?q=${encodeURIComponent(query)}&src=sac`,
+        `https://duckduckgo.com/html/?q=${encodeURIComponent(`site:udemy.com/course ${query} udemy`)}`,
+    ]
+
+    for (const candidateUrl of buildUdemySlugCandidates(query)) {
+        try {
+            await fetchText(candidateUrl, 5000)
+            return candidateUrl
+        } catch {}
+    }
+
+    for (const searchUrl of searchUrls) {
+        try {
+            const html = await fetchText(searchUrl)
+            const courseUrl = searchUrl.includes('duckduckgo.com')
+                ? extractDuckDuckGoUdemyCourseUrl(html)
+                : extractUdemyCourseUrlFromSearch(html)
+            if (courseUrl) return courseUrl
+        } catch {}
+    }
+
+    return null
+}
+
+async function fetchUdemyReaderText(courseUrl) {
+    return fetchText(`https://r.jina.ai/http://${courseUrl}`)
+}
+
+async function findUdemyThumbnail(title) {
+    const query = sanitizeCourseThumbnailQuery(title)
+    if (!query) throw new Error('Missing title')
+
+    const directCourseUrls = buildUdemySlugCandidates(query)
+    const discoveredCourseUrl = await discoverUdemyCourseUrl(query)
+    const courseUrls = [...new Set([
+        ...directCourseUrls,
+        discoveredCourseUrl,
+    ].filter(Boolean))]
+
+    const courseUrl = courseUrls[0]
+    if (!courseUrl) {
+        throw new Error('No Udemy course page found')
+    }
+
+    let imageUrl = null
+    let matchedCourseUrl = null
+
+    for (const candidateUrl of courseUrls) {
+        try {
+            const courseText = await fetchText(candidateUrl)
+            imageUrl = extractUdemyImageFromHtml(courseText)
+        } catch {}
+
+        if (!imageUrl) {
+            try {
+                const readerText = await fetchUdemyReaderText(candidateUrl)
+                imageUrl = extractUdemyImageFromHtml(readerText)
+            } catch {}
+        }
+
+        if (imageUrl) {
+            matchedCourseUrl = candidateUrl
+            break
+        }
+    }
+
+    if (!imageUrl) {
+        throw new Error('No Udemy thumbnail found')
+    }
+    if (!isAllowedUdemyImageUrl(imageUrl)) {
+        throw new Error('Discovered thumbnail is not hosted by Udemy')
+    }
+
+    return {
+        base64: await fetchImageAsDataUrl(imageUrl),
+        sourceUrl: imageUrl,
+        courseUrl: matchedCourseUrl || courseUrl,
+    }
+}
 
 // DELETE /api/data/reset
 // Wipes all user data from the database
@@ -67,6 +342,20 @@ router.post('/download-image', async (req, res) => {
         res.json({ base64 })
     } catch (err) {
         res.status(500).json({ error: err.message })
+    }
+})
+
+// POST /api/data/course-thumbnail
+// Best-effort Udemy-only thumbnail lookup for imported courses without local cover art.
+router.post('/course-thumbnail', async (req, res) => {
+    const query = sanitizeCourseThumbnailQuery(req.body?.title)
+    if (!query) return res.status(400).json({ error: 'Missing title' })
+
+    try {
+        const result = await findUdemyThumbnail(query)
+        res.json({ ...result, provider: 'udemy' })
+    } catch (err) {
+        res.status(502).json({ error: err.message })
     }
 })
 

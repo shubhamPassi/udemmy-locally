@@ -45,7 +45,7 @@ export async function pickFolder() {
 /**
  * Scan course folder via server (v4)
  */
-export async function scanCourseFolder(directoryHandleOrPath, autoDetectThumbnails = false) {
+function getFolderPath(directoryHandleOrPath) {
     const folderPath = typeof directoryHandleOrPath === 'string' 
         ? directoryHandleOrPath 
         : directoryHandleOrPath.path
@@ -54,7 +54,31 @@ export async function scanCourseFolder(directoryHandleOrPath, autoDetectThumbnai
         throw new Error('Invalid folder path for scanning')
     }
 
-    return await api.post('/api/fs/scan', { path: folderPath, autoDetectThumbnails })
+    return folderPath
+}
+
+export async function scanCourseFolder(directoryHandleOrPath, autoDetectThumbnails = false, options = {}) {
+    const folderPath = getFolderPath(directoryHandleOrPath)
+
+    return await api.post('/api/fs/scan', {
+        path: folderPath,
+        autoDetectThumbnails,
+        detectDurations: options.detectDurations === true,
+    })
+}
+
+/**
+ * Scan a selected folder. If it is a course collection, child folders are
+ * returned as independent courses.
+ */
+export async function scanCourseSelection(directoryHandleOrPath, autoDetectThumbnails = false, options = {}) {
+    const folderPath = getFolderPath(directoryHandleOrPath)
+
+    return await api.post('/api/fs/scan-selection', {
+        path: folderPath,
+        autoDetectThumbnails,
+        detectDurations: options.detectDurations === true,
+    })
 }
 
 /**
@@ -224,9 +248,6 @@ export async function syncCoursePreview(courseId, scannedData) {
     const removedModulePaths = existingModulePaths.filter(p => !scannedModulePaths.includes(p))
     const removedModules = existingModules.filter(m => removedModulePaths.includes(existingModuleIdToPath.get(m.id))).map(m => m.id)
 
-    // Check for thumbnail change
-    const thumbnailChanged = scannedData.thumbnailData && scannedData.thumbnailData !== course.thumbnailData
-
     return {
         course,
         added,
@@ -237,7 +258,7 @@ export async function syncCoursePreview(courseId, scannedData) {
         newModules,
         removedModules,
         flatScannedModules,
-        thumbnailChanged,
+        thumbnailChanged: false,
         totalBefore: existingVideos.length,
         totalAfter: scannedVideos.length,
         scannedData
@@ -251,12 +272,9 @@ export async function applySyncChanges(courseId, preview) {
     const { addVideo, deleteVideo, updateVideo, addModule, getModulesByCourse, deleteModule, updateCourse } = await import('./db')
     const { added, removed, updated, moved, removedModules, flatScannedModules, scannedData } = preview
 
-    // 0. Update course thumbnail and metadata if found during scan
+    // 0. Update course metadata. Sync intentionally preserves user-selected thumbnails.
     const courseUpdates = {}
-    if (scannedData?.thumbnailData) {
-        courseUpdates.thumbnailData = scannedData.thumbnailData
-    }
-    if (scannedData?.totalDuration !== undefined) {
+    if (scannedData?.totalDuration > 0) {
         courseUpdates.totalDuration = scannedData.totalDuration
     }
     if (scannedData?.totalVideos !== undefined) {

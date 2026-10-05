@@ -6,7 +6,7 @@ import { scanCourseFolder } from './courseScanner.js'
 import { addAllowedRoot } from './videoStreamer.js'
 import { getAll, getOne, run, saveDatabaseSync, transaction } from '../database.js'
 
-export const DEFAULT_LIBRARY_PATH = process.env.TUTIN_LIBRARY_PATH || 'H:\\My Drive\\Udemy_Courses'
+export const DEFAULT_LIBRARY_PATH = process.env.TUTIN_LIBRARY_PATH || ''
 
 function generateId(prefix) {
     return `${prefix}${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
@@ -54,6 +54,8 @@ function getExistingCoursePathSet() {
 }
 
 export function configureDefaultLibraryRoot() {
+    if (!DEFAULT_LIBRARY_PATH) return null
+
     const libraryPath = path.resolve(DEFAULT_LIBRARY_PATH)
 
     run(
@@ -66,7 +68,9 @@ export function configureDefaultLibraryRoot() {
     return libraryPath
 }
 
-export function pruneMissingLibraryCourses(libraryPath = path.resolve(DEFAULT_LIBRARY_PATH)) {
+export function pruneMissingLibraryCourses(libraryPath = DEFAULT_LIBRARY_PATH ? path.resolve(DEFAULT_LIBRARY_PATH) : null) {
+    if (!libraryPath) return { removed: 0, removedCourses: [] }
+
     const courses = getAll(
         `SELECT id, title, folder_path FROM courses
          WHERE source_type = 'local' AND folder_path IS NOT NULL`
@@ -213,6 +217,10 @@ export async function bootstrapLibrary(options = {}) {
     } = options
 
     const libraryPath = configureDefaultLibraryRoot()
+    if (!libraryPath) {
+        saveDatabaseSync()
+        return { libraryPath: null, imported: 0, skipped: 0, failed: 0, removed: 0, removedCourses: [] }
+    }
 
     if (!fs.existsSync(libraryPath)) {
         console.warn(`[LibraryBootstrap] Library path not found: ${libraryPath}`)

@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, Upload, Link2, Trash2, Folder, Video, Clock, Image, Sparkles, Loader2 } from 'lucide-react'
+import { X, Upload, Link2, Folder, Video, Clock, Image, Sparkles, Loader2 } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
 import { fetchPageMetadata, extractCourseStatsWithAI } from '../../utils/aiMetadataParser'
+import * as api from '../../utils/api'
 
 import { sanitizeHTML } from '../../utils/validation'
 
@@ -22,6 +23,8 @@ function ExternalLinkImportModal({ isOpen, onClose, onImport }) {
     const [errors, setErrors] = useState({})
     const [isDragging, setIsDragging] = useState(false)
     const [isFetching, setIsFetching] = useState(false)
+    const [thumbnailUrl, setThumbnailUrl] = useState('')
+    const [isDownloadingThumbnail, setIsDownloadingThumbnail] = useState(false)
     const [fetchStatus, setFetchStatus] = useState('')
     const fileInputRef = useRef(null)
 
@@ -29,6 +32,7 @@ function ExternalLinkImportModal({ isOpen, onClose, onImport }) {
         if (isOpen) {
             setFormData(defaultData)
             setErrors({})
+            setThumbnailUrl('')
             setFetchStatus('')
         }
     }, [isOpen])
@@ -121,6 +125,30 @@ function ExternalLinkImportModal({ isOpen, onClose, onImport }) {
     function removeThumbnail() {
         setFormData(prev => ({ ...prev, thumbnailData: null }))
         if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    async function handleThumbnailUrlDownload() {
+        const url = thumbnailUrl.trim()
+        if (!/^https?:\/\/\S+/i.test(url)) {
+            setErrors(prev => ({ ...prev, thumbnail: 'Enter a valid image URL starting with http:// or https://' }))
+            return
+        }
+
+        try {
+            setIsDownloadingThumbnail(true)
+            const result = await api.post('/api/data/download-image', { url })
+            if (!result?.base64?.startsWith('data:image/')) {
+                throw new Error('Downloaded file was not an image')
+            }
+            setFormData(prev => ({ ...prev, thumbnailData: result.base64 }))
+            setThumbnailUrl('')
+            setErrors(prev => ({ ...prev, thumbnail: null }))
+        } catch (err) {
+            console.error('[ExternalLink] Thumbnail URL download failed:', err)
+            setErrors(prev => ({ ...prev, thumbnail: err.message || 'Failed to download image from URL' }))
+        } finally {
+            setIsDownloadingThumbnail(false)
+        }
     }
 
     function validate() {
@@ -343,6 +371,34 @@ function ExternalLinkImportModal({ isOpen, onClose, onImport }) {
                                     <button onClick={removeThumbnail} className="text-sm text-error hover:underline text-left">Remove</button>
                                 )}
                             </div>
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                            <div className="relative flex-1">
+                                <Link2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-light-text-secondary dark:text-dark-text-secondary" />
+                                <input
+                                    type="url"
+                                    value={thumbnailUrl}
+                                    onChange={(e) => setThumbnailUrl(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault()
+                                            handleThumbnailUrlDownload()
+                                        }
+                                    }}
+                                    className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-light-border dark:border-dark-border bg-white dark:bg-dark-bg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                                    placeholder="Paste image URL"
+                                    disabled={isDownloadingThumbnail}
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleThumbnailUrlDownload}
+                                disabled={!thumbnailUrl.trim() || isDownloadingThumbnail}
+                                className="px-3 py-2 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                            >
+                                {isDownloadingThumbnail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Image className="w-4 h-4" />}
+                                Use URL
+                            </button>
                         </div>
                         {errors.thumbnail && <p className="text-error text-sm mt-1">{errors.thumbnail}</p>}
                     </div>

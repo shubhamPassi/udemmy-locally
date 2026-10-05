@@ -25,19 +25,25 @@ function Header() {
     const [showYouTubeModal, setShowYouTubeModal] = useState(false)
     const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false)
     const [showExternalLinkModal, setShowExternalLinkModal] = useState(false)
+    const [isScanningLocal, setIsScanningLocal] = useState(false)
     const { showNotification } = useNotification()
 
     // Only show search on homepage
     const isHomePage = location.pathname === '/'
 
     async function handleImportClick() {
+        if (isScanningLocal) return
+        setIsScanningLocal(true)
         try {
-            const { scanCourseFolder, pickFolder } = await import('../../utils/fileSystem')
+            const { scanCourseSelection, pickFolder } = await import('../../utils/fileSystem')
             const handle = await pickFolder()
             if (handle) {
-                const courseData = await scanCourseFolder(handle, settings.autoDetectThumbnails)
-                if (courseData) {
-                    dispatchImport(courseData)
+                showNotification('Scanning selected folder...', 'info')
+                const scanResult = await scanCourseSelection(handle, settings.autoDetectThumbnails)
+                if (scanResult?.courses?.length > 1) {
+                    dispatchImport({ type: 'collection', courses: scanResult.courses, selectedPath: scanResult.selectedPath, failed: scanResult.failed || [] })
+                } else if (scanResult?.courses?.[0]) {
+                    dispatchImport(scanResult.courses[0])
                 }
             }
         } catch (err) {
@@ -46,6 +52,7 @@ function Header() {
                 showNotification('Import failed: ' + err.message, 'error')
             }
         }
+        setIsScanningLocal(false)
         setShowAddMenu(false)
     }
 
@@ -113,10 +120,11 @@ function Header() {
                                 {/* Main button - imports local folder */}
                                 <button
                                     onClick={handleImportClick}
+                                    disabled={isScanningLocal}
                                     className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-content hover:bg-primary-hover rounded-l-full transition-all duration-200 border-r border-gray-700 dark:border-white/10"
                                 >
                                     <Plus className="w-4 h-4" />
-                                    <span className="hidden sm:inline text-sm font-medium">Add Course</span>
+                                    <span className="hidden sm:inline text-sm font-medium">{isScanningLocal ? 'Scanning...' : 'Add Course'}</span>
                                 </button>
                                 {/* Dropdown toggle */}
                                 <button
@@ -132,6 +140,7 @@ function Header() {
                                         <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-white dark:bg-neutral-900 rounded-lg shadow-xl border border-gray-200 dark:border-white/10 z-20">
                                             <button
                                                 onClick={handleImportClick}
+                                                disabled={isScanningLocal}
                                                 className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-2"
                                             >
                                                 <FolderOpen className="w-4 h-4" />

@@ -11,8 +11,8 @@ import express from 'express'
 import fs from 'fs'
 import path from 'path'
 import { execFile } from 'child_process'
-import { getOne, run } from '../database.js'
-import { scanCourseFolder } from '../services/courseScanner.js'
+import { run } from '../database.js'
+import { detectCourseFolders, scanCourseFolder } from '../services/courseScanner.js'
 import { repairPaths } from '../services/pathRepair.js'
 import { addAllowedRoot, setAllowedRoots } from '../services/videoStreamer.js'
 
@@ -39,7 +39,7 @@ router.get('/pick-folder', async (req, res) => {
 // POST /api/fs/scan
 // Scans a course folder and returns structured module/video data
 router.post('/scan', async (req, res) => {
-    const { path: folderPath, autoDetectThumbnails } = req.body
+    const { path: folderPath, autoDetectThumbnails, detectDurations = false } = req.body
     if (!folderPath) {
         return res.status(400).json({ error: 'Missing path' })
     }
@@ -48,8 +48,60 @@ router.post('/scan', async (req, res) => {
     }
 
     try {
-        const result = await scanCourseFolder(folderPath, undefined, autoDetectThumbnails)
+        const result = await scanCourseFolder(folderPath, undefined, autoDetectThumbnails, { detectDurations })
         res.json(result)
+    } catch (err) {
+        res.status(500).json({ error: err.message })
+    }
+})
+
+// POST /api/fs/scan-selection
+// Scans either a single course folder or each child course in a collection folder.
+router.post('/scan-selection', async (req, res) => {
+    const { path: folderPath, autoDetectThumbnails, detectDurations = false } = req.body
+    if (!folderPath) {
+        return res.status(400).json({ error: 'Missing path' })
+    }
+    if (!fs.existsSync(folderPath)) {
+        return res.status(404).json({ error: 'Folder not found' })
+    }
+
+    try {
+        const courseFolders = detectCourseFolders(folderPath)
+        const courses = []
+        const failed = []
+
+        run(
+            `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+            ['root_folder_path', JSON.stringify(folderPath), new Date().toISOString()]
+        )
+        addAllowedRoot(folderPath)
+
+        for (const courseFolder of courseFolders) {
+            try {
+                const course = await scanCourseFolder(courseFolder, undefined, autoDetectThumbnails, { detectDurations })
+                courses.push(course)
+                addAllowedRoot(courseFolder)
+                addAllowedRoot(path.dirname(courseFolder))
+            } catch (err) {
+                failed.push({ folderPath: courseFolder, error: err.message })
+            }
+        }
+
+        if (courses.length === 0) {
+            return res.status(500).json({
+                error: failed[0]?.error || 'No courses with videos found in the selected folder.',
+                failed,
+            })
+        }
+
+        res.json({
+            type: courses.length > 1 ? 'collection' : 'course',
+            selectedPath: folderPath,
+            courses,
+            failed,
+        })
     } catch (err) {
         res.status(500).json({ error: err.message })
     }
@@ -169,7 +221,7 @@ function openFolderDialog() {
                 '    }',
                 '}',
                 '"@',
-                '$result = [FolderPicker]::Show("Select Course Folder")',
+                '$result = [FolderPicker]::Show("Select Course or Course Collection Folder")',
                 'if ($result) { Write-Output $result }'
             ].join('\n')
 
