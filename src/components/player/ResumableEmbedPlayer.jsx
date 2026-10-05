@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { updateVideoProgress, updateVideo, markVideoComplete, formatDuration } from '../../utils/db'
 import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks'
+import { IS_BROWSER_MODE } from '../../utils/api'
 
 let youtubeApi
 function loadYouTubeApi() {
@@ -108,7 +109,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
             <iframe className="w-full h-full" src={`https://drive.google.com/file/d/${driveId}/preview`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={video.title} />
             <p className="absolute bottom-0 inset-x-0 p-2 text-xs bg-black/90 text-white">Drive preview does not expose playback time. Enable downloads for this file or import its local copy to use automatic resume.</p>
         </> : <video ref={native} className="w-full h-full" controls playsInline crossOrigin="anonymous" autoPlay={autoPlay}
-            src={`https://drive.usercontent.google.com/download?id=${encodeURIComponent(driveId)}&export=download&confirm=t`}
+            src={IS_BROWSER_MODE ? `/api/drive-video?id=${encodeURIComponent(driveId)}` : `https://drive.usercontent.google.com/download?id=${encodeURIComponent(driveId)}&export=download&confirm=t`}
             onLoadedMetadata={event => {
                 const element = event.currentTarget
                 duration.current = element.duration
