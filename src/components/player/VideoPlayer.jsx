@@ -13,11 +13,15 @@ import CaptionOverlay from './CaptionOverlay'
 import TranslateModal from './TranslateModal'
 // [DUB FEATURE HIDDEN] import DubModal from './DubModal'
 import mpegts from 'mpegts.js'
+import ResumableEmbedPlayer from './ResumableEmbedPlayer'
+import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks'
 
 
 const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext, onPrevious, courseId, onTimeUpdate, autoPlay, onAspectRatioChange }, ref) {
     const { settings, updateSettings } = useSettings()
     const videoRef = useRef(null)
+    const embeddedPlayerRef = useRef(null)
+    const localBookmarkRef = useRef(null)
     const containerRef = useRef(null)
     const progressRef = useRef(null)
     const [videoUrl, setVideoUrl] = useState(null)
@@ -298,11 +302,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             setDuration(video.duration || 0)
 
             // Auto-restore last watched position
-            if (settings.resumePlayback && video.lastWatchedPosition > 5 && video.watchProgress < 0.95) {
-                setResumePosition(video.lastWatchedPosition)
-            } else {
-                setResumePosition(0)
-            }
+            setResumePosition(resumeTime(video, settings.resumePlayback))
             return
         }
 
@@ -331,11 +331,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             }
 
             // Auto-restore last watched position
-            if (settings.resumePlayback && video.lastWatchedPosition > 5 && video.watchProgress < 0.95) {
-                setResumePosition(video.lastWatchedPosition)
-            } else {
-                setResumePosition(0)
-            }
+            setResumePosition(resumeTime(video, settings.resumePlayback))
         } catch (err) {
             console.error('Failed to load video:', err)
             setError('Failed to load video: ' + err.message)
@@ -400,6 +396,9 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
 
     function handleTimeUpdate() {
         if (videoRef.current) {
+            const element = videoRef.current
+            localBookmarkRef.current = { id: video.id, time: element.currentTime, duration: element.duration }
+            writePlaybackBookmark(video.id, element.currentTime, element.duration)
             setCurrentTime(videoRef.current.currentTime)
             onTimeUpdate?.(videoRef.current.currentTime)
             
@@ -419,6 +418,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     // Expose seekTo method via ref
     useImperativeHandle(ref, () => ({
         seekTo: (time) => {
+            if (embeddedPlayerRef.current) return embeddedPlayerRef.current.seekTo(time)
             if (videoRef.current) {
                 const isYt = video?.youtubeId || video?.url?.includes('youtube.com') || video?.url?.includes('youtu.be')
                 if (isYt && videoRef.current.contentWindow) {
@@ -435,13 +435,14 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             }
         },
         getCurrentTime: () => {
+            if (embeddedPlayerRef.current) return embeddedPlayerRef.current.getCurrentTime()
             if (videoRef.current?.getCurrentTime) {
                 return videoRef.current.getCurrentTime()
             }
             return videoRef.current?.currentTime || 0
         },
         getInternalVideo: () => {
-            return videoRef.current
+            return embeddedPlayerRef.current?.getInternalVideo() || videoRef.current
         }
     }), [])
 
@@ -537,6 +538,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             const currentD = isEmbedded ? durationRef.current : videoRef.current.duration
 
             if (currentT === undefined || currentD === undefined) return
+            writePlaybackBookmark(video.id, currentT, currentD)
 
             await updateVideoProgress(
                 video.id,
@@ -669,73 +671,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             videoEl.removeEventListener('leavepictureinpicture', handleLeavePiP)
         }
     }, [videoUrl])
-
-    // ── YouTube / Drive current-time tracking ──────────────────────────
-    // YouTube: uses IFrame Player API (postMessage).  enablejsapi=1 is
-    //   already in the embed URL, so the iframe posts 'infoDelivery'
-    //   messages that include currentTime when we send a 'listening' cmd.
-    // Drive: no JS API available — use a simple elapsed-time counter.
-    useEffect(() => {
-        const isYouTube = !!(video?.youtubeId ||
-            (video?.url && (video.url.includes('youtube.com') || video.url.includes('youtu.be'))))
-        const isDrive = !!(video?.driveFileId ||
-            (video?.url && video.url.includes('drive.google.com')))
-
-        if (!isYouTube && !isDrive) return
-
-        // ── YouTube: postMessage API ────────────────────────────────
-        if (isYouTube) {
-            function handleMessage(e) {
-                if (!e.origin.includes('youtube.com')) return
-                try {
-                    const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
-                    if (data?.event === 'infoDelivery') {
-                        if (data.info?.currentTime != null) {
-                            const t = data.info.currentTime
-                            setCurrentTime(t)
-                            onTimeUpdate?.(t)
-                        }
-                        if (data.info?.playerState === 0) {
-                            handleEnded()
-                        }
-                    }
-                } catch { /* non-JSON messages — ignore */ }
-            }
-
-            window.addEventListener('message', handleMessage)
-
-            // Poll the iframe to trigger infoDelivery events
-            const poll = setInterval(() => {
-                try {
-                    videoRef.current?.contentWindow?.postMessage(
-                        JSON.stringify({ event: 'listening' }),
-                        'https://www.youtube.com'
-                    )
-                } catch { /* iframe not ready */ }
-            }, 500)
-
-            return () => {
-                window.removeEventListener('message', handleMessage)
-                clearInterval(poll)
-            }
-        }
-
-        // ── Drive: elapsed-time fallback ────────────────────────────
-        if (isDrive) {
-            let elapsed = 0
-            const ticker = setInterval(() => {
-                elapsed += 1
-                setCurrentTime(elapsed)
-                onTimeUpdate?.(elapsed)
-                
-                if (video?.duration > 0 && elapsed >= video.duration) {
-                    handleEnded()
-                }
-            }, 1000)
-
-            return () => clearInterval(ticker)
-        }
-    }, [video?.id])
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -1119,6 +1054,21 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     // We still show TutIn's prev/next, fullscreen, settings, and captions controls.
     const isEmbeddedPlayer = !!(video?.youtubeId || video?.driveFileId ||
         (video?.url && (video.url.includes('youtube.com') || video.url.includes('youtu.be') || video.url.includes('drive.google.com'))))
+
+    useEffect(() => {
+        const flush = () => {
+            const saved = localBookmarkRef.current
+            if (saved?.id !== video?.id) return
+            writePlaybackBookmark(saved.id, saved.time, saved.duration)
+            updateVideoProgress(saved.id, saved.time, saved.duration).catch(console.error)
+        }
+        const hidden = () => { if (document.visibilityState === 'hidden') flush() }
+        window.addEventListener('pagehide', flush)
+        document.addEventListener('visibilitychange', hidden)
+        return () => { flush(); window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', hidden) }
+    }, [video?.id])
+
+    if (isEmbeddedPlayer) return <ResumableEmbedPlayer key={video.id} ref={embeddedPlayerRef} video={video} settings={settings} autoPlay={autoPlay} onTimeUpdate={onTimeUpdate} onComplete={onComplete} onNext={onNext} onAspectRatioChange={onAspectRatioChange} />
 
     return (
         <div

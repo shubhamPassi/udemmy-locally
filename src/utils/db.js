@@ -1,4 +1,5 @@
 import * as api from './api.js'
+import { withPlaybackBookmark } from './playbackBookmarks.js'
 
 /**
  * TutIn Database — Server-only API client (v4)
@@ -24,7 +25,8 @@ export async function getCourse(courseId) {
 }
 
 export async function getCourseContent(courseId) {
-    return api.get(`/api/courses/${courseId}/content`)
+    const content = await api.get(`/api/courses/${courseId}/content`)
+    return { ...content, videos: (content.videos || []).map(withPlaybackBookmark) }
 }
 
 export async function getAllCourses() {
