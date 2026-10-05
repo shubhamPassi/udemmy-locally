@@ -3,6 +3,7 @@
   "framework": "vite",
   "buildCommand": "npm run build -- --base=/",
   "outputDirectory": "dist",
+  "regions": ["bom1"],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]

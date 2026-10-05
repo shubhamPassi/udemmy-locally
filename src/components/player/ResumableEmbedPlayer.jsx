@@ -23,6 +23,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
     const observed = useRef(false), lastPersist = useRef(0), completed = useRef(video.isCompleted)
     const persistedDuration = useRef(video.duration || 0)
     const nativeReady = useRef(false)
+    const lastCachedSecond = useRef(null)
     const [fallback, setFallback] = useState(false), [error, setError] = useState('')
     const [savedTime, setSavedTime] = useState(position.current)
     const callbacks = useRef({ onTimeUpdate, onComplete, onNext, onAspectRatioChange })
@@ -33,9 +34,13 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
 
     function remember(force = false) {
         if (!observed.current) return
-        writePlaybackBookmark(video.id, position.current, duration.current)
-        setSavedTime(position.current)
-        if (force || Date.now() - lastPersist.current > 4000) {
+        const second = Math.floor(position.current)
+        if (force || lastCachedSecond.current !== second) {
+            lastCachedSecond.current = second
+            writePlaybackBookmark(video.id, position.current, duration.current)
+            setSavedTime(position.current)
+        }
+        if (force || Date.now() - lastPersist.current > 10000) {
             lastPersist.current = Date.now()
             const time = position.current, length = duration.current
             const metadata = length > 0 && Math.abs(length - persistedDuration.current) > 1

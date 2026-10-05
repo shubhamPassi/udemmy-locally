@@ -79,6 +79,12 @@ function CoursePlayerPage() {
         return saved ? Math.max(280, Math.min(600, parseInt(saved, 10))) : 360
     })
     const [currentTime, setCurrentTime] = useState(0)
+    const handlePlaybackTime = useCallback(time => {
+        setCurrentTime(previous => Math.floor(previous) === Math.floor(time) ? previous : time)
+    }, [])
+    const playlistRefreshRef = useRef(null)
+    playlistRefreshRef.current = refreshModulesOnly
+    const handlePlaylistRefresh = useCallback(() => playlistRefreshRef.current?.(), [])
     const [instructorAvatar, setInstructorAvatar] = useState(null)
     const videoRef = useRef(null)
     const ambientCanvasRef = useRef(null)
@@ -250,10 +256,10 @@ function CoursePlayerPage() {
         }
     }
 
-    function handleVideoSelect(video) {
+    const handleVideoSelect = useCallback((video) => {
         setAutoPlay(true) // Autoplay when manually selecting from playlist
         setCurrentVideo(video)
-    }
+    }, [])
 
     // Lightweight refresh - only updates modules/videos data without reloading video player
     async function refreshModulesOnly() {
@@ -476,7 +482,7 @@ function CoursePlayerPage() {
                                         onNext={handleNextVideo}
                                         onPrevious={handlePreviousVideo}
                                         autoPlay={autoPlay}
-                                        onTimeUpdate={setCurrentTime}
+                                        onTimeUpdate={handlePlaybackTime}
                                         onAspectRatioChange={(w, h) => setVideoAspect({ w, h })}
                                     />
                                 </div>
@@ -546,7 +552,7 @@ function CoursePlayerPage() {
                     onVideoSelect={handleVideoSelect}
                     isCollapsed={sidebarCollapsed}
                     onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-                    onRefresh={refreshModulesOnly}
+                    onRefresh={handlePlaylistRefresh}
                     onVideoDataChange={refreshCurrentVideoOnly}
                     courseId={courseId}
                     currentTime={currentTime}

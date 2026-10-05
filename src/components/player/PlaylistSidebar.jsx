@@ -55,11 +55,12 @@ function PlaylistSidebar({
     onWidthChange
 }) {
     const [expandedModules, setExpandedModules] = useState(() => {
-        // Expand all modules by default (including sub-modules)
+        // Large courses initially expand only the selected lesson's module path.
+        const largeCourse = collectAllVideos(modules).length > 100
         function expandAll(mods) {
             const acc = {}
             for (const m of mods) {
-                acc[m.id] = true
+                acc[m.id] = !largeCourse || collectAllVideos([m]).some(video => video.id === currentVideo?.id)
                 if (m.subModules?.length > 0) {
                     Object.assign(acc, expandAll(m.subModules))
                 }
@@ -71,6 +72,19 @@ function PlaylistSidebar({
     const [editingModule, setEditingModule] = useState(null)
     const [activeTab, setActiveTab] = useState('playlist')
     const [isBulkEditing, setIsBulkEditing] = useState(false)
+    useEffect(() => {
+        function selectedPath(nodes, parents = []) {
+            for (const node of nodes) {
+                const path = [...parents, node.id]
+                if (node.videos?.some(video => video.id === currentVideo?.id)) return path
+                const nested = selectedPath(node.subModules || [], path)
+                if (nested.length) return nested
+            }
+            return []
+        }
+        const path = selectedPath(modules)
+        setExpandedModules(previous => path.every(id => previous[id]) ? previous : { ...previous, ...Object.fromEntries(path.map(id => [id, true])) })
+    }, [modules, currentVideo?.id])
     const { showNotification } = useNotification()
 
     // Resizable panel state
@@ -120,14 +134,14 @@ function PlaylistSidebar({
         }
     }, [])
 
-    function toggleModule(moduleId) {
+    const toggleModule = useCallback((moduleId) => {
         setExpandedModules(prev => ({
             ...prev,
             [moduleId]: !prev[moduleId]
         }))
-    }
+    }, [])
 
-    async function handleToggleComplete(e, video) {
+    const handleToggleComplete = useCallback(async (e, video) => {
         e.stopPropagation()
         try {
             await markVideoComplete(video.id, !video.isCompleted)
@@ -135,7 +149,7 @@ function PlaylistSidebar({
         } catch (err) {
             console.error('Failed to update completion:', err)
         }
-    }
+    }, [onRefresh])
 
     async function handleBulkSave(updatedModules) {
         try {
@@ -195,7 +209,7 @@ function PlaylistSidebar({
     /**
      * Render a module and its sub-modules recursively
      */
-    function renderModule(module, depth = 0) {
+    const renderModule = useCallback(function renderModule(module, depth = 0) {
         const isExpanded = expandedModules[module.id]
         const hasSubModules = module.subModules && module.subModules.length > 0
         const hasContent = (module.videos?.length > 0) || hasSubModules
@@ -307,7 +321,9 @@ function PlaylistSidebar({
                 )}
             </div>
         )
-    }
+    }, [expandedModules, currentVideo?.id, toggleModule, handleToggleComplete, onVideoSelect])
+
+    const playlistRows = useMemo(() => modules.map(module => renderModule(module, 0)), [modules, renderModule])
 
     const sidebarContent = (
         <>
@@ -415,7 +431,7 @@ function PlaylistSidebar({
                             </Suspense>
                         ) : (
                             <div className="flex-1 overflow-y-auto">
-                                {modules.map(module => renderModule(module, 0))}
+                                {playlistRows}
                             </div>
                         )}
                     </div>

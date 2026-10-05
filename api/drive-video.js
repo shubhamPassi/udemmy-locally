@@ -1,6 +1,8 @@
 // Public Drive files are read in bounded ranges so the native browser player can seek.
 // Video bytes are cacheable in the viewer's browser; no whole-file download is buffered.
-const CHUNK_SIZE = 1024 * 1024
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+const CHUNK_SIZE = 4 * 1024 * 1024
 export default async function handler(req, res) {
     if (!['GET', 'HEAD'].includes(req.method)) return res.status(405).end()
     const { id } = req.query
@@ -9,7 +11,9 @@ export default async function handler(req, res) {
     if (!match) return res.status(416).end()
     const start = Number(match[1])
     if (!Number.isSafeInteger(start)) return res.status(416).end()
-    const end = req.method === 'HEAD' ? start : Math.min(match[2] ? Number(match[2]) : start + CHUNK_SIZE - 1, start + CHUNK_SIZE - 1)
+    // Fetch only metadata-sized data initially, then amortize request overhead with 4 MB ranges.
+    const size = start === 0 ? 1024 * 1024 : CHUNK_SIZE
+    const end = req.method === 'HEAD' ? start : Math.min(match[2] ? Number(match[2]) : start + size - 1, start + size - 1)
     if (!Number.isSafeInteger(end) || end < start) return res.status(416).end()
     let upstream
     try {
@@ -27,12 +31,14 @@ export default async function handler(req, res) {
         res.setHeader('Cache-Control', 'private, max-age=86400')
         res.setHeader('Vary', 'Range')
         if (req.method === 'HEAD') { await upstream.body.cancel(); return res.status(206).end() }
-        const bytes = Buffer.from(await upstream.arrayBuffer())
-        if (bytes.length > CHUNK_SIZE) throw new Error('Drive returned an oversized range')
-        res.setHeader('Content-Length', bytes.length)
-        return res.status(206).send(bytes)
+        const length = Number(upstream.headers.get('content-length'))
+        if (!Number.isFinite(length) || length < 1 || length > size) throw new Error('Drive returned an invalid range')
+        res.setHeader('Content-Length', length)
+        res.status(206)
+        return await pipeline(Readable.fromWeb(upstream.body), res)
     } catch {
         await upstream?.body?.cancel().catch(() => {})
+        if (res.headersSent || res.destroyed) return
         res.setHeader('Cache-Control', 'no-store')
         return res.status(502).json({ error: 'Could not stream this public Drive video. Please retry.' })
     }

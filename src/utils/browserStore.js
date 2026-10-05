@@ -1,13 +1,23 @@
 // Hosted app data stays in this browser. Structured cloning preserves folder/file handles.
 const tables = ['courses', 'modules', 'videos', 'notes', 'instructors', 'roadmaps', 'transcripts', 'summaries']
 let database
+const dirtyCourses = new Set()
+let aggregation = Promise.resolve(), aggregationTimer
 function openDatabase() {
     if (!database) database = new Promise((resolve, reject) => {
         const opening = indexedDB.open('tutin-web', 1)
         opening.onupgradeneeded = () => {
-            for (const name of [...tables, 'settings']) opening.result.createObjectStore(name, { keyPath: 'id' })
+            for (const name of [...tables, 'settings']) {
+                const store = opening.result.objectStoreNames.contains(name)
+                    ? opening.transaction.objectStore(name)
+                    : opening.result.createObjectStore(name, { keyPath: 'id' })
+                for (const field of ['courseId', 'moduleId', 'videoId']) if (!store.indexNames.contains(field)) store.createIndex(field, field)
+            }
         }
-        opening.onsuccess = () => resolve(opening.result)
+        opening.onsuccess = () => {
+            opening.result.onversionchange = () => { opening.result.close(); database = null }
+            resolve(opening.result)
+        }
         opening.onerror = () => { database = null; reject(opening.error) }
     })
     return database
@@ -25,18 +35,49 @@ async function operation(table, method, value) {
 const all = name => operation(name, 'getAll')
 const save = (name, row) => operation(name, 'put', row).then(() => row)
 const sort = rows => rows.sort((a, b) => (a.order || 0) - (b.order || 0))
+async function by(table, field, value) {
+    const db = await openDatabase()
+    // Existing v1 databases remain usable while other app tabs are open.
+    if (!db.transaction(table).objectStore(table).indexNames.contains(field)) return (await all(table)).filter(row => row[field] === value)
+    return new Promise((resolve, reject) => {
+        const query = db.transaction(table).objectStore(table).index(field).getAll(value)
+        query.onsuccess = () => resolve(query.result)
+        query.onerror = () => reject(query.error)
+    })
+}
+function invalidateCourse(courseId) {
+    dirtyCourses.add(courseId)
+    clearTimeout(aggregationTimer)
+    aggregationTimer = setTimeout(() => flushProgress().catch(console.error), 100)
+}
+function flushProgress() {
+    const ids = [...dirtyCourses]
+    dirtyCourses.clear()
+    aggregation = aggregation.catch(() => {}).then(async () => { for (const id of ids) await updateProgress(id) })
+    return aggregation
+}
 async function updateProgress(courseId) {
-    const course = await operation('courses', 'get', courseId)
-    if (!course) return
-    const videos = (await all('videos')).filter(v => v.courseId === courseId)
+    const [videos, modules] = await Promise.all([by('videos', 'courseId', courseId), by('modules', 'courseId', courseId)])
     const completed = videos.filter(v => v.isCompleted).length
-    await save('courses', { ...course, totalVideos: videos.length, completedVideos: completed,
+    const totals = { totalVideos: videos.length, completedVideos: completed,
         totalDuration: videos.reduce((sum, v) => sum + (v.duration || 0), 0),
-        completionPercentage: videos.length ? completed / videos.length * 100 : 0 })
-    for (const mod of (await all('modules')).filter(m => m.courseId === courseId)) {
+        completionPercentage: videos.length ? completed / videos.length * 100 : 0 }
+    const db = await openDatabase()
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(['courses', 'modules'], 'readwrite')
+      function merge(table, id, updates) {
+        const store = tx.objectStore(table), current = store.get(id)
+        current.onsuccess = () => { if (current.result) store.put({ ...current.result, ...updates }) }
+      }
+      merge('courses', courseId, totals)
+      for (const mod of modules) {
         const own = videos.filter(v => v.moduleId === mod.id)
-        await save('modules', { ...mod, totalDuration: own.reduce((sum, v) => sum + (v.duration || 0), 0), completedVideos: own.filter(v => v.isCompleted).length })
-    }
+        merge('modules', mod.id, { totalDuration: own.reduce((sum, v) => sum + (v.duration || 0), 0), completedVideos: own.filter(v => v.isCompleted).length })
+      }
+      tx.oncomplete = resolve
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error)
+    })
 }
 async function removeRelated(courseId, moduleId) {
     for (const table of ['videos', 'modules', 'notes', 'transcripts', 'summaries']) {
@@ -84,16 +125,19 @@ export async function request(method, path, body = {}) {
     }
     if (id?.startsWith('by-')) {
         const key = { 'by-course': 'courseId', 'by-module': 'moduleId', 'by-video': 'videoId' }[id]
-        const rows = sort((await all(table)).filter(row => row[key] === action))
+        const rows = sort(await by(table, key, action))
         if (method === 'DELETE') { for (const row of rows) await operation(table, 'delete', row.id); return { success: true } }
         return rows
     }
     if (table === 'courses' && action === 'content') {
+        await flushProgress()
         const course = await operation(table, 'get', id)
         if (!course) throw new Error('Course not found')
-        return { course, modules: sort((await all('modules')).filter(m => m.courseId === id)), videos: sort((await all('videos')).filter(v => v.courseId === id)) }
+        const [modules, videos] = await Promise.all([by('modules', 'courseId', id), by('videos', 'courseId', id)])
+        return { course, modules: sort(modules), videos: sort(videos) }
     }
     if (method === 'GET') {
+        if (table === 'courses' || table === 'modules') await flushProgress()
         if (id) return operation(table, 'get', id)
         let rows = sort(await all(table))
         if (url.searchParams.has('instructor')) rows = rows.filter(r => r.instructor?.toLowerCase() === url.searchParams.get('instructor').toLowerCase())
@@ -104,7 +148,7 @@ export async function request(method, path, body = {}) {
         await operation(table, 'delete', id)
         if (table === 'courses') await removeRelated(id)
         if (table === 'modules') await removeRelated(existing?.courseId, id)
-        if (existing?.courseId) await updateProgress(existing.courseId)
+        if (existing?.courseId) invalidateCourse(existing.courseId)
         return { success: true }
     }
     const existing = id ? await operation(table, 'get', id) : null
@@ -112,7 +156,9 @@ export async function request(method, path, body = {}) {
         isCompleted: false, watchProgress: 0, lastWatchedPosition: 0, ...existing, ...body,
         id: id || body.id || `${table}_${crypto.randomUUID()}`, updatedAt: now }
     if (table === 'videos' && action === 'progress') row.lastWatchedAt = now
+    if (table === 'courses') delete row.modules
     const result = await save(table, row)
-    if (row.courseId && ['videos', 'modules'].includes(table)) await updateProgress(row.courseId)
+    const affectsTotals = table === 'modules' || (table === 'videos' && (!existing || ['duration','isCompleted','moduleId','courseId'].some(key => key in body)))
+    if (row.courseId && affectsTotals) invalidateCourse(row.courseId)
     return result
 }

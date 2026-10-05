@@ -40,3 +40,17 @@ test('Drive page decoder reads escaped public names and refuses sign-in pages', 
  assert.equal(parsed.name,'Course')
  assert.throws(()=>parseDrivePage('<title>Sign in</title>'),/publicly readable/)
 })
+test('saving a timestamp writes only its video instead of recalculating the whole course', async () => {
+ await request('POST','/api/courses',{id:'performance',title:'Large course'})
+ await request('POST','/api/modules',{id:'perf-module',courseId:'performance'})
+ await request('POST','/api/videos',{id:'perf-video',courseId:'performance',moduleId:'perf-module',duration:100})
+ await request('GET','/api/courses/performance/content')
+ const originalPut = IDBObjectStore.prototype.put
+ const writes = []
+ IDBObjectStore.prototype.put = function(...args) { writes.push(this.name); return originalPut.apply(this,args) }
+ try {
+   await request('PUT','/api/videos/perf-video/progress',{lastWatchedPosition:50,watchProgress:0.5})
+   assert.deepEqual(writes,['videos'])
+ } finally { IDBObjectStore.prototype.put = originalPut }
+ assert.equal((await request('GET','/api/courses/performance/content')).videos[0].lastWatchedPosition,50)
+})
