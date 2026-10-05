@@ -110,6 +110,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
         return () => { cancelled = true; clearInterval(timer); remember(true); player.current?.destroy?.(); player.current = null }
     }, [video.id])
     return <div className="w-full h-full relative bg-black">
+        <div className="relative w-full h-full" style={{ height: !fallback && savedTime > 0 ? 'calc(100% - 24px)' : '100%' }}>
         {isYouTube ? <div ref={host} className="w-full h-full" /> : fallback ? <>
             <iframe className="w-full h-full" src={`https://drive.google.com/file/d/${driveId}/preview`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={video.title} />
             <p className="absolute bottom-0 inset-x-0 p-2 text-xs bg-black/90 text-white">Drive preview does not expose playback time. Enable downloads for this file or import its local copy to use automatic resume.</p>
@@ -129,7 +130,8 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
             onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext) callbacks.current.onNext?.() }}
             onError={event => { console.warn('Drive direct playback failed:', event.currentTarget.error?.code, event.currentTarget.error?.message); setFallback(true) }} />}
         {error && <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p>}
-        {!fallback && savedTime > 0 && <span className="absolute top-2 left-2 pointer-events-none text-xs text-white bg-black/70 rounded px-2 py-1">Saved at {formatDuration(savedTime)}</span>}
+        </div>
+        {!fallback && savedTime > 0 && <div className="h-6 px-2 flex items-center text-xs text-neutral-400 bg-black" aria-live="off">Saved at {formatDuration(savedTime)}</div>}
     </div>
 })
 export default ResumableEmbedPlayer
