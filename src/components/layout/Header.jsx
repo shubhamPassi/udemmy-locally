@@ -58,7 +58,7 @@ function Header() {
 
     return (
         <>
-            <header className="h-16 sticky top-0 z-50 bg-white dark:bg-black/60 backdrop-blur-2xl border-b border-gray-200 dark:border-white/5 transition-all duration-300">
+            <header className="h-16 sticky top-0 z-50 bg-white dark:bg-black border-b border-gray-200 dark:border-white/5 transition-colors duration-150">
                 <div className="h-full px-4 flex items-center">
                     {/* Left: Hamburger + Logo */}
                     <div className="flex items-center gap-4 flex-shrink-0">

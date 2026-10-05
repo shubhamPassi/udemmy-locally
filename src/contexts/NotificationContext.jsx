@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo } from 'react'
 import NotificationToast from '../components/common/NotificationToast'
 
 const NotificationContext = createContext(null)
@@ -16,9 +16,10 @@ export function NotificationProvider({ children }) {
     const removeNotification = useCallback((id) => {
         setNotifications(prev => prev.filter(n => n.id !== id))
     }, [])
+    const value = useMemo(() => ({ showNotification }), [showNotification])
 
     return (
-        <NotificationContext.Provider value={{ showNotification }}>
+        <NotificationContext.Provider value={value}>
             {children}
             <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
                 {notifications.map((n, i) => (

@@ -4,7 +4,10 @@ import { ChevronLeft, Menu } from 'lucide-react'
 import { getCourse, getCourseContent, getInstructorAvatarAsync, buildModuleTree } from '../utils/db'
 import { useSettings } from '../contexts/SettingsContext'
 import LoadingSpinner from '../components/common/LoadingSpinner'
-import VideoPlayer from '../components/player/VideoPlayer'
+import VideoPlayer from '../components/player/CourseVideoPlayer'
+import { createPlaybackClock } from '../utils/playbackClock'
+import { IS_BROWSER_MODE } from '../utils/api'
+import { resumeTime } from '../utils/playbackBookmarks'
 import PlaylistSidebar from '../components/player/PlaylistSidebar'
 function findModulePath(modules, targetModuleId) {
     if (!modules || !targetModuleId) return []
@@ -78,16 +81,16 @@ function CoursePlayerPage() {
         const saved = localStorage.getItem('sidebarPanelWidth')
         return saved ? Math.max(280, Math.min(600, parseInt(saved, 10))) : 360
     })
-    const [currentTime, setCurrentTime] = useState(0)
-    const handlePlaybackTime = useCallback(time => {
-        setCurrentTime(previous => Math.floor(previous) === Math.floor(time) ? previous : time)
-    }, [])
+    const playbackClock = useMemo(() => createPlaybackClock(), [courseId])
+    const handlePlaybackTime = playbackClock.update
+    useEffect(() => {
+        if (currentVideo) playbackClock.update(resumeTime(currentVideo, settings.resumePlayback))
+    }, [playbackClock, currentVideo?.id, settings.resumePlayback])
     const playlistRefreshRef = useRef(null)
     playlistRefreshRef.current = refreshModulesOnly
     const handlePlaylistRefresh = useCallback(() => playlistRefreshRef.current?.(), [])
     const [instructorAvatar, setInstructorAvatar] = useState(null)
     const videoRef = useRef(null)
-    const ambientCanvasRef = useRef(null)
 
     // ── Adaptive player sizing (YouTube-style JS-driven height) ──────────────
     // videoAspect: actual pixel dimensions reported by VideoPlayer after load.
@@ -302,6 +305,7 @@ function CoursePlayerPage() {
 
     // Auto-fetch YouTube transcripts
     useEffect(() => {
+        if (IS_BROWSER_MODE) return
         if (!currentVideo) return
         const isYouTube = currentVideo.youtubeId ||
             (currentVideo.url && (currentVideo.url.includes('youtube.com') || currentVideo.url.includes('youtu.be')))
@@ -350,63 +354,6 @@ function CoursePlayerPage() {
         }
     }
 
-    // Ambient Mode Effect
-    const innerAmbientCanvasRef = useRef(null)
-
-    useEffect(() => {
-        let animationFrameId
-        let originalWidth = 0
-        let originalHeight = 0
-
-        const drawAmbient = () => {
-            const canvas = ambientCanvasRef.current
-            const video = videoRef.current?.getInternalVideo?.()
-
-            // Note: YouTube/Drive iframes will be skipped as they don't have nodeName === 'VIDEO'
-            // We draw even if paused so that the glow stays when video is paused
-            if (canvas && video && video.nodeName === 'VIDEO' && video.readyState >= 2) {
-                const ctx = canvas.getContext('2d')
-
-                // Set low resolution canvas but maintain aspect ratio for performance
-                if (video.videoWidth > 0 && video.videoHeight > 0 && (originalWidth !== video.videoWidth || originalHeight !== video.videoHeight)) {
-                    originalWidth = video.videoWidth
-                    originalHeight = video.videoHeight
-
-                    // Cap at ~64x36 for extreme blur performance
-                    const ratio = originalWidth / originalHeight
-                    canvas.height = 36
-                    canvas.width = Math.floor(36 * ratio)
-                }
-
-                if (canvas.width > 0 && canvas.height > 0) {
-                    try {
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-                        // Duplicate to inner canvas for letterboxes
-                        if (innerAmbientCanvasRef.current) {
-                            const innerCtx = innerAmbientCanvasRef.current.getContext('2d')
-                            if (innerAmbientCanvasRef.current.width !== canvas.width) {
-                                innerAmbientCanvasRef.current.width = canvas.width
-                                innerAmbientCanvasRef.current.height = canvas.height
-                            }
-                            innerCtx.drawImage(canvas, 0, 0)
-                        }
-                    } catch (err) {
-                        // Ignore cross-origin errors if any
-                    }
-                }
-            }
-
-            animationFrameId = requestAnimationFrame(drawAmbient)
-        }
-
-        drawAmbient()
-
-        return () => {
-            if (animationFrameId) cancelAnimationFrame(animationFrameId)
-        }
-    }, [])
-
     if (isLoading) {
         return <LoadingSpinner message="Loading course..." />
     }
@@ -427,21 +374,7 @@ function CoursePlayerPage() {
     }
 
     return (
-        <div className="animate-fade-in -mx-4 -my-6 relative overflow-hidden">
-            {/* Ambient Mode Background Wrapper */}
-            <div className="absolute inset-0 z-0 pointer-events-none opacity-10 dark:opacity-10 transition-opacity duration-1000">
-                <canvas
-                    ref={ambientCanvasRef}
-                    className="absolute top-1/2 left-1/2 w-[110%] h-[110%] object-cover"
-                    style={{
-                        filter: 'blur(90px) saturate(150%)',
-                        transform: 'translate(-50%, -50%) scale(1.05)'
-                    }}
-                />
-                {/* Edge Fading Overlays */}
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-light-bg dark:to-dark-bg" />
-            </div>
-
+        <div className="-mx-4 -my-6 relative overflow-hidden">
             {/* Main Content */}
             <div className={`relative z-10 flex h-[calc(100vh-64px)]`}>
                 {/* Video Player Area — padding-right tracks sidebar width exactly */}
@@ -460,19 +393,6 @@ function CoursePlayerPage() {
                                 className="bg-transparent relative sticky top-0 z-20 mx-4 mt-4 rounded-xl overflow-hidden"
                                 style={{ height: playerHeight }}
                             >
-                                {/* Inner Ambient for Letterboxes */}
-                                <div className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000">
-                                    <canvas
-                                        ref={innerAmbientCanvasRef}
-                                        className="w-full h-full object-cover"
-                                        style={{
-                                            filter: 'blur(30px) saturate(200%)',
-                                            transform: 'scale(1.05)',
-                                            opacity: 0.05
-                                        }}
-                                    />
-                                </div>
-
                                 <div className="relative z-10 w-full h-full">
                                     <VideoPlayer
                                         ref={videoRef}
@@ -555,7 +475,7 @@ function CoursePlayerPage() {
                     onRefresh={handlePlaylistRefresh}
                     onVideoDataChange={refreshCurrentVideoOnly}
                     courseId={courseId}
-                    currentTime={currentTime}
+                    playbackClock={playbackClock}
                     onSeek={(time) => videoRef.current?.seekTo?.(time)}
                     onWidthChange={handleSidebarWidthChange}
                 />

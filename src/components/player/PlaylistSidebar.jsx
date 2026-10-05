@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { lazy, Suspense, useState, useMemo, useRef, useEffect, useCallback, useSyncExternalStore } from 'react'
 import {
     ChevronDown, ChevronRight, ChevronLeft, Check,
     Pencil, GripVertical, Folder, FolderOpen
@@ -10,6 +10,11 @@ const EditModuleModal = lazy(() => import('./EditModuleModal'))
 const NotesPanel = lazy(() => import('./NotesPanel'))
 const BulkEditPlaylist = lazy(() => import('./BulkEditPlaylist'))
 const AISummaryPanel = lazy(() => import('./AISummaryPanel'))
+
+function TimestampPanel({ playbackClock, component: Panel, ...props }) {
+    const currentTime = useSyncExternalStore(playbackClock.subscribe, playbackClock.getSnapshot, () => 0)
+    return <Panel {...props} currentTime={currentTime} />
+}
 
 /**
  * Collect all videos from a module tree recursively
@@ -50,7 +55,7 @@ function PlaylistSidebar({
     onRefresh,
     onVideoDataChange,
     courseId,
-    currentTime,
+    playbackClock,
     onSeek,
     onWidthChange
 }) {
@@ -441,10 +446,9 @@ function PlaylistSidebar({
                         <div className="h-full overflow-y-auto">
                             {activeTab === 'notes' && (
                                 <Suspense fallback={null}>
-                                    <NotesPanel
+                                    <TimestampPanel component={NotesPanel} playbackClock={playbackClock}
                                         video={currentVideo}
                                         courseId={courseId}
-                                        currentTime={currentTime}
                                         onSeek={onSeek}
                                         isCollapsed={false}
                                         hideHeader={true}
@@ -459,12 +463,11 @@ function PlaylistSidebar({
                         <div className="h-full overflow-y-auto">
                             {activeTab === 'ai' && (
                                 <Suspense fallback={null}>
-                                    <AISummaryPanel
+                                    <TimestampPanel component={AISummaryPanel} playbackClock={playbackClock}
                                         video={currentVideo}
                                         courseId={courseId}
                                         onSeek={onSeek}
                                         onVideoDataChange={onVideoDataChange}
-                                        currentTime={currentTime}
                                     />
                                 </Suspense>
                             )}
