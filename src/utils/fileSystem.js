@@ -1,4 +1,5 @@
 import * as api from './api.js'
+import { pickBrowserFolder, scanBrowserFolder, browserVideoUrl } from './browserFiles.js'
 
 /**
  * File System Manager (v4 Server-Only)
@@ -30,6 +31,7 @@ export function naturalSort(a, b) {
  * Open folder picker via server (v4)
  */
 export async function pickFolder() {
+    if (api.IS_BROWSER_MODE) return pickBrowserFolder()
     const result = await api.get('/api/fs/pick-folder')
     if (!result.path) return null // User cancelled
     
@@ -58,6 +60,7 @@ function getFolderPath(directoryHandleOrPath) {
 }
 
 export async function scanCourseFolder(directoryHandleOrPath, autoDetectThumbnails = false, options = {}) {
+    if (api.IS_BROWSER_MODE) return scanBrowserFolder(directoryHandleOrPath)
     const folderPath = getFolderPath(directoryHandleOrPath)
 
     return await api.post('/api/fs/scan', {
@@ -72,6 +75,11 @@ export async function scanCourseFolder(directoryHandleOrPath, autoDetectThumbnai
  * returned as independent courses.
  */
 export async function scanCourseSelection(directoryHandleOrPath, autoDetectThumbnails = false, options = {}) {
+    if (api.IS_BROWSER_MODE) {
+        const course = await scanBrowserFolder(directoryHandleOrPath)
+        if (!course.totalVideos) throw new Error('No video files found in this folder.')
+        return { courses: [course], selectedPath: course.folderPath, failed: [] }
+    }
     const folderPath = getFolderPath(directoryHandleOrPath)
 
     return await api.post('/api/fs/scan-selection', {
@@ -85,6 +93,7 @@ export async function scanCourseSelection(directoryHandleOrPath, autoDetectThumb
  * Get video streaming URL via server (v4)
  */
 export async function getVideoUrl(pathOrHandle) {
+    if (api.IS_BROWSER_MODE) return browserVideoUrl(pathOrHandle)
     const path = typeof pathOrHandle === 'string' ? pathOrHandle : pathOrHandle.path || pathOrHandle.filePath
     if (!path) {
         throw new Error('No file path provided for video URL')
@@ -96,6 +105,7 @@ export async function getVideoUrl(pathOrHandle) {
  * Release video URL (No-op for server streaming)
  */
 export function releaseVideoUrl(url) {
+    if (url?.startsWith('blob:')) URL.revokeObjectURL(url)
     // Server URLs don't need to be revoked like Blob URLs
 }
 

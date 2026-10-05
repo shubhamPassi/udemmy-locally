@@ -3,6 +3,7 @@ import { X, HardDrive, Save, AlertTriangle, Folder, Video, Loader, ExternalLink 
 import { parseGoogleDriveUrl, scanDriveFolder, getDriveThumbnailUrl } from '../../utils/googleDrive'
 import { formatDuration } from '../../utils/db'
 import { useSettings } from '../../contexts/SettingsContext'
+import { IS_BROWSER_MODE } from '../../utils/api'
 
 function GoogleDriveImportModal({ isOpen, onClose, onImport }) {
     const { settings } = useSettings()
@@ -27,7 +28,7 @@ function GoogleDriveImportModal({ isOpen, onClose, onImport }) {
     if (!isOpen) return null
 
     async function handleFetchInfo() {
-        if (!url || !apiKey) return
+        if (!url) return
         setIsLoading(true)
         setError(null)
         setPreviewData(null)
@@ -42,13 +43,14 @@ function GoogleDriveImportModal({ isOpen, onClose, onImport }) {
 
             // Scan the folder
             const courseData = await scanDriveFolder(folderId, apiKey)
+            setFolderName(courseData.title || 'Google Drive Course')
 
             if (courseData.totalVideos === 0) {
                 throw new Error('No video files found in this folder. Make sure the folder contains MP4, WebM, MOV, or other video files.')
             }
 
             // Try to get folder name (requires additional API call)
-            try {
+            if (apiKey && !IS_BROWSER_MODE) try {
                 const metaUrl = `https://www.googleapis.com/drive/v3/files/${folderId}?key=${apiKey}&fields=name`
                 const metaRes = await fetch(metaUrl)
                 if (metaRes.ok) {
@@ -140,7 +142,7 @@ function GoogleDriveImportModal({ isOpen, onClose, onImport }) {
                             />
                             <button
                                 onClick={handleFetchInfo}
-                                disabled={!url || !apiKey || isLoading}
+                                disabled={!url || isLoading}
                                 className="px-4 py-2 bg-primary text-primary-content text-white rounded-lg hover:bg-primary-hover disabled:opacity-50"
                             >
                                 {isLoading ? <Loader className="w-5 h-5 animate-spin" /> : 'Scan'}
@@ -159,13 +161,7 @@ function GoogleDriveImportModal({ isOpen, onClose, onImport }) {
                         </div>
                     )}
                     
-                    {/* API Key Missing Error */}
-                    {!apiKey && !error && (
-                        <div className="p-4 bg-warning/10 text-warning rounded-lg flex items-start gap-2">
-                            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                            <span className="text-sm">Google API Key is missing. Please configure it in the <strong className="font-semibold">Settings</strong> menu first.</span>
-                        </div>
-                    )}
+                    <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">Share the folder and its videos as “Anyone with the link” with Viewer access. Public folders do not need an API key.</p>
 
                     {/* Preview */}
                     {previewData && (

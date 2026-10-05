@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { X, Youtube, Save, AlertTriangle, PlayCircle, List, Loader, Settings } from 'lucide-react'
 import { formatDuration, parseISODuration } from '../../utils/db'
 import { useSettings } from '../../contexts/SettingsContext'
+import { IS_BROWSER_MODE } from '../../utils/api'
+import { fetchPublicImport } from '../../utils/publicImport'
 
 function YouTubeImportModal({ isOpen, onClose, onImport }) {
     const { settings } = useSettings()
@@ -38,6 +40,7 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
             let id = ''
 
             const urlObj = new URL(url)
+            if (!['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'].includes(urlObj.hostname)) throw new Error('Please use a YouTube video or playlist link')
             if (urlObj.searchParams.has('list')) {
                 type = 'playlist'
                 id = urlObj.searchParams.get('list')
@@ -47,10 +50,17 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
             } else if (urlObj.hostname === 'youtu.be') {
                 type = 'video'
                 id = urlObj.pathname.slice(1)
+            } else if (/^\/(shorts|embed)\//.test(urlObj.pathname)) {
+                id = urlObj.pathname.split('/')[2]
             }
 
             if (!id) throw new Error('Invalid YouTube URL')
             setImportType(type)
+
+            if (IS_BROWSER_MODE) {
+                setPreviewData(await fetchPublicImport('youtube', id, type))
+                return
+            }
 
             if (type === 'video') {
                 let videoData = null
@@ -260,7 +270,7 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
                     </div>
 
                     {/* API Key Status */}
-                    {!apiKey && (
+                    {!apiKey && !IS_BROWSER_MODE && (
                         <div className="p-4 bg-amber-50 dark:bg-amber-500/5 rounded-lg border border-amber-200 dark:border-amber-500/20 flex items-start gap-3">
                             <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                             <div>

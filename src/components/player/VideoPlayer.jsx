@@ -311,8 +311,8 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             setError(null)
 
             // Server mode: use filePath for streaming
-            if (video.filePath) {
-                const url = await getVideoUrl(video.filePath)
+            if (video.filePath || video.fileHandle) {
+                const url = await getVideoUrl(video.fileHandle || video.filePath)
                 fallbackAttemptRef.current = url.includes('/video-compatible/')
                     ? 4
                     : url.includes('/video-transcoded/')

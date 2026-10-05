@@ -110,7 +110,8 @@ function HomePage() {
             ...courseStructure,
             ...overrides,
             thumbnailData,
-            folderPath: courseStructure.folderPath || courseStructure.path
+            folderPath: courseStructure.folderPath || courseStructure.path,
+            folderHandle: courseStructure.folderHandle
         }
 
         const savedCourse = await addCourse(courseData)
@@ -242,7 +243,7 @@ function HomePage() {
     async function handleSyncCourse(course) {
         try {
             const { pickFolder, scanCourseFolder, syncCoursePreview } = await import('../utils/fileSystem')
-            const folderPath = course.folderPath || course.folder_path
+            const folderPath = api.IS_BROWSER_MODE ? course.folderHandle : course.folderPath || course.folder_path
             let scannedData = null
 
             if (folderPath) {

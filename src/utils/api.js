@@ -6,10 +6,27 @@
  */
 
 export const SERVER_URL = 'http://127.0.0.1:9474'
+export const IS_BROWSER_MODE = typeof window !== 'undefined' &&
+    !['localhost', '127.0.0.1', '[::1]', ''].includes(window.location.hostname)
+
+async function browserRequest(method, path, body) {
+    const { request } = await import('./browserStore.js')
+    return request(method, path, body)
+}
+
+async function fetchCompanion(path, options) {
+    try {
+        return await fetch(`${SERVER_URL}${path}`, options)
+    } catch (error) {
+        if (error.name === 'AbortError') throw error
+        throw new Error('Cannot connect to TutIn on this computer. Start the companion server with npm run server, then reload this page. If your browser asks for local network access, allow it for this site.')
+    }
+}
 /**
  * Check if the companion server is running and reachable.
  */
 export async function isServerAvailable() {
+    if (IS_BROWSER_MODE) return false
     try {
         const res = await fetch(`${SERVER_URL}/api/health`, {
             signal: AbortSignal.timeout(1000)
@@ -38,9 +55,10 @@ async function handleErrorResponse(res) {
  * GET request wrapper
  */
 export async function get(path) {
+    if (IS_BROWSER_MODE) return browserRequest('GET', path)
     const separator = path.includes('?') ? '&' : '?'
     const timestampedPath = `${path}${separator}_t=${Date.now()}`
-    const res = await fetch(`${SERVER_URL}${timestampedPath}`)
+    const res = await fetchCompanion(timestampedPath)
     if (!res.ok) await handleErrorResponse(res)
     return res.json()
 }
@@ -49,7 +67,8 @@ export async function get(path) {
  * POST request wrapper
  */
 export async function post(path, body) {
-    const res = await fetch(`${SERVER_URL}${path}`, {
+    if (IS_BROWSER_MODE) return browserRequest('POST', path, body)
+    const res = await fetchCompanion(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -62,7 +81,8 @@ export async function post(path, body) {
  * PUT request wrapper
  */
 export async function put(path, body) {
-    const res = await fetch(`${SERVER_URL}${path}`, {
+    if (IS_BROWSER_MODE) return browserRequest('PUT', path, body)
+    const res = await fetchCompanion(path, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -75,7 +95,8 @@ export async function put(path, body) {
  * DELETE request wrapper
  */
 export async function del(path) {
-    const res = await fetch(`${SERVER_URL}${path}`, { method: 'DELETE' })
+    if (IS_BROWSER_MODE) return browserRequest('DELETE', path)
+    const res = await fetchCompanion(path, { method: 'DELETE' })
     if (!res.ok) await handleErrorResponse(res)
     return res.json()
 }

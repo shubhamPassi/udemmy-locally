@@ -7,6 +7,7 @@ import { lazy, Suspense, useState } from 'react'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useNotification } from '../../contexts/NotificationContext'
 import { useImport } from '../../contexts/ImportContext'
+import { pickFolder, scanCourseSelection } from '../../utils/fileSystem'
 
 const SettingsModal = lazy(() => import('../settings/SettingsModal'))
 const YouTubeImportModal = lazy(() => import('../course/YouTubeImportModal'))
@@ -35,7 +36,6 @@ function Header() {
         if (isScanningLocal) return
         setIsScanningLocal(true)
         try {
-            const { scanCourseSelection, pickFolder } = await import('../../utils/fileSystem')
             const handle = await pickFolder()
             if (handle) {
                 showNotification('Scanning selected folder...', 'info')
@@ -129,6 +129,7 @@ function Header() {
                                 {/* Dropdown toggle */}
                                 <button
                                     onClick={() => setShowAddMenu(!showAddMenu)}
+                                    aria-label="Choose course source"
                                     className="px-2 py-2 bg-primary text-primary-content hover:bg-primary-hover rounded-r-full transition-all duration-200"
                                 >
                                     <ChevronDown className="w-4 h-4" />
