@@ -55,7 +55,7 @@ export default function StreamPlayerControls({ mediaRef, containerRef }) {
                     <button className={`${button} hidden sm:flex`} onClick={() => { mediaRef.current.muted = !mediaRef.current.muted }} aria-label={state.muted ? 'Unmute' : 'Mute'} title="Mute (M)">{state.muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}</button>
                     <input type="range" aria-label="Volume" min="0" max="1" step="0.05" value={state.muted ? 0 : state.volume} onChange={event => { mediaRef.current.volume = Number(event.target.value); mediaRef.current.muted = false }} className="hidden lg:block w-16 accent-blue-500" />
                     <select aria-label="Playback speed" value={state.rate} onChange={event => { mediaRef.current.playbackRate = Number(event.target.value); reveal() }} className="text-xs text-white bg-black/70 rounded-lg py-2 px-1 sm:px-2 cursor-pointer">
-                        {[0.5,0.75,1,1.25,1.5,1.75,2].map(rate => <option key={rate} value={rate}>{rate}×</option>)}
+                        {[0.25,0.5,0.75,1,1.25,1.5,1.75,2].map(rate => <option key={rate} value={rate}>{rate}×</option>)}
                     </select>
                     <button className={button} onClick={fullscreen} aria-label="Fullscreen" title="Fullscreen (F)"><Maximize className="w-5 h-5" /></button>
                 </div>
