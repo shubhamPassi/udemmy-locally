@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { updateVideoProgress, updateVideo, markVideoComplete } from '../../utils/db'
 import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks'
 import { IS_BROWSER_MODE } from '../../utils/api'
+import { playerShortcut } from '../../utils/playerShortcuts'
 
 let youtubeApi
 function loadYouTubeApi() {
@@ -17,7 +18,8 @@ function loadYouTubeApi() {
     return youtubeApi
 }
 
-const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, settings, autoPlay, onTimeUpdate, onComplete, onNext, onAspectRatioChange }, ref) {
+const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, settings, autoPlay, onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange }, ref) {
+    const container = useRef(null)
     const host = useRef(null), native = useRef(null), player = useRef(null)
     const position = useRef(resumeTime(video, settings.resumePlayback)), duration = useRef(video.duration || 0)
     const observed = useRef(false), lastPersist = useRef(0), completed = useRef(video.isCompleted)
@@ -25,8 +27,8 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
     const nativeReady = useRef(false)
     const lastCachedSecond = useRef(null)
     const [fallback, setFallback] = useState(false), [error, setError] = useState('')
-    const callbacks = useRef({ onTimeUpdate, onComplete, onNext, onAspectRatioChange })
-    callbacks.current = { onTimeUpdate, onComplete, onNext, onAspectRatioChange }
+    const callbacks = useRef({ onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange })
+    callbacks.current = { onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange }
     const isYouTube = !!(video.youtubeId || /youtu(?:be\.com|\.be)/.test(video.url || ''))
     const youtubeId = video.youtubeId || video.url?.match(/(?:[?&]v=|youtu\.be\/)([^?&/]+)/)?.[1]
     const driveId = video.driveFileId || video.url?.match(/(?:\/d\/|[?&]id=)([a-zA-Z0-9_-]+)/)?.[1]
@@ -69,6 +71,58 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
         getInternalVideo: () => native.current || player.current,
     }), [isYouTube])
     useEffect(() => {
+        function keydown(event) {
+            if (!settings.keyboardShortcuts || fallback) return
+            const action = playerShortcut(event)
+            const media = native.current, yt = player.current
+            if (!action || (isYouTube ? !yt?.getPlayerState : !media || media.readyState < 1)) return
+            const paused = isYouTube ? yt.getPlayerState() !== 1 : media.paused
+            const time = isYouTube ? yt.getCurrentTime() : media.currentTime
+            const length = isYouTube ? yt.getDuration() : media.duration
+            const seek = value => {
+                if (!Number.isFinite(length) || length <= 0) return
+                const bounded = Math.max(0, Math.min(length, value))
+                if (isYouTube) yt.seekTo(bounded, true)
+                else media.currentTime = bounded
+            }
+            if (action.type === 'frame' && !paused) return
+            if (event.repeat && ['toggle', 'mute', 'fullscreen', 'next', 'previous'].includes(action.type)) return
+            event.preventDefault()
+            switch (action.type) {
+                case 'toggle':
+                    if (isYouTube) paused ? yt.playVideo() : yt.pauseVideo()
+                    else paused ? media.play().catch(() => {}) : media.pause()
+                    break
+                case 'seek': case 'frame': seek(time + action.value); break
+                case 'percent': seek(length * action.value); break
+                case 'volume':
+                    if (isYouTube) yt.setVolume(Math.max(0, Math.min(100, yt.getVolume() + action.value * 100)))
+                    else media.volume = Math.max(0, Math.min(1, media.volume + action.value))
+                    break
+                case 'mute':
+                    if (isYouTube) yt.isMuted() ? yt.unMute() : yt.mute()
+                    else media.muted = !media.muted
+                    break
+                case 'speed': {
+                    const rates = isYouTube ? yt.getAvailablePlaybackRates() : [0.25,0.5,0.75,1,1.25,1.5,1.75,2]
+                    const rate = isYouTube ? yt.getPlaybackRate() : media.playbackRate
+                    const next = action.value > 0 ? rates.find(value => value > rate) : [...rates].reverse().find(value => value < rate)
+                    if (next) isYouTube ? yt.setPlaybackRate(next) : media.playbackRate = next
+                    break
+                }
+                case 'fullscreen':
+                    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+                    else if (container.current?.requestFullscreen) container.current.requestFullscreen().catch(() => {})
+                    else media?.webkitEnterFullscreen?.()
+                    break
+                case 'next': callbacks.current.onNext?.(); break
+                case 'previous': callbacks.current.onPrevious?.(); break
+            }
+        }
+        window.addEventListener('keydown', keydown, true)
+        return () => window.removeEventListener('keydown', keydown, true)
+    }, [video.id, settings.keyboardShortcuts, fallback, isYouTube])
+    useEffect(() => {
         const flush = () => remember(true)
         const onHidden = () => { if (document.visibilityState === 'hidden') flush() }
         window.addEventListener('pagehide', flush)
@@ -107,7 +161,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
         }).catch(err => setError(err.message))
         return () => { cancelled = true; clearInterval(timer); remember(true); player.current?.destroy?.(); player.current = null }
     }, [video.id])
-    return <div className="w-full h-full relative bg-black">
+    return <div ref={container} className="w-full h-full relative bg-black">
         {isYouTube ? <div ref={host} className="w-full h-full" /> : fallback ? <>
             <iframe className="w-full h-full" src={`https://drive.google.com/file/d/${driveId}/preview`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={video.title} />
             <p className="absolute bottom-0 inset-x-0 p-2 text-xs bg-black/90 text-white">Drive preview does not expose playback time. Enable downloads for this file or import its local copy to use automatic resume.</p>

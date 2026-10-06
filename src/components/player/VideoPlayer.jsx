@@ -745,9 +745,14 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                     break
                 case 'p':
                     e.preventDefault()
-                    togglePiP()
+                    if (e.shiftKey) onPrevious?.()
+                    else togglePiP()
                     break
                 case ',':
+                    if (!videoRef.current?.paused) break
+                    e.preventDefault()
+                    videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 1 / 30)
+                    break
                 case '<':
                     e.preventDefault()
                     // Decrease speed
@@ -757,6 +762,10 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                     }
                     break
                 case '.':
+                    if (!videoRef.current?.paused) break
+                    e.preventDefault()
+                    videoRef.current.currentTime = Math.min(duration, videoRef.current.currentTime + 1 / 30)
+                    break
                 case '>':
                     e.preventDefault()
                     // Increase speed
