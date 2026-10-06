@@ -3,6 +3,7 @@ import { updateVideoProgress, updateVideo, markVideoComplete } from '../../utils
 import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks'
 import { IS_BROWSER_MODE } from '../../utils/api'
 import { playerShortcut } from '../../utils/playerShortcuts'
+import StreamPlayerControls from './StreamPlayerControls'
 
 let youtubeApi
 function loadYouTubeApi() {
@@ -165,7 +166,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
         {isYouTube ? <div ref={host} className="w-full h-full" /> : fallback ? <>
             <iframe className="w-full h-full" src={`https://drive.google.com/file/d/${driveId}/preview`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={video.title} />
             <p className="absolute bottom-0 inset-x-0 p-2 text-xs bg-black/90 text-white">Drive preview does not expose playback time. Enable downloads for this file or import its local copy to use automatic resume.</p>
-        </> : <video ref={native} className="w-full h-full" controls playsInline crossOrigin="anonymous" autoPlay={autoPlay}
+        </> : <video ref={native} className="w-full h-full object-contain" playsInline crossOrigin="anonymous" autoPlay={autoPlay}
             src={IS_BROWSER_MODE ? `/api/drive-video?id=${encodeURIComponent(driveId)}` : `https://drive.usercontent.google.com/download?id=${encodeURIComponent(driveId)}&export=download&confirm=t`}
             onLoadedMetadata={event => {
                 const element = event.currentTarget
@@ -180,6 +181,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
             onSeeked={event => sampleNative(event, true)}
             onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext) callbacks.current.onNext?.() }}
             onError={event => { console.warn('Drive direct playback failed:', event.currentTarget.error?.code, event.currentTarget.error?.message); setFallback(true) }} />}
+        {!isYouTube && !fallback && <StreamPlayerControls mediaRef={native} containerRef={container} />}
         {error && <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p>}
     </div>
 })
