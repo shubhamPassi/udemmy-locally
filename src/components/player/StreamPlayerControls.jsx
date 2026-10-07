@@ -36,7 +36,7 @@ export default function StreamPlayerControls({ mediaRef, containerRef }) {
     function reveal() {
         setVisible(true)
         clearTimeout(hideTimer.current)
-        if (!interacting.current) hideTimer.current = setTimeout(() => setVisible(false), 1000)
+        if (!interacting.current) hideTimer.current = setTimeout(() => setVisible(false), 2000)
     }
     function toggle() {
         const media = mediaRef.current

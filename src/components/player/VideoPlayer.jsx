@@ -815,7 +815,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             if (!hasOpenMenu) {
                 controlsTimeoutRef.current = setTimeout(() => {
                     setShowControls(false)
-                }, 1000)
+                }, 2000)
             }
         }
 
