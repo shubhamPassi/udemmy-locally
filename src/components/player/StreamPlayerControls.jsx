@@ -6,6 +6,22 @@ export default function StreamPlayerControls({ mediaRef, containerRef }) {
     const [state, setState] = useState({ time: 0, duration: 0, paused: true, muted: false, volume: 1, rate: 1, buffering: true })
     const [visible, setVisible] = useState(true)
     const hideTimer = useRef(null)
+    const interacting = useRef(false)
+    useEffect(() => {
+        reveal()
+        const release = () => {
+            if (!interacting.current) return
+            interacting.current = false
+            reveal()
+        }
+        window.addEventListener('pointerup', release)
+        window.addEventListener('pointercancel', release)
+        return () => {
+            clearTimeout(hideTimer.current)
+            window.removeEventListener('pointerup', release)
+            window.removeEventListener('pointercancel', release)
+        }
+    }, [])
     useEffect(() => {
         const media = mediaRef.current
         if (!media) return
@@ -20,7 +36,7 @@ export default function StreamPlayerControls({ mediaRef, containerRef }) {
     function reveal() {
         setVisible(true)
         clearTimeout(hideTimer.current)
-        if (!mediaRef.current?.paused) hideTimer.current = setTimeout(() => setVisible(false), 2500)
+        if (!interacting.current) hideTimer.current = setTimeout(() => setVisible(false), 1000)
     }
     function toggle() {
         const media = mediaRef.current
@@ -34,13 +50,13 @@ export default function StreamPlayerControls({ mediaRef, containerRef }) {
         else if (containerRef.current?.requestFullscreen) containerRef.current.requestFullscreen().catch(() => {})
         else mediaRef.current?.webkitEnterFullscreen?.()
     }
-    const shown = visible || state.paused || state.buffering
+    const shown = visible
     const button = 'h-10 w-8 sm:w-10 flex shrink-0 items-center justify-center rounded-full text-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400'
-    return <div className="absolute inset-0 flex flex-col justify-end" onMouseMove={reveal} onTouchStart={reveal} onMouseLeave={() => { if (!state.paused) setVisible(false) }}>
+    return <div className={`absolute inset-0 flex flex-col justify-end ${shown ? '' : 'cursor-none'}`} onMouseMove={reveal} onTouchStart={reveal} onKeyDownCapture={reveal} onMouseLeave={() => { if (!interacting.current) setVisible(false) }}>
         <button className="absolute inset-0 w-full h-full" onClick={toggle} aria-label={state.paused ? 'Play video' : 'Pause video'} />
         {state.buffering && <div className="absolute inset-0 pointer-events-none flex items-center justify-center"><Loader2 className="w-9 h-9 text-white animate-spin" /></div>}
-        {state.paused && <button onClick={toggle} aria-label="Play" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-black/65 border border-white/20 text-white flex items-center justify-center hover:bg-blue-600"><Play className="w-7 h-7 ml-1" fill="currentColor" /></button>}
-        <div className={`relative px-3 sm:px-5 pt-8 pb-2 bg-gradient-to-t from-black/95 via-black/70 to-transparent transition-opacity duration-150 ${shown ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onFocusCapture={reveal}>
+        {state.paused && shown && <button onClick={toggle} aria-label="Play" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-black/65 border border-white/20 text-white flex items-center justify-center hover:bg-blue-600"><Play className="w-7 h-7 ml-1" fill="currentColor" /></button>}
+        <div className={`relative px-3 sm:px-5 pt-8 pb-2 bg-gradient-to-t from-black/95 via-black/70 to-transparent transition-opacity duration-150 ${shown ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onFocusCapture={reveal} onPointerDown={() => { interacting.current = true; clearTimeout(hideTimer.current) }}>
             <input type="range" aria-label="Video position" min="0" max={state.duration || 1} step="0.1" value={Math.min(state.time, state.duration || 1)} disabled={!state.duration}
                 onChange={event => { mediaRef.current.currentTime = Number(event.target.value); reveal() }}
                 className="w-full h-4 cursor-pointer accent-blue-500" style={{ touchAction: 'none' }} />

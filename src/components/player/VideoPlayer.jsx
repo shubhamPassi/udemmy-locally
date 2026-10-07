@@ -812,10 +812,10 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                 clearTimeout(controlsTimeoutRef.current)
             }
 
-            if (isPlaying && !hasOpenMenu) {
+            if (!hasOpenMenu) {
                 controlsTimeoutRef.current = setTimeout(() => {
                     setShowControls(false)
-                }, 3000)
+                }, 1000)
             }
         }
 
@@ -831,12 +831,15 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         if (container) {
             container.addEventListener('mousemove', handleMouseMove)
             container.addEventListener('mouseleave', handleMouseLeave)
+            container.addEventListener('touchstart', handleMouseMove)
+            handleMouseMove()
         }
 
         return () => {
             if (container) {
                 container.removeEventListener('mousemove', handleMouseMove)
                 container.removeEventListener('mouseleave', handleMouseLeave)
+                container.removeEventListener('touchstart', handleMouseMove)
             }
             if (controlsTimeoutRef.current) {
                 clearTimeout(controlsTimeoutRef.current)
@@ -1010,7 +1013,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     }
 
     // Whether the control bar is currently visible
-    const controlsVisible = showControls || !isPlaying
+    const controlsVisible = showControls
 
     // Speed boost handlers (hold to 2x speed)
     function handleSpeedBoostStart(e) {
@@ -1252,7 +1255,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             {/* Controls Overlay — hidden for YouTube/Drive embeds (they have their own built-in controls) */}
             {!isEmbeddedPlayer && (
             <div
-                className={`absolute inset-0 flex flex-col justify-end transition-opacity duration-200 pointer-events-none ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'
+                className={`absolute inset-0 flex flex-col justify-end transition-opacity duration-200 pointer-events-none ${showControls ? 'opacity-100' : 'opacity-0'
                     }`}
             >
                     {/* Gradient */}
