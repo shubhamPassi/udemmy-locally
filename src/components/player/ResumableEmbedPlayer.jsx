@@ -29,11 +29,38 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
     const nativeReady = useRef(false)
     const lastCachedSecond = useRef(null)
     const [fallback, setFallback] = useState(false), [error, setError] = useState('')
+    const [retrying, setRetrying] = useState(false), [attempt, setAttempt] = useState(0)
+    const retryTimer = useRef(null), retryCount = useRef(0), continuePlaying = useRef(autoPlay)
     const callbacks = useRef({ onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange })
     callbacks.current = { onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange }
     const isYouTube = !!(video.youtubeId || /youtu(?:be\.com|\.be)/.test(video.url || ''))
     const youtubeId = video.youtubeId || video.url?.match(/(?:[?&]v=|youtu\.be\/)([^?&/]+)/)?.[1]
     const driveId = video.driveFileId || video.url?.match(/(?:\/d\/|[?&]id=)([a-zA-Z0-9_-]+)/)?.[1]
+    useEffect(() => () => clearTimeout(retryTimer.current), [])
+    function retryDrive(manual = false) {
+        clearTimeout(retryTimer.current)
+        if (manual) retryCount.current = 0
+        nativeReady.current = false
+        setError('')
+        setFallback(false)
+        setRetrying(true)
+        setAttempt(value => value + 1)
+    }
+    function handleDriveError(event) {
+        const media = event.currentTarget
+        console.warn('Drive direct playback failed:', media.error?.code, media.error?.message)
+        if (nativeReady.current && media.currentTime > 0) sample(media.currentTime, media.duration, true)
+        continuePlaying.current = continuePlaying.current || !media.paused
+        nativeReady.current = false
+        if (retryCount.current < 2) {
+            retryCount.current++
+            setRetrying(true)
+            retryTimer.current = setTimeout(() => retryDrive(), retryCount.current * 1500)
+        } else {
+            setRetrying(false)
+            setError('The Drive video could not be loaded. This may be a temporary connection or Drive limit, or the file may not allow downloads. Your saved position is preserved.')
+        }
+    }
     const flushStudyTime=useStudyTime(()=>{
         if(isYouTube) {
             const yt=player.current
@@ -175,24 +202,29 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
     return <div ref={container} className="w-full h-full relative bg-black">
         {isYouTube ? <div ref={host} className="w-full h-full" /> : fallback ? <>
             <iframe className="w-full h-full" src={`https://drive.google.com/file/d/${driveId}/preview`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={video.title} />
-            <p className="absolute bottom-0 inset-x-0 p-2 text-xs bg-black/90 text-white">Drive preview does not expose playback time. Enable downloads for this file or import its local copy to use automatic resume.</p>
-        </> : <video ref={native} className="w-full h-full object-contain" playsInline crossOrigin="anonymous" autoPlay={autoPlay}
-            src={IS_BROWSER_MODE ? `/api/drive-video?id=${encodeURIComponent(driveId)}` : `https://drive.usercontent.google.com/download?id=${encodeURIComponent(driveId)}&export=download&confirm=t`}
+            <div className="absolute bottom-0 inset-x-0 p-2 text-xs bg-black/90 text-white flex flex-wrap items-center justify-between gap-2"><p>Preview mode cannot save playback time. Your previous position is still saved.</p><button onClick={() => retryDrive(true)} className="rounded bg-blue-600 px-3 py-2 text-white">Retry resumable player</button></div>
+        </> : <video key={attempt} ref={native} className="w-full h-full object-contain" playsInline crossOrigin="anonymous" autoPlay={continuePlaying.current}
+            src={IS_BROWSER_MODE ? `/api/drive-video?id=${encodeURIComponent(driveId)}${attempt ? `&retry=${attempt}` : ''}` : `https://drive.usercontent.google.com/download?id=${encodeURIComponent(driveId)}&export=download&confirm=t`}
             onLoadedMetadata={event => {
                 const element = event.currentTarget
                 duration.current = element.duration
                 if (position.current > 0) element.currentTime = Math.min(position.current, Math.max(0, element.duration - 1))
                 nativeReady.current = true
+                setRetrying(false)
+                setError('')
                 updateVideo(video.id, { duration: element.duration }).catch(console.error)
                 if (element.videoWidth && element.videoHeight) callbacks.current.onAspectRatioChange?.(element.videoWidth, element.videoHeight)
             }}
             onTimeUpdate={event => sampleNative(event)}
-            onPause={event => sampleNative(event, true)}
+            onPlay={() => { continuePlaying.current = true }}
+            onPlaying={() => { retryCount.current = 0; setRetrying(false) }}
+            onPause={event => { if (!event.currentTarget.error && !retrying) continuePlaying.current = false; sampleNative(event, true) }}
             onSeeked={event => sampleNative(event, true)}
             onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext) callbacks.current.onNext?.() }}
-            onError={event => { console.warn('Drive direct playback failed:', event.currentTarget.error?.code, event.currentTarget.error?.message); setFallback(true) }} />}
-        {!isYouTube && !fallback && <StreamPlayerControls mediaRef={native} containerRef={container} />}
-        {error && <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p>}
+            onError={handleDriveError} />}
+        {!isYouTube && !fallback && !error && !retrying && <StreamPlayerControls key={attempt} mediaRef={native} containerRef={container} />}
+        {retrying && !fallback && <div role="status" className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm">Reconnecting to Drive…</div>}
+        {error && (isYouTube ? <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p> : <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-5"><div className="max-w-md text-center text-white"><p role="alert" className="text-sm leading-6">{error}</p><div className="mt-4 flex flex-wrap justify-center gap-3"><button onClick={() => retryDrive(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium">Retry video</button><button onClick={() => { clearTimeout(retryTimer.current); remember(true); setError(''); setRetrying(false); setFallback(true) }} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Use Drive preview</button></div></div></div>)}
     </div>
 })
 export default ResumableEmbedPlayer

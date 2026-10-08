@@ -3,6 +3,20 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import handler from '../api/drive-video.js'
 
+test('temporary Drive failures are retryable and never cached as permission errors', async () => {
+ const realFetch = globalThis.fetch
+ try {
+   for (const status of [429, 503, 403]) {
+     globalThis.fetch = async () => new Response('unavailable', {status,headers:{'Content-Type':'text/html'}})
+     const headers = {}, res = {setHeader(name,value){headers[name]=value},status(code){this.code=code;return this},json(value){this.body=value;return this}}
+     await handler({method:'GET',query:{id:'public12345'},headers:{}},res)
+     assert.equal(res.code,status===403?422:503)
+     assert.equal(headers['Cache-Control'],'no-store')
+     if(status!==403){assert.equal(headers['Retry-After'],'3');assert.match(res.body.error,/temporarily/)}
+   }
+ } finally {globalThis.fetch=realFetch}
+})
+
 test('Drive relay streams before the upstream completes and caps ranges at 4 MB', async () => {
  const realFetch = globalThis.fetch
  let upstreamRange, release, upstreamFinished = false

@@ -22,8 +22,11 @@ export default async function handler(req, res) {
         })
         if (upstream.status === 416) { await upstream.body?.cancel(); return res.status(416).end() }
         if (upstream.status !== 206 || !upstream.headers.get('content-type')?.startsWith('video/')) {
+            const temporary = upstream.status === 429 || upstream.status >= 500
             await upstream.body?.cancel()
-            return res.status(422).json({ error: 'This Drive file does not allow public video downloads.' })
+            res.setHeader('Cache-Control', 'no-store')
+            if (temporary) res.setHeader('Retry-After', '3')
+            return res.status(temporary ? 503 : 422).json({ error: temporary ? 'Google Drive is temporarily unavailable. Please retry.' : 'Google Drive did not return a downloadable video. Check public access and download permissions, or try again later.' })
         }
         res.setHeader('Content-Type', upstream.headers.get('content-type'))
         res.setHeader('Accept-Ranges', 'bytes')
