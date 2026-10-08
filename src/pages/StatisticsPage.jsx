@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart3, Clock, BookOpen, CheckCircle, Trophy, RefreshCw, CalendarDays } from 'lucide-react'
 import { getAllCourses, getCourseContent } from '../utils/db'
@@ -14,8 +14,6 @@ export default function StatisticsPage() {
     const [loading,setLoading]=useState(true),[error,setError]=useState(''),[refreshing,setRefreshing]=useState(false)
     const [studyHours,setStudyHours]=useState({}),[selectedDay,setSelectedDay]=useState(6)
     const [periodDays,setPeriodDays]=useState(7)
-    const activityChart=useRef(null)
-    useEffect(()=>{if(activityChart.current)activityChart.current.scrollLeft=periodDays===30?activityChart.current.scrollWidth:0},[periodDays])
     async function load() {
         setRefreshing(true);setError('')
         setStudyHours(readStudyHours())
@@ -45,16 +43,16 @@ export default function StatisticsPage() {
             <section className={card}>
                 <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold flex items-center gap-2"><CalendarDays className="w-4 h-4 text-blue-500" />Recent lesson activity</h2><div className="inline-flex rounded-lg bg-gray-100 dark:bg-white/5 p-1" aria-label="Activity period">{[{label:'Weekly',days:7},{label:'Monthly',days:30}].map(option=><button key={option.days} aria-pressed={periodDays===option.days} onClick={()=>{setPeriodDays(option.days);setSelectedDay(option.days-1)}} className={`rounded-md px-3 py-1.5 text-xs font-medium ${periodDays===option.days?'bg-blue-600 text-white':'text-gray-500 dark:text-neutral-400 hover:text-blue-500'}`}>{option.label}</button>)}</div></div>
                 <p className="mt-3 text-xs text-gray-500">Last {periodDays} days · {studyTimeLabel(stats.periodStudySeconds)} studied</p>
-                <div ref={activityChart} className="overflow-x-auto"><div className={`mt-6 grid gap-2 sm:gap-4 items-end h-40 ${periodDays===30?'min-w-[1000px]':''}`} style={{gridTemplateColumns:`repeat(${periodDays},minmax(0,1fr))`}}>{stats.days.map((day,index)=><button key={index} onClick={()=>setSelectedDay(index)} aria-pressed={selectedDay===index} aria-label={`${day.date.toLocaleDateString()}, ${studyTimeLabel(day.seconds)} studied`} className="flex h-full flex-col items-center justify-end gap-2 rounded-lg focus-visible:outline focus-visible:outline-blue-500">
-                    <span className="text-[10px] sm:text-xs tabular-nums text-gray-600 dark:text-neutral-300">{studyTimeLabel(day.seconds)}</span>
+                <div className="mt-6 grid items-end h-40 gap-0.5 sm:gap-1" style={{gridTemplateColumns:`repeat(${periodDays},minmax(0,1fr))`}}>{stats.days.map((day,index)=><button key={index} onClick={()=>setSelectedDay(index)} aria-pressed={selectedDay===index} aria-label={`${day.date.toLocaleDateString()}, ${studyTimeLabel(day.seconds)} studied`} title={`${day.date.toLocaleDateString()}: ${studyTimeLabel(day.seconds)} studied`} className="min-w-0 flex h-full flex-col items-center justify-end gap-2 rounded-sm focus-visible:outline focus-visible:outline-blue-500">
+                    <span className={`text-[10px] sm:text-xs tabular-nums text-gray-600 dark:text-neutral-300 ${periodDays===30?'sr-only':''}`}>{studyTimeLabel(day.seconds)}</span>
                     <span className="w-full max-w-9 rounded-t-lg bg-blue-500/10 flex items-end" style={{height:'100px'}}><span className={`w-full rounded-t-lg ${selectedDay===index?'bg-blue-500':'bg-blue-500/50'}`} style={{height:`${day.seconds/Math.max(1,...stats.days.map(d=>d.seconds))*100}%`,minHeight:day.seconds?4:0}} /></span>
-                    <span className={`text-[11px] sm:text-xs ${selectedDay===index?'font-semibold text-blue-500':'text-gray-500'}`}>{periodDays===30?day.date.toLocaleDateString(undefined,{month:'short',day:'numeric'}):day.label}</span>
-                </button>)}</div></div>
+                    <span className={`h-4 whitespace-nowrap text-[9px] sm:text-[10px] ${selectedDay===index?'font-semibold text-blue-500':'text-gray-500'}`}>{periodDays===30?(index%5===0||index===29?day.date.getDate():''):day.label}</span>
+                </button>)}</div>
                 <div className="mt-6 border-t border-gray-200 dark:border-white/10 pt-4">
                     <div className="flex items-center justify-between gap-3 text-sm"><h3 className="font-medium">{stats.days[selectedDay].date.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})} · by hour</h3><span className="font-semibold text-blue-500">{studyTimeLabel(stats.days[selectedDay].seconds)} studied</span></div>
-                    <div className="mt-3 overflow-x-auto"><div className="grid grid-cols-24 gap-1 min-w-[600px] h-24 items-end" style={{gridTemplateColumns:'repeat(24,minmax(0,1fr))'}}>{stats.days[selectedDay].hours.map((seconds,hour)=><div key={hour} className="flex flex-col items-center justify-end gap-1 h-full" title={`${String(hour).padStart(2,'0')}:00–${String(hour).padStart(2,'0')}:59 · ${studyTimeLabel(seconds)} studied`}>
-                        <div className="w-full flex items-end h-16"><div className="w-full rounded-t bg-blue-500/70" style={{height:`${seconds/Math.max(1,...stats.days[selectedDay].hours)*100}%`,minHeight:seconds?3:0}} /></div><span className="text-[9px] text-gray-500">{String(hour).padStart(2,'0')}</span>
-                    </div>)}</div></div>
+                    <div className="mt-3 grid gap-0.5 sm:gap-1 h-24 items-end" style={{gridTemplateColumns:'repeat(24,minmax(0,1fr))'}}>{stats.days[selectedDay].hours.map((seconds,hour)=><div key={hour} className="min-w-0 flex flex-col items-center justify-end gap-1 h-full" title={`${String(hour).padStart(2,'0')}:00–${String(hour).padStart(2,'0')}:59 · ${studyTimeLabel(seconds)} studied`}>
+                        <div className="w-full flex items-end h-16"><div className="w-full rounded-t bg-blue-500/70" style={{height:`${seconds/Math.max(1,...stats.days[selectedDay].hours)*100}%`,minHeight:seconds?3:0}} /></div><span className="h-3 text-[9px] text-gray-500">{hour%4===0||hour===23?String(hour).padStart(2,'0'):''}</span>
+                    </div>)}</div>
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-neutral-400">{stats.days[selectedDay].hours.map((seconds,hour)=>seconds>0&&<span key={hour}>{String(hour).padStart(2,'0')}:00 · {studyTimeLabel(seconds)}</span>)}</div>
                     {stats.days[selectedDay].seconds===0&&<p className="mt-2 text-xs text-neutral-500">No recorded study time for this day yet.</p>}
                 </div>
