@@ -1,4 +1,5 @@
 import * as api from './api.js'
+import { restoreLocalModuleTitle } from './localCourseTitles.js'
 import { withPlaybackBookmark, isProgressResetting, writeCompletionBookmark } from './playbackBookmarks.js'
 
 /**
@@ -26,7 +27,7 @@ export async function getCourse(courseId) {
 
 export async function getCourseContent(courseId) {
     const content = await api.get(`/api/courses/${courseId}/content`)
-    return { ...content, videos: (content.videos || []).map(withPlaybackBookmark) }
+    return { ...content, modules: (content.modules || []).map(restoreLocalModuleTitle), videos: (content.videos || []).map(withPlaybackBookmark) }
 }
 
 export async function getAllCourses() {

@@ -1,5 +1,5 @@
 const videoExtensions = /\.(mp4|webm|mov|ogg|avi|mkv|ts|m4v)$/i
-const clean = name => name.replace(/\.[^.]+$/, '').replace(/^\d+[\s._-]+/, '') || name
+import { localCourseTitle } from './localCourseTitles.js'
 export async function pickBrowserFolder() {
     if (!window.showDirectoryPicker) throw new Error('Local folder import needs desktop Chrome or Edge. You can still import Google Drive or YouTube links here.')
     return window.showDirectoryPicker({ mode: 'read' })
@@ -13,9 +13,9 @@ export async function scanBrowserFolder(handle, rootPath = handle.name) {
         const filePath = `${rootPath}/${entry.name}`
         if (entry.kind === 'directory') {
             const child = await scanBrowserFolder(entry, filePath)
-            if (child.totalVideos) modules.push({ title: clean(entry.name), originalTitle: entry.name, folderPath: filePath, videos: [], subModules: child.modules, totalVideos: child.totalVideos, totalDuration: 0, order: modules.length })
+            if (child.totalVideos) modules.push({ title: localCourseTitle(entry.name), originalTitle: entry.name, folderPath: filePath, videos: [], subModules: child.modules, totalVideos: child.totalVideos, totalDuration: 0, order: modules.length })
         } else if (videoExtensions.test(entry.name)) {
-            videos.push({ title: clean(entry.name), originalTitle: entry.name, fileName: entry.name, filePath, fileHandle: entry, duration: 0, order: videos.length })
+            videos.push({ title: localCourseTitle(entry.name, true), originalTitle: entry.name, fileName: entry.name, filePath, fileHandle: entry, duration: 0, order: videos.length })
         }
     }
     if (videos.length) modules.unshift({ title: 'Videos', originalTitle: 'Videos', videos, totalVideos: videos.length, totalDuration: 0, order: 0 })
