@@ -10,7 +10,7 @@ test('dotted module names keep their text and file names only lose the final ext
     assert.equal(localCourseTitle('Node.js Security'), 'Node.js Security')
 })
 test('existing numeric headings are repaired without changing custom titles or IDs', () => {
-    assert.deepEqual(restoreLocalModuleTitle({id:'same',title:'1',originalTitle:'1. Security Essentials'}),{id:'same',title:'Security Essentials',originalTitle:'1. Security Essentials'})
+    assert.deepEqual(restoreLocalModuleTitle({id:'same',title:'1',originalTitle:'1. Security Essentials'}),{id:'same',title:'1. Security Essentials',originalTitle:'1. Security Essentials'})
     const custom={title:'My custom title',originalTitle:'1. Security Essentials'}
     assert.equal(restoreLocalModuleTitle(custom),custom)
 })
@@ -19,6 +19,6 @@ test('browser folder scans preserve numbered DevSecOps module headings', async (
     const module={kind:'directory',name:'0. Welcome',async *values(){yield lesson}}
     const root={kind:'directory',name:'DevSecOps Bootcamp',async *values(){yield module}}
     const result=await scanBrowserFolder(root)
-    assert.equal(result.modules[0].title,'Welcome')
+    assert.equal(result.modules[0].title,'0. Welcome')
     assert.equal(result.modules[0].subModules[0].videos[0].title,'Why learn DevSecOps')
 })

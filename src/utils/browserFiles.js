@@ -13,7 +13,7 @@ export async function scanBrowserFolder(handle, rootPath = handle.name) {
         const filePath = `${rootPath}/${entry.name}`
         if (entry.kind === 'directory') {
             const child = await scanBrowserFolder(entry, filePath)
-            if (child.totalVideos) modules.push({ title: localCourseTitle(entry.name), originalTitle: entry.name, folderPath: filePath, videos: [], subModules: child.modules, totalVideos: child.totalVideos, totalDuration: 0, order: modules.length })
+            if (child.totalVideos) modules.push({ title: entry.name, originalTitle: entry.name, folderPath: filePath, videos: [], subModules: child.modules, totalVideos: child.totalVideos, totalDuration: 0, order: modules.length })
         } else if (videoExtensions.test(entry.name)) {
             videos.push({ title: localCourseTitle(entry.name, true), originalTitle: entry.name, fileName: entry.name, filePath, fileHandle: entry, duration: 0, order: videos.length })
         }
