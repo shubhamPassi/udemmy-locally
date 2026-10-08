@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { formatDuration, markVideoComplete, updateModule, updateVideo } from '../../utils/db'
 import { useNotification } from '../../contexts/NotificationContext'
+import { playlistDisplay } from '../../utils/playlistDisplay'
 
 const EditModuleModal = lazy(() => import('./EditModuleModal'))
 const NotesPanel = lazy(() => import('./NotesPanel'))
@@ -328,7 +329,7 @@ function PlaylistSidebar({
         )
     }, [expandedModules, currentVideo?.id, toggleModule, handleToggleComplete, onVideoSelect])
 
-    const playlistRows = useMemo(() => modules.map(module => renderModule(module, 0)), [modules, renderModule])
+    const playlistRows = useMemo(() => playlistDisplay(modules).map(module => renderModule(module, 0)), [modules, renderModule])
 
     const sidebarContent = (
         <>

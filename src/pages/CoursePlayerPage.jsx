@@ -9,11 +9,12 @@ import { createPlaybackClock } from '../utils/playbackClock'
 import { IS_BROWSER_MODE } from '../utils/api'
 import { resumeTime } from '../utils/playbackBookmarks'
 import PlaylistSidebar from '../components/player/PlaylistSidebar'
+import { playlistDisplay } from '../utils/playlistDisplay'
 function findModulePath(modules, targetModuleId) {
     if (!modules || !targetModuleId) return []
 
     for (const mod of modules) {
-        if (mod.id === targetModuleId) {
+        if (mod.id === targetModuleId || mod.videos?.some(video => video.moduleId === targetModuleId)) {
             return [mod]
         }
         if (mod.subModules && mod.subModules.length > 0) {
@@ -416,7 +417,7 @@ function CoursePlayerPage() {
                                             <span className="truncate max-w-[200px] sm:max-w-[300px]" title={course.title}>
                                                 {course.title}
                                             </span>
-                                            {findModulePath(modules, currentVideo.moduleId).map(mod => (
+                                            {findModulePath(playlistDisplay(modules), currentVideo.moduleId).map(mod => (
                                                 <span key={mod.id} className="flex items-center gap-1.5">
                                                     <span className="text-light-text-secondary dark:text-dark-text-secondary font-normal">/</span>
                                                     <span
