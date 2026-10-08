@@ -1,64 +1,102 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, Clock, BookOpen, CheckCircle, Trophy, RefreshCw, CalendarDays } from 'lucide-react'
+import { Clock, BookOpen, RefreshCw, ChevronLeft, ChevronRight, ArrowDown, ArrowUp } from 'lucide-react'
 import { getAllCourses, getCourseContent } from '../utils/db'
 import * as api from '../utils/api'
 import { withPlaybackBookmark } from '../utils/playbackBookmarks'
-import { learningStats, learningTime } from '../utils/learningStats'
+import { learningStats } from '../utils/learningStats'
 import LoadingSpinner from '../components/common/LoadingSpinner'
-import { readStudyHours, studyTimeLabel } from '../utils/studyTime'
+import { readStudySessions, studyTimeLabel } from '../utils/studyTime'
+import { dayKey, moveDay, studyActivity } from '../utils/studyActivity'
 
-const card='min-w-0 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-neutral-900 p-5 sm:p-6'
-export default function StatisticsPage() {
-    const [courses,setCourses]=useState([]),[videos,setVideos]=useState([])
-    const [loading,setLoading]=useState(true),[error,setError]=useState(''),[refreshing,setRefreshing]=useState(false)
-    const [studyHours,setStudyHours]=useState({}),[selectedDay,setSelectedDay]=useState(6)
-    const [periodDays,setPeriodDays]=useState(7)
-    async function load() {
-        setRefreshing(true);setError('')
-        setStudyHours(readStudyHours())
-        try {
-            const library=await getAllCourses()
-            const lessons=api.IS_BROWSER_MODE?await api.get('/api/videos'):(await Promise.all(library.map(course=>getCourseContent(course.id)))).flatMap(content=>content.videos||[])
-            setCourses(library);setVideos(lessons.map(withPlaybackBookmark))
-        } catch(err) {setError(err.message||'Could not load your statistics.')}
-        finally {setLoading(false);setRefreshing(false)}
-    }
-    useEffect(()=>{load()},[])
-    const stats=useMemo(()=>learningStats(courses,videos,new Date(),studyHours,periodDays),[courses,videos,studyHours,periodDays])
-    if(loading)return <LoadingSpinner message="Loading your learning overview…" />
-    const metrics=[
-        {label:'Lessons completed',value:stats.completed,detail:`of ${stats.total} lessons`,icon:CheckCircle,color:'text-emerald-500 bg-emerald-500/10'},
-        {label:'Courses finished',value:stats.finished,detail:`of ${courses.length} courses`,icon:Trophy,color:'text-violet-500 bg-violet-500/10'},
-        {label:'Time studied',value:studyTimeLabel(stats.periodStudySeconds),detail:`Actual playing time · last ${periodDays} days`,icon:Clock,color:'text-blue-500 bg-blue-500/10'},
-        {label:'Courses in progress',value:stats.active,detail:`${stats.notStarted} not started`,icon:BookOpen,color:'text-amber-500 bg-amber-500/10'},
-    ]
-    return <div className="py-4 sm:py-6 space-y-6 text-gray-900 dark:text-white">
-        <header className="flex flex-wrap items-center justify-between gap-4"><div><div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-blue-500 mb-2"><BarChart3 className="w-4 h-4" />Your learning, at a glance</div><h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Learning Statistics</h1><p className="mt-2 text-sm text-gray-500 dark:text-neutral-400">A clearer view of what you’ve finished and what’s next.</p></div><button onClick={load} disabled={refreshing} className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-white/10 px-4 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-white/5 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${refreshing?'animate-spin':''}`} />Refresh</button></header>
-        {error&&<p role="alert" className="rounded-xl bg-red-500/10 p-4 text-sm text-red-500">{error}</p>}
-        {error ? null : courses.length===0?<div className={`${card} text-center py-16`}><BookOpen className="mx-auto w-10 h-10 text-blue-500 mb-4" /><h2 className="text-xl font-semibold">Your learning starts here</h2><p className="text-sm text-neutral-500 mt-2">Add a course to start building your progress.</p><Link to="/" className="inline-flex mt-6 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white">Go to courses</Link></div>:<>
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">{metrics.map(({label,value,detail,icon:Icon,color})=><div key={label} className={card}><span className={`inline-flex rounded-xl p-2.5 ${color}`}><Icon className="w-5 h-5" /></span><div className="mt-4 text-2xl sm:text-3xl font-bold tabular-nums">{value}</div><h2 className="mt-1 text-sm font-medium">{label}</h2><p className="mt-2 text-xs leading-5 text-gray-500 dark:text-neutral-500">{detail}</p></div>)}</div>
-        <div className="grid gap-5">
-            <section className={card}><h2 className="font-semibold">Overall progress</h2><div className="flex flex-col sm:flex-row sm:items-center gap-5 py-5"><svg viewBox="0 0 120 120" className="h-24 w-24 sm:h-28 sm:w-28 shrink-0" role="img" aria-label={`${Math.round(stats.percent)} percent of lessons completed`}><circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" strokeWidth="9" className="text-gray-100 dark:text-white/5" /><circle cx="60" cy="60" r="50" fill="none" stroke="#3b82f6" strokeWidth="9" strokeLinecap="round" strokeDasharray="314.159" strokeDashoffset={314.159*(1-stats.percent/100)} transform="rotate(-90 60 60)" /><text x="60" y="63" textAnchor="middle" fill="currentColor" fontSize="24" fontWeight="700">{Math.round(stats.percent)}%</text><text x="60" y="81" textAnchor="middle" fill="#737373" fontSize="10">completed</text></svg><div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-8 min-w-0 flex-1 text-sm"><div><p className="text-xs text-gray-500 dark:text-neutral-400">Lessons finished</p><p className="mt-1 text-xl sm:text-2xl font-semibold text-blue-500">{stats.completed}<span className="ml-2 text-xs font-normal text-gray-500 dark:text-neutral-400">of {stats.total}</span></p></div><div><p className="text-xs text-gray-500 dark:text-neutral-400">Lessons to go</p><p className="mt-1 text-xl sm:text-2xl font-semibold">{Math.max(0,stats.total-stats.completed)}</p></div><div><p className="text-xs text-gray-500 dark:text-neutral-400">Known video duration</p><p className="mt-1 text-xl sm:text-2xl font-semibold">{learningTime(stats.knownSeconds)}</p></div></div></div><p className="border-t border-gray-200 dark:border-white/10 pt-3 text-xs leading-5 text-gray-500 dark:text-neutral-500">Study time is recorded from this update onward. Paused, buffering, and skipped time don’t count.</p></section>
-            <section className={card}>
-                <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold flex items-center gap-2"><CalendarDays className="w-4 h-4 text-blue-500" />Recent lesson activity</h2><div className="inline-flex rounded-lg bg-gray-100 dark:bg-white/5 p-1" aria-label="Activity period">{[{label:'Weekly',days:7},{label:'Monthly',days:30}].map(option=><button key={option.days} aria-pressed={periodDays===option.days} onClick={()=>{setPeriodDays(option.days);setSelectedDay(option.days-1)}} className={`rounded-md px-3 py-1.5 text-xs font-medium ${periodDays===option.days?'bg-blue-600 text-white':'text-gray-500 dark:text-neutral-400 hover:text-blue-500'}`}>{option.label}</button>)}</div></div>
-                <p className="mt-3 text-xs text-gray-500">Last {periodDays} days · {studyTimeLabel(stats.periodStudySeconds)} studied</p>
-                <div className="mt-6 grid items-end h-40 gap-0.5 sm:gap-1" style={{gridTemplateColumns:`repeat(${periodDays},minmax(0,1fr))`}}>{stats.days.map((day,index)=><button key={index} onClick={()=>setSelectedDay(index)} aria-pressed={selectedDay===index} aria-label={`${day.date.toLocaleDateString()}, ${studyTimeLabel(day.seconds)} studied`} title={`${day.date.toLocaleDateString()}: ${studyTimeLabel(day.seconds)} studied`} className="min-w-0 flex h-full flex-col items-center justify-end gap-2 rounded-sm focus-visible:outline focus-visible:outline-blue-500">
-                    <span className={`text-[10px] sm:text-xs tabular-nums text-gray-600 dark:text-neutral-300 ${periodDays===30?'sr-only':''}`}>{studyTimeLabel(day.seconds)}</span>
-                    <span className="w-full max-w-9 rounded-t-lg bg-blue-500/10 flex items-end" style={{height:'100px'}}><span className={`w-full rounded-t-lg ${selectedDay===index?'bg-blue-500':'bg-blue-500/50'}`} style={{height:`${day.seconds/Math.max(1,...stats.days.map(d=>d.seconds))*100}%`,minHeight:day.seconds?4:0}} /></span>
-                    <span className={`h-4 whitespace-nowrap text-[9px] sm:text-[10px] ${selectedDay===index?'font-semibold text-blue-500':'text-gray-500'}`}>{periodDays===30?(index%5===0||index===29?day.date.getDate():''):day.label}</span>
-                </button>)}</div>
-                <div className="mt-6 border-t border-gray-200 dark:border-white/10 pt-4">
-                    <div className="flex items-center justify-between gap-3 text-sm"><h3 className="font-medium">{stats.days[selectedDay].date.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})} · by hour</h3><span className="font-semibold text-blue-500">{studyTimeLabel(stats.days[selectedDay].seconds)} studied</span></div>
-                    <div className="mt-3 grid gap-0.5 sm:gap-1 h-24 items-end" style={{gridTemplateColumns:'repeat(24,minmax(0,1fr))'}}>{stats.days[selectedDay].hours.map((seconds,hour)=><div key={hour} className="min-w-0 flex flex-col items-center justify-end gap-1 h-full" title={`${String(hour).padStart(2,'0')}:00–${String(hour).padStart(2,'0')}:59 · ${studyTimeLabel(seconds)} studied`}>
-                        <div className="w-full flex items-end h-16"><div className="w-full rounded-t bg-blue-500/70" style={{height:`${seconds/Math.max(1,...stats.days[selectedDay].hours)*100}%`,minHeight:seconds?3:0}} /></div><span className="h-3 text-[9px] text-gray-500">{hour%4===0||hour===23?String(hour).padStart(2,'0'):''}</span>
-                    </div>)}</div>
-                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-neutral-400">{stats.days[selectedDay].hours.map((seconds,hour)=>seconds>0&&<span key={hour}>{String(hour).padStart(2,'0')}:00 · {studyTimeLabel(seconds)}</span>)}</div>
-                    {stats.days[selectedDay].seconds===0&&<p className="mt-2 text-xs text-neutral-500">No recorded study time for this day yet.</p>}
-                </div>
-                <p className="mt-4 text-xs text-gray-500 dark:text-neutral-500">Select a day to see the hours you studied. Refresh to load the latest time.</p>
-            </section>
+const card = 'min-w-0 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-neutral-900'
+const muted = 'text-gray-500 dark:text-neutral-400'
+const hourLabel = hour => hour === 0 ? '12 am' : hour < 12 ? `${hour} am` : hour === 12 ? '12 pm' : `${hour-12} pm`
+
+function StudyChart({ activity, periodDays, onSelect, selectedHour }) {
+    const max = Math.max(60, ...activity.bins.map(bin => bin.seconds))
+    const step = max <= 300 ? 60 : max <= 1800 ? 300 : max <= 7200 ? 1800 : 3600
+    const ceiling = Math.ceil(max / step) * step
+    return <div className="relative mt-7 pl-0 pr-9 sm:pr-11">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-44 pr-9 sm:pr-11">
+            {[1, 0.5, 0].map(level => <div key={level} className="absolute left-0 right-9 sm:right-11 border-t border-dashed border-gray-200 dark:border-white/10" style={{ top: `${(1-level)*100}%` }}><span className={`absolute -right-9 sm:-right-11 -top-2 text-[10px] ${muted}`}>{studyTimeLabel(ceiling*level)}</span></div>)}
         </div>
+        <div className="relative grid h-44 items-end gap-1 sm:gap-2" style={{ gridTemplateColumns: `repeat(${activity.bins.length}, minmax(0, 1fr))` }}>
+            {activity.bins.map(bin => {
+                const label = periodDays === 1 ? hourLabel(bin.index) : bin.date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
+                return <button key={bin.index} onClick={() => onSelect(bin)} aria-label={`${label}: ${studyTimeLabel(bin.seconds)} studied`} aria-pressed={periodDays === 1 ? selectedHour === bin.index : undefined} title={`${label}: ${studyTimeLabel(bin.seconds)} studied`} className="group flex h-full min-w-0 items-end justify-center rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500">
+                    <span className={`flex w-full max-w-12 flex-col justify-end overflow-hidden rounded-t-sm ${selectedHour === bin.index && periodDays === 1 ? 'ring-2 ring-blue-400 ring-offset-2 dark:ring-offset-neutral-900' : ''}`} style={{ height: `${bin.seconds/ceiling*100}%`, minHeight: bin.seconds ? 3 : 0 }}>
+                        {activity.rows.filter(row => bin.courses[row.id]).map(row => <span key={row.id} className="block w-full shrink-0" style={{ backgroundColor: row.color, height: `${bin.courses[row.id]/bin.seconds*100}%` }} />)}
+                    </span>
+                </button>
+            })}
+        </div>
+        {periodDays === 1 ? <div aria-hidden="true" className={`mt-3 grid grid-cols-4 text-[10px] sm:text-xs ${muted}`}><span>12 am</span><span>6 am</span><span>12 pm</span><span>6 pm</span></div> : <div aria-hidden="true" className={`mt-3 grid grid-cols-7 text-center text-[10px] sm:text-xs ${muted}`}>{activity.dates.map(date => <span key={dayKey(date)}>{date.toLocaleDateString(undefined, { weekday: 'short' })}<span className="block mt-1 text-[10px] opacity-70">{date.getDate()}</span></span>)}</div>}
+    </div>
+}
+
+export default function StatisticsPage() {
+    const [courses, setCourses] = useState([]), [videos, setVideos] = useState([]), [sessions, setSessions] = useState([])
+    const [loading, setLoading] = useState(true), [error, setError] = useState(''), [refreshing, setRefreshing] = useState(false)
+    const [periodDays, setPeriodDays] = useState(1), [endDate, setEndDate] = useState(() => moveDay(new Date(), 0))
+    const [selectedHour, setSelectedHour] = useState(null)
+    async function load() {
+        setRefreshing(true); setError(''); setSessions(readStudySessions())
+        try {
+            const library = await getAllCourses()
+            const lessons = api.IS_BROWSER_MODE ? await api.get('/api/videos') : (await Promise.all(library.map(course => getCourseContent(course.id)))).flatMap(content => content.videos || [])
+            setCourses(library); setVideos(lessons.map(withPlaybackBookmark))
+        } catch (err) { setError(err.message || 'Could not load your statistics.') }
+        finally { setLoading(false); setRefreshing(false) }
+    }
+    useEffect(() => { load() }, [])
+    const stats = useMemo(() => learningStats(courses, videos), [courses, videos])
+    const activity = useMemo(() => studyActivity(sessions, courses, endDate, periodDays), [sessions, courses, endDate, periodDays])
+    const isToday = dayKey(endDate) === dayKey(new Date())
+    const dateTitle = periodDays === 1 ? isToday ? 'Today' : endDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : `${activity.dates[0].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+    const difference = activity.totalSeconds-activity.previousSeconds
+    function changeDate(amount) { setEndDate(date => moveDay(date, amount)); setSelectedHour(null) }
+    function selectBin(bin) {
+        if (periodDays === 7) { setPeriodDays(1); setEndDate(bin.date); setSelectedHour(null) }
+        else setSelectedHour(bin.index)
+    }
+    if (loading) return <LoadingSpinner message="Loading your learning overview…" />
+    return <div className="mx-auto max-w-5xl py-4 sm:py-6 space-y-5 text-gray-900 dark:text-white">
+        <header className="flex flex-wrap items-center justify-between gap-3">
+            <div><h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Learning Statistics</h1><p className={`mt-1 text-sm ${muted}`}>Your study time, one day at a time.</p></div>
+            <button onClick={load} disabled={refreshing} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-blue-500 hover:bg-blue-500/10 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />Refresh</button>
+        </header>
+        {error && <p role="alert" className="rounded-xl bg-red-500/10 p-4 text-sm text-red-500">{error}</p>}
+        {!error && courses.length === 0 ? <section className={`${card} p-8 text-center`}><BookOpen className="mx-auto mb-4 h-10 w-10 text-blue-500" /><h2 className="text-xl font-semibold">Your learning starts here</h2><p className={`mt-2 text-sm ${muted}`}>Add a course to start tracking your study time.</p><Link to="/" className="mt-5 inline-flex rounded-lg bg-blue-600 px-5 py-2.5 text-sm text-white">Go to courses</Link></section> : !error && <>
+            <div className="mx-auto flex max-w-xs rounded-xl bg-gray-200/70 dark:bg-white/10 p-1" aria-label="Study time period">{[{ label: 'Day', days: 1 }, { label: 'Week', days: 7 }].map(option => <button key={option.days} aria-pressed={periodDays === option.days} onClick={() => { setPeriodDays(option.days); setSelectedHour(null) }} className={`flex-1 rounded-lg px-5 py-2 text-sm font-semibold transition-colors ${periodDays === option.days ? 'bg-white dark:bg-neutral-600 text-gray-900 dark:text-white shadow-sm' : muted}`}>{option.label}</button>)}</div>
+            <section className={card}>
+                <div className="flex items-center justify-between gap-2 border-b border-gray-200 dark:border-white/10 px-4 sm:px-6 py-3">
+                    <button aria-label={`Previous ${periodDays === 1 ? 'day' : 'week'}`} onClick={() => changeDate(-periodDays)} className="rounded-lg p-2 text-blue-500 hover:bg-blue-500/10"><ChevronLeft className="h-5 w-5" /></button>
+                    <h2 className="text-center text-sm font-medium">{dateTitle}</h2>
+                    <button aria-label={`Next ${periodDays === 1 ? 'day' : 'week'}`} disabled={isToday} onClick={() => { setEndDate(date => { const next = moveDay(date, periodDays), today = moveDay(new Date(), 0); return next > today ? today : next }); setSelectedHour(null) }} className="rounded-lg p-2 text-blue-500 hover:bg-blue-500/10 disabled:opacity-25"><ChevronRight className="h-5 w-5" /></button>
+                </div>
+                <div className="p-5 sm:p-7">
+                    <div className="flex flex-wrap items-end justify-between gap-4">
+                        <div><p className={`flex items-center gap-2 text-xs font-medium uppercase tracking-wider ${muted}`}><Clock className="h-3.5 w-3.5" />Study time</p><p className="mt-2 text-4xl sm:text-5xl font-semibold tracking-tight tabular-nums">{studyTimeLabel(activity.totalSeconds)}</p>{periodDays === 7 && <p className={`mt-2 text-sm ${muted}`}>{studyTimeLabel(activity.averageSeconds)} daily average</p>}</div>
+                        <div className="text-sm">{activity.previousSeconds > 0 ? <p className="flex items-center gap-1 text-cyan-600 dark:text-cyan-400">{difference < 0 ? <ArrowDown className="h-4 w-4" /> : difference > 0 ? <ArrowUp className="h-4 w-4" /> : null}{difference === 0 ? 'Same as' : `${studyTimeLabel(Math.abs(difference))} ${difference < 0 ? 'less' : 'more'} than`} {periodDays === 1 ? 'the previous day' : 'the previous week'}</p> : <p className={muted}>Actual video playback</p>}{!isToday && <button onClick={() => { setEndDate(moveDay(new Date(), 0)); setSelectedHour(null) }} className="mt-2 text-blue-500 hover:underline">Back to today</button>}</div>
+                    </div>
+                    <StudyChart activity={activity} periodDays={periodDays} onSelect={selectBin} selectedHour={selectedHour} />
+                    {activity.totalSeconds === 0 && <p className={`mt-4 text-sm ${muted}`}>No recorded study time for this {periodDays === 1 ? 'day' : 'week'} yet.</p>}
+                    {periodDays === 1 && selectedHour !== null && <p role="status" className="mt-4 text-sm text-blue-500">{hourLabel(selectedHour)} – {hourLabel((selectedHour+1)%24)} · {studyTimeLabel(activity.bins[selectedHour].seconds)} studied</p>}
+                    <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">{activity.rows.slice(0, 3).map(row => <div key={row.id} className="min-w-0"><p className="flex items-center gap-2 text-xs sm:text-sm"><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.color }} /><span className="truncate" title={row.title}>{row.title}</span></p><p className="mt-1 pl-4 text-lg font-medium tabular-nums">{studyTimeLabel(row.seconds)}</p></div>)}</div>
+                </div>
+                <div className="grid grid-cols-2 border-t border-gray-200 dark:border-white/10 divide-x divide-gray-200 dark:divide-white/10">
+                    <div className="p-4 sm:px-7"><p className={`text-xs ${muted}`}>{periodDays === 1 ? 'Most active hour' : 'Most active day'}</p><p className="mt-1 text-sm font-medium">{activity.totalSeconds ? periodDays === 1 ? hourLabel(activity.peak.index) : activity.peak.date.toLocaleDateString(undefined, { weekday: 'long' }) : '—'}</p></div>
+                    <div className="p-4 sm:px-7"><p className={`text-xs ${muted}`}>{periodDays === 1 ? 'Courses studied' : 'Days studied'}</p><p className="mt-1 text-sm font-medium">{periodDays === 1 ? activity.rows.length : `${activity.activeDays} of 7`}</p></div>
+                </div>
+            </section>
+            {activity.rows.length > 0 && <section className={card}><h2 className="px-5 sm:px-7 pt-5 font-semibold">Study breakdown</h2><div className="mt-2 divide-y divide-gray-200 dark:divide-white/10">{activity.rows.map(row => <div key={row.id} className="flex items-center gap-3 px-5 sm:px-7 py-4"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: row.color }} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium" title={row.title}>{row.title}</p><div className="mt-2 h-1.5 max-w-sm overflow-hidden rounded-full bg-gray-100 dark:bg-white/5"><div className="h-full rounded-full" style={{ backgroundColor: row.color, width: `${row.seconds/activity.totalSeconds*100}%` }} /></div></div><span className="shrink-0 text-sm tabular-nums">{studyTimeLabel(row.seconds)}</span></div>)}</div></section>}
+            <section className={`${card} p-5 sm:px-7`}>
+                <div className="flex flex-wrap items-center gap-4"><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">Overall progress</h2><p className={`mt-1 text-xs ${muted}`}>All-time lesson completion</p></div><p className="text-2xl font-semibold tabular-nums">{Math.round(stats.percent)}%</p></div>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/5"><div className="h-full rounded-full bg-blue-500" style={{ width: `${stats.percent}%` }} /></div>
+                <div className={`mt-3 flex flex-wrap justify-between gap-2 text-xs ${muted}`}><span>{stats.completed} of {stats.total} lessons finished</span><span>{stats.finished} of {courses.length} courses finished</span></div>
+            </section>
+            <p className={`px-1 text-xs leading-5 ${muted}`}>Study time reflects recorded playback. Pauses, buffering, and skipped time don’t count. Tap a {periodDays === 1 ? 'bar to see that hour' : 'day to see its hours'}.</p>
         </>}
     </div>
 }

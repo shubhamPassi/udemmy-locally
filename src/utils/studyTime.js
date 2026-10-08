@@ -25,18 +25,25 @@ export function saveStudySession(id,record) {
     if(isProgressResetting())return
     try {localStorage.setItem(prefix+id,JSON.stringify({version:1,...record}))}catch{}
 }
-export function readStudyHours() {
-    const hours={}
+export function readStudySessions() {
+    const records=[]
     try {
         for(const key of Object.keys(localStorage)) {
             if(!key.startsWith(prefix))continue
             try {
                 const record=JSON.parse(localStorage.getItem(key))
                 if(record?.version!==1)continue
-                for(const [hour,seconds] of Object.entries(record.hours||{})) if(/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(hour)&&Number.isFinite(seconds)&&seconds>0) hours[hour]=(hours[hour]||0)+seconds
+                const hours={}
+                for(const [hour,seconds] of Object.entries(record.hours||{})) if(/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3])$/.test(hour)&&Number.isFinite(seconds)&&seconds>0) hours[hour]=seconds
+                records.push({...record,hours})
             }catch{}
         }
     }catch{}
+    return records
+}
+export function readStudyHours() {
+    const hours={}
+    for(const record of readStudySessions())for(const [hour,seconds] of Object.entries(record.hours))hours[hour]=(hours[hour]||0)+seconds
     return hours
 }
 export function clearStudyHistory() {
