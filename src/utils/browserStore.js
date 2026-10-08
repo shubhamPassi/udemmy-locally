@@ -146,7 +146,7 @@ export async function request(method, path, body = {}) {
             saveLibraryRecovery({courses:[],modules:[],videos:[]})
             return { success: true }
         }
-        if (id === 'import') { for (const name of tables) for (const row of body[name] || []) await save(name, row); return { success: true } }
+        if (id === 'import') { for (const name of tables) for (const row of body[name] || []) await save(name, row); await saveRecovery(); return { success: true } }
     }
     if (table === 'analytics' && id === 'history') {
         const courses = await all('courses'), modules = await all('modules')
@@ -186,12 +186,13 @@ export async function request(method, path, body = {}) {
         return rows
     }
     if (method === 'DELETE') {
+        recoveryEpoch++
         const existing = await operation(table, 'get', id)
         await operation(table, 'delete', id)
         if (table === 'courses') await removeRelated(id)
         if (table === 'modules') await removeRelated(existing?.courseId, id)
         if (existing?.courseId) invalidateCourse(existing.courseId)
-        if (['courses','modules','videos'].includes(table)) scheduleRecovery()
+        if (['courses','modules','videos'].includes(table)) await saveRecovery()
         return { success: true }
     }
     const existing = id ? await operation(table, 'get', id) : null
