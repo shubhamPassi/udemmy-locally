@@ -6,11 +6,15 @@ import {
     BarChart3,
     Map,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    RotateCcw
 } from 'lucide-react'
 import { useSidebar } from '../../contexts/SidebarContext'
 import { useState, useEffect } from 'react'
 import { getAllCourses, getInstructorAvatarAsync } from '../../utils/db'
+import * as api from '../../utils/api'
+import { beginProgressReset, cancelProgressReset } from '../../utils/playbackBookmarks'
+import { useNotification } from '../../contexts/NotificationContext'
 
 function scheduleAfterFirstPaint(callback) {
     const run = () => {
@@ -25,6 +29,22 @@ function scheduleAfterFirstPaint(callback) {
 }
 
 function Sidebar() {
+    const [clearingProgress, setClearingProgress] = useState(false)
+    const { showNotification } = useNotification()
+    async function clearProgress() {
+        if (!confirm('Clear all watched positions, completed lessons, and watch history? Your courses and notes will be kept.')) return
+        beginProgressReset()
+        setClearingProgress(true)
+        document.querySelectorAll('video').forEach(video => video.pause())
+        try {
+            await api.post('/api/data/reset-progress')
+            window.location.reload()
+        } catch (error) {
+            cancelProgressReset()
+            setClearingProgress(false)
+            showNotification('Could not clear progress: ' + error.message, 'error')
+        }
+    }
     const { isExpanded, isMobileOpen, closeMobileSidebar, setIsExpanded } = useSidebar()
     const location = useLocation()
     const [instructors, setInstructors] = useState([])
@@ -195,6 +215,10 @@ function Sidebar() {
 
                 {/* Bottom Section - Profile & Collapse Toggle */}
                 <div className="border-t border-gray-200 dark:border-white/5 p-3 bg-gray-50 dark:bg-black/20">
+                    {api.IS_BROWSER_MODE && <button onClick={clearProgress} disabled={clearingProgress} aria-label="Clear progress" title="Clear progress" className="flex items-center gap-3 px-3 py-3 rounded-full w-full text-sm text-neutral-500 hover:text-red-500 hover:bg-red-500/10 disabled:opacity-50">
+                        <RotateCcw className="w-5 h-5 shrink-0" />
+                        {(isExpanded || isMobileOpen) && <span>{clearingProgress ? 'Clearing…' : 'Clear progress'}</span>}
+                    </button>}
 
                     {/* Collapse Toggle (desktop only) */}
                     <button

@@ -1,8 +1,19 @@
 // Hosted app data stays in this browser. Structured cloning preserves folder/file handles.
+import { saveLibraryRecovery, restoreLibraryRecovery } from './browserPersistence.js'
+import { clearPlaybackBookmarks } from './playbackBookmarks.js'
 const tables = ['courses', 'modules', 'videos', 'notes', 'instructors', 'roadmaps', 'transcripts', 'summaries']
 let database
 const dirtyCourses = new Set()
-let aggregation = Promise.resolve(), aggregationTimer
+let aggregation = Promise.resolve(), aggregationTimer, recoveryTimer, recoveryEpoch = 0
+async function saveRecovery() {
+    const epoch = recoveryEpoch
+    const [courses, modules, videos] = await Promise.all([all('courses'), all('modules'), all('videos')])
+    if (epoch === recoveryEpoch) saveLibraryRecovery({ courses, modules, videos })
+}
+function scheduleRecovery() {
+    clearTimeout(recoveryTimer)
+    recoveryTimer = setTimeout(() => saveRecovery().catch(console.error), 1000)
+}
 function openDatabase() {
     if (!database) database = new Promise((resolve, reject) => {
         const opening = indexedDB.open('tutin-web', 1)
@@ -16,7 +27,7 @@ function openDatabase() {
         }
         opening.onsuccess = () => {
             opening.result.onversionchange = () => { opening.result.close(); database = null }
-            resolve(opening.result)
+            restoreLibraryRecovery(opening.result).then(() => { resolve(opening.result); scheduleRecovery() }, error => { database = null; reject(error) })
         }
         opening.onerror = () => { database = null; reject(opening.error) }
     })
@@ -95,6 +106,31 @@ export async function request(method, path, body = {}) {
         await save('settings', { id: 'settings', value: body }); return body
     }
     if (table === 'data') {
+        if (id === 'reset-progress') {
+            recoveryEpoch++
+            clearTimeout(recoveryTimer)
+            await flushProgress()
+            const db = await openDatabase()
+            await new Promise((resolve,reject) => {
+                const tx = db.transaction(['courses','modules','videos'], 'readwrite')
+                for (const name of ['courses','modules','videos']) {
+                    const store = tx.objectStore(name), cursor = store.openCursor()
+                    cursor.onsuccess = () => {
+                        const current = cursor.result
+                        if (!current) return
+                        const row = { ...current.value, completedVideos: 0, completionPercentage: 0 }
+                        if (name === 'videos') Object.assign(row,{isCompleted:false,watchProgress:0,lastWatchedPosition:0,lastWatchedAt:null,isFavorite:current.value.isFavorite})
+                        if (name === 'courses') { row.lastAccessedClickTime = null; row.lastAccessed = null }
+                        current.update(row); current.continue()
+                    }
+                }
+                tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)
+            })
+            clearPlaybackBookmarks()
+            await saveRecovery()
+            try { localStorage.setItem('tutin_progress_reset', String(Date.now())) } catch {}
+            return { success:true }
+        }
         if (id === 'course-thumbnail') return { thumbnailData: null }
         if (id === 'download-image') throw new Error('Use the image URL or upload a thumbnail in browser mode.')
         if (id === 'detect-durations') return { updated: 0, failed: 0 }
@@ -103,7 +139,13 @@ export async function request(method, path, body = {}) {
             for (const name of tables) data[name] = (await all(name)).map(({fileHandle, folderHandle, ...row}) => row)
             return data
         }
-        if (id === 'reset') { for (const name of [...tables, 'settings']) await operation(name, 'clear'); return { success: true } }
+        if (id === 'reset') {
+            recoveryEpoch++; clearTimeout(recoveryTimer)
+            for (const name of [...tables, 'settings']) await operation(name, 'clear')
+            clearPlaybackBookmarks()
+            saveLibraryRecovery({courses:[],modules:[],videos:[]})
+            return { success: true }
+        }
         if (id === 'import') { for (const name of tables) for (const row of body[name] || []) await save(name, row); return { success: true } }
     }
     if (table === 'analytics' && id === 'history') {
@@ -149,6 +191,7 @@ export async function request(method, path, body = {}) {
         if (table === 'courses') await removeRelated(id)
         if (table === 'modules') await removeRelated(existing?.courseId, id)
         if (existing?.courseId) invalidateCourse(existing.courseId)
+        if (['courses','modules','videos'].includes(table)) scheduleRecovery()
         return { success: true }
     }
     const existing = id ? await operation(table, 'get', id) : null
@@ -160,5 +203,6 @@ export async function request(method, path, body = {}) {
     const result = await save(table, row)
     const affectsTotals = table === 'modules' || (table === 'videos' && (!existing || ['duration','isCompleted','moduleId','courseId'].some(key => key in body)))
     if (row.courseId && affectsTotals) invalidateCourse(row.courseId)
+    if (['courses','modules','videos'].includes(table) && action !== 'progress') scheduleRecovery()
     return result
 }

@@ -1,5 +1,5 @@
 import * as api from './api.js'
-import { withPlaybackBookmark } from './playbackBookmarks.js'
+import { withPlaybackBookmark, isProgressResetting, writeCompletionBookmark } from './playbackBookmarks.js'
 
 /**
  * TutIn Database — Server-only API client (v4)
@@ -97,6 +97,7 @@ export async function getVideosByModule(moduleId) {
 }
 
 export async function updateVideoProgress(videoId, currentTime, duration) {
+    if (isProgressResetting()) return
     const watchProgress = duration > 0 ? currentTime / duration : 0
     return api.put(`/api/videos/${videoId}/progress`, {
         watchProgress,
@@ -105,6 +106,8 @@ export async function updateVideoProgress(videoId, currentTime, duration) {
 }
 
 export async function markVideoComplete(videoId, isCompleted = true) {
+    if (isProgressResetting()) return
+    if (api.IS_BROWSER_MODE) writeCompletionBookmark(videoId, isCompleted)
     return api.post(`/api/videos/${videoId}/complete`, { isCompleted })
 }
 
