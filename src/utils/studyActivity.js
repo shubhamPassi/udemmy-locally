@@ -34,3 +34,41 @@ export function studyActivity(records, courses, endDate, periodDays) {
     const peak=bins.reduce((best,bin)=>bin.seconds>best.seconds?bin:best,bins[0])
     return {dates,bins,rows,totalSeconds,previousSeconds,averageSeconds:totalSeconds/length,activeDays:length===1?(totalSeconds?1:0):bins.filter(bin=>bin.seconds>0).length,peak}
 }
+
+export function studyConsistency(records, today = new Date()) {
+    const days = new Map()
+    for (const record of records) for (const [hour, seconds] of Object.entries(record.hours || {})) {
+        if (!/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3])$/.test(hour) || !Number.isFinite(seconds) || seconds <= 0) continue
+        const key = hour.slice(0, 10)
+        if (key > dayKey(today)) continue
+        days.set(key, (days.get(key) || 0) + seconds)
+    }
+    let cursor = days.has(dayKey(today)) ? moveDay(today, 0) : moveDay(today, -1)
+    let currentStreak = 0, bestStreak = 0, run = 0, previous = null
+    while (days.has(dayKey(cursor))) { currentStreak++; cursor = moveDay(cursor, -1) }
+    for (const key of [...days.keys()].sort()) {
+        const [year, month, day] = key.split('-').map(Number)
+        const date = new Date(year, month - 1, day, 12)
+        run = previous && dayKey(moveDay(previous, 1)) === key ? run + 1 : 1
+        bestStreak = Math.max(bestStreak, run)
+        previous = date
+    }
+    return { currentStreak, bestStreak, studiedDays: days.size, totalSeconds: [...days.values()].reduce((sum, seconds) => sum + seconds, 0) }
+}
+
+export function studyReportCsv(activity, periodDays) {
+    function cell(value) {
+        let text = String(value)
+        if (/^[=+\-@\t\r]/.test(text)) text = "'" + text
+        return '"' + text.replace(/"/g, '""') + '"'
+    }
+    const rows = [['Date', 'Hour', 'Course', 'Study time', 'Seconds']]
+    for (const bin of activity.bins) for (const course of activity.rows) {
+        const seconds = bin.courses[course.id]
+        if (!seconds) continue
+        const rounded = Math.round(seconds)
+        const duration = `${Math.floor(rounded / 3600)}:${String(Math.floor(rounded % 3600 / 60)).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`
+        rows.push([dayKey(bin.date), periodDays === 1 ? `${String(bin.index).padStart(2, '0')}:00` : 'All day', course.title, duration, rounded])
+    }
+    return '\uFEFF' + rows.map(row => row.map(cell).join(',')).join('\r\n')
+}
