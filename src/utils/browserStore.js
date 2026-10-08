@@ -1,6 +1,7 @@
 // Hosted app data stays in this browser. Structured cloning preserves folder/file handles.
 import { saveLibraryRecovery, restoreLibraryRecovery } from './browserPersistence.js'
 import { clearPlaybackBookmarks } from './playbackBookmarks.js'
+import { clearStudyHistory } from './studyTime.js'
 const tables = ['courses', 'modules', 'videos', 'notes', 'instructors', 'roadmaps', 'transcripts', 'summaries']
 let database
 const dirtyCourses = new Set()
@@ -127,6 +128,7 @@ export async function request(method, path, body = {}) {
                 tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)
             })
             clearPlaybackBookmarks()
+            clearStudyHistory()
             await saveRecovery()
             try { localStorage.setItem('tutin_progress_reset', String(Date.now())) } catch {}
             return { success:true }
@@ -143,6 +145,7 @@ export async function request(method, path, body = {}) {
             recoveryEpoch++; clearTimeout(recoveryTimer)
             for (const name of [...tables, 'settings']) await operation(name, 'clear')
             clearPlaybackBookmarks()
+            clearStudyHistory()
             saveLibraryRecovery({courses:[],modules:[],videos:[]})
             return { success: true }
         }

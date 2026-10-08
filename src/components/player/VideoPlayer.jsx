@@ -15,11 +15,16 @@ import TranslateModal from './TranslateModal'
 import mpegts from 'mpegts.js'
 import ResumableEmbedPlayer from './ResumableEmbedPlayer'
 import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks'
+import useStudyTime from '../../hooks/useStudyTime'
 
 
 const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext, onPrevious, courseId, onTimeUpdate, autoPlay, onAspectRatioChange }, ref) {
     const { settings, updateSettings } = useSettings()
     const videoRef = useRef(null)
+    useStudyTime(()=>{
+        const media=videoRef.current
+        return media?.nodeName==='VIDEO'?{element:media,time:media.currentTime,rate:media.playbackRate,seeking:media.seeking,playing:!media.paused&&!media.seeking&&media.readyState>=3}:null
+    },video?.id,courseId)
     const embeddedPlayerRef = useRef(null)
     const localBookmarkRef = useRef(null)
     const containerRef = useRef(null)

@@ -4,6 +4,7 @@ import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks
 import { IS_BROWSER_MODE } from '../../utils/api'
 import { playerShortcut } from '../../utils/playerShortcuts'
 import StreamPlayerControls from './StreamPlayerControls'
+import useStudyTime from '../../hooks/useStudyTime'
 
 let youtubeApi
 function loadYouTubeApi() {
@@ -19,7 +20,7 @@ function loadYouTubeApi() {
     return youtubeApi
 }
 
-const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, settings, autoPlay, onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange }, ref) {
+const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, courseId, settings, autoPlay, onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange }, ref) {
     const container = useRef(null)
     const host = useRef(null), native = useRef(null), player = useRef(null)
     const position = useRef(resumeTime(video, settings.resumePlayback)), duration = useRef(video.duration || 0)
@@ -33,6 +34,14 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
     const isYouTube = !!(video.youtubeId || /youtu(?:be\.com|\.be)/.test(video.url || ''))
     const youtubeId = video.youtubeId || video.url?.match(/(?:[?&]v=|youtu\.be\/)([^?&/]+)/)?.[1]
     const driveId = video.driveFileId || video.url?.match(/(?:\/d\/|[?&]id=)([a-zA-Z0-9_-]+)/)?.[1]
+    const flushStudyTime=useStudyTime(()=>{
+        if(isYouTube) {
+            const yt=player.current
+            return yt?.getCurrentTime?{time:yt.getCurrentTime(),rate:yt.getPlaybackRate(),playing:yt.getPlayerState()===1}:null
+        }
+        const media=native.current
+        return media?{element:media,time:media.currentTime,rate:media.playbackRate,seeking:media.seeking,playing:!media.paused&&!media.seeking&&media.readyState>=3}:null
+    },video.id,courseId)
 
     function remember(force = false) {
         if (!observed.current) return
@@ -148,6 +157,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, s
                         if (!autoPlay) event.target.pauseVideo()
                     },
                     onStateChange: event => {
+                        flushStudyTime()
                         if (event.data === 1) sample(event.target.getCurrentTime(), event.target.getDuration())
                         if ((event.data === 2 || event.data === 0) && observed.current) sample(event.target.getCurrentTime(), event.target.getDuration(), true)
                         if (event.data === 0 && settings.autoPlayNext) callbacks.current.onNext?.()

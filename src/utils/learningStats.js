@@ -1,7 +1,9 @@
-export function learningStats(courses, videos, today = new Date()) {
+export function learningStats(courses, videos, today = new Date(), studyHours = {}) {
     const days = Array.from({ length:7 }, (_,index) => {
         const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6 + index)
-        return { date, label:date.toLocaleDateString(undefined,{weekday:'short'}), count:0 }
+        const key=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
+        const hours=Array.from({length:24},(_,hour)=>Math.max(0,Number(studyHours[`${key}T${String(hour).padStart(2,'0')}`])||0))
+        return { date, label:date.toLocaleDateString(undefined,{weekday:'short'}), count:0,hours,seconds:hours.reduce((sum,value)=>sum+value,0) }
     })
     const byCourse = new Map()
     let savedSeconds=0, knownSeconds=0
@@ -28,7 +30,8 @@ export function learningStats(courses, videos, today = new Date()) {
     const finished=rows.filter(row=>row.total>0&&row.completed===row.total).length
     const active=rows.filter(row=>row.active&&row.completed<row.total).length
     const continueCourse=[...rows].filter(row=>row.active&&row.completed<row.total).sort((a,b)=>new Date(b.lastVideo?.lastWatchedAt||0)-new Date(a.lastVideo?.lastWatchedAt||0))[0]
-    return {rows,total,completed,finished,active,notStarted:Math.max(0,rows.length-finished-active),savedSeconds,knownSeconds,days,percent:total?completed/total*100:0,continueCourse}
+    const studySeconds=Object.values(studyHours).reduce((sum,value)=>sum+Math.max(0,Number(value)||0),0)
+    return {rows,total,completed,finished,active,notStarted:Math.max(0,rows.length-finished-active),savedSeconds,knownSeconds,days,studySeconds,percent:total?completed/total*100:0,continueCourse}
 }
 export function learningTime(seconds) {
     const minutes=Math.floor(Math.max(0,seconds)/60)
