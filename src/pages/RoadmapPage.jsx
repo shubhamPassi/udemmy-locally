@@ -8,9 +8,21 @@ import {
 import { getAllCourses } from '../utils/db'
 import { getRoadmaps, addRoadmap, updateRoadmap, deleteRoadmap as deleteRoadmapDb } from '../utils/roadmapDb'
 import LoadingSpinner from '../components/common/LoadingSpinner'
+import { useNotification } from '../contexts/NotificationContext'
+import { fitRoadmapViewport } from '../utils/roadmapLayout'
 
 // Generate unique ID
 const generateId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+function handleDialogKeyDown(event, busy, close) {
+    if (event.key === 'Escape' && !busy) close()
+    if (event.key !== 'Tab') return
+    const controls = Array.from(event.currentTarget.querySelectorAll('button:not(:disabled), input:not(:disabled)'))
+    if (!controls.length) { event.preventDefault(); return }
+    const first = controls[0], last = controls[controls.length - 1]
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+}
 
 function RoadmapPage() {
     const [courses, setCourses] = useState([])
@@ -20,6 +32,14 @@ function RoadmapPage() {
     const [showCoursePanel, setShowCoursePanel] = useState(true)
     const [showNewRoadmapModal, setShowNewRoadmapModal] = useState(false)
     const [newRoadmapTitle, setNewRoadmapTitle] = useState('')
+
+    const { showNotification } = useNotification()
+    const [courseSearch, setCourseSearch] = useState('')
+    const [isCreating, setIsCreating] = useState(false)
+    const [loadError, setLoadError] = useState('')
+    const [saveStatus, setSaveStatus] = useState('Saved')
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
 
     // Canvas state
     const [nodes, setNodes] = useState([])
@@ -34,8 +54,10 @@ function RoadmapPage() {
 
     const canvasRef = useRef(null)
     const containerRef = useRef(null)
-    // Guard to prevent auto-save from firing before a new roadmap is committed to DB
-    const skipNextAutoSave = useRef(false)
+    // Track the last stored canvas and serialize writes to preserve edit order.
+    const savedSnapshot = useRef('')
+    const activeRoadmapId = useRef(null)
+    const saveQueue = useRef(Promise.resolve())
 
     // Load courses and roadmaps
     useEffect(() => {
@@ -45,6 +67,7 @@ function RoadmapPage() {
     async function loadData() {
         try {
             setIsLoading(true)
+            setLoadError('')
             const allCourses = await getAllCourses()
             setCourses(allCourses)
 
@@ -59,6 +82,7 @@ function RoadmapPage() {
             }
         } catch (err) {
             console.error('Failed to load data:', err)
+            setLoadError('Could not load your roadmaps. Please try again.')
         } finally {
             setIsLoading(false)
         }
@@ -69,6 +93,12 @@ function RoadmapPage() {
         const normalized = { ...roadmap, title: roadmap.title || roadmap.name }
         // Also restore pan/zoom from viewport if stored that way by server
         const viewport = roadmap.viewport || {}
+        activeRoadmapId.current = normalized.id
+        savedSnapshot.current = JSON.stringify([normalized.nodes || [], normalized.connections || [], normalized.pan || viewport.pan || { x: 0, y: 0 }, normalized.zoom || viewport.zoom || 1])
+        setSaveStatus('Saved')
+        setSelectedNode(null)
+        setConnectingFrom(null)
+        setCourseSearch('')
         setCurrentRoadmap(normalized)
         setNodes(normalized.nodes || [])
         setConnections(normalized.connections || [])
@@ -89,14 +119,29 @@ function RoadmapPage() {
             updatedAt: new Date().toISOString()
         }
 
-        const newRoadmaps = roadmaps.map(r => r.id === updated.id ? updated : r)
-        setRoadmaps(newRoadmaps)
-        setCurrentRoadmap(updated)
-        await updateRoadmap(updated)
+        const snapshot = JSON.stringify([nodes, connections, pan, zoom])
+        if (snapshot === savedSnapshot.current) return true
+        setSaveStatus('Saving…')
+        const write = saveQueue.current.catch(() => {}).then(() => updateRoadmap(updated))
+        saveQueue.current = write
+        try {
+            await write
+            setRoadmaps(prev => prev.map(r => r.id === updated.id ? updated : r))
+            if (activeRoadmapId.current === updated.id) {
+                savedSnapshot.current = snapshot
+                setSaveStatus('Saved')
+            }
+            return true
+        } catch (error) {
+            setSaveStatus('Save failed')
+            showNotification('Could not save your roadmap. Please retry.', 'error')
+            return false
+        }
     }
 
     async function createNewRoadmap() {
-        if (!newRoadmapTitle.trim()) return
+        if (!newRoadmapTitle.trim() || isCreating) return
+        setIsCreating(true)
 
         const newRoadmap = {
             id: generateId(),
@@ -109,56 +154,71 @@ function RoadmapPage() {
             updatedAt: new Date().toISOString()
         }
 
-        // Skip the next auto-save cycle to avoid a PUT before the POST completes
-        skipNextAutoSave.current = true
-        await addRoadmap(newRoadmap)
-        const newRoadmaps = [...roadmaps, newRoadmap]
-        setRoadmaps(newRoadmaps)
-        loadRoadmap(newRoadmap)
-        setShowNewRoadmapModal(false)
-        setNewRoadmapTitle('')
+        try {
+            if (await saveRoadmap() === false) return
+            await addRoadmap(newRoadmap)
+            setRoadmaps(prev => [...prev, newRoadmap])
+            loadRoadmap(newRoadmap)
+            setShowNewRoadmapModal(false)
+            setNewRoadmapTitle('')
+            setShowCoursePanel(true)
+        } catch {
+            showNotification('Could not create your roadmap. Please try again.', 'error')
+        } finally { setIsCreating(false) }
     }
 
     async function deleteRoadmap(id) {
-        if (!confirm('Are you sure you want to delete this roadmap?')) return
+        if (isDeleting) return
+        setIsDeleting(true)
 
-        await deleteRoadmapDb(id)
-        const newRoadmaps = roadmaps.filter(r => r.id !== id)
-        setRoadmaps(newRoadmaps)
-
-        if (currentRoadmap?.id === id) {
-            if (newRoadmaps.length > 0) {
-                loadRoadmap(newRoadmaps[0])
-            } else {
-                setCurrentRoadmap(null)
-                setNodes([])
-                setConnections([])
+        try {
+            await saveQueue.current.catch(() => {})
+            await deleteRoadmapDb(id)
+            const newRoadmaps = roadmaps.filter(r => r.id !== id)
+            setRoadmaps(newRoadmaps)
+    
+            if (currentRoadmap?.id === id) {
+                if (newRoadmaps.length > 0) {
+                    loadRoadmap(newRoadmaps[0])
+                } else {
+                    activeRoadmapId.current = null
+                    localStorage.removeItem('last_roadmap_id')
+                    setCurrentRoadmap(null)
+                    setNodes([])
+                    setConnections([])
+                }
             }
-        }
+            setShowDeleteDialog(false)
+        } catch { showNotification('Could not delete your roadmap. Please try again.', 'error') }
+        finally { setIsDeleting(false) }
     }
 
     // Add course to canvas
     function addCourseToCanvas(course) {
         const container = containerRef.current
-        if (!container) return
+        if (!currentRoadmap || !container || nodes.some(node => node.courseId === course.id)) return
 
         const rect = container.getBoundingClientRect()
         const centerX = (rect.width / 2 - pan.x) / zoom
         const centerY = (rect.height / 2 - pan.y) / zoom
 
-        // Offset slightly if there are already nodes
-        const offset = nodes.length * 20
+        // Put new courses beside the existing cards instead of stacking them.
+        const rightEdge = nodes.length ? Math.max(...nodes.map(node => node.x + node.width)) : centerX - 140
 
         const newNode = {
             id: generateId(),
             courseId: course.id,
-            x: centerX + offset,
-            y: centerY + offset,
+            x: nodes.length ? rightEdge + 40 : centerX - 140,
+            y: nodes.length ? nodes[0].y : centerY - 80,
             width: 280,
             height: 160
         }
 
-        setNodes(prev => [...prev, newNode])
+        const nextNodes = [...nodes, newNode]
+        setNodes(nextNodes)
+        const view = fitRoadmapViewport(nextNodes, rect.width, rect.height)
+        setZoom(view.zoom)
+        setPan(view.pan)
     }
 
     // Remove node
@@ -170,6 +230,7 @@ function RoadmapPage() {
 
     // Handle node dragging
     const handleNodeMouseDown = (e, node) => {
+        if (e.button !== 0 || e.target.closest('button, a')) return
         e.stopPropagation()
         setDraggedNode(node)
         setDragStart({ x: e.clientX - node.x * zoom, y: e.clientY - node.y * zoom })
@@ -177,7 +238,7 @@ function RoadmapPage() {
     }
 
     const handleCanvasMouseDown = (e) => {
-        if (draggedNode) return
+        if (!currentRoadmap || e.button !== 0 || draggedNode) return
         if (e.target === canvasRef.current || e.target.closest('.canvas-bg')) {
             setIsDragging(true)
             setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
@@ -207,11 +268,13 @@ function RoadmapPage() {
     }
 
     useEffect(() => {
-        window.addEventListener('mousemove', handleMouseMove)
-        window.addEventListener('mouseup', handleMouseUp)
+        window.addEventListener('pointermove', handleMouseMove)
+        window.addEventListener('pointerup', handleMouseUp)
+        window.addEventListener('pointercancel', handleMouseUp)
         return () => {
-            window.removeEventListener('mousemove', handleMouseMove)
-            window.removeEventListener('mouseup', handleMouseUp)
+            window.removeEventListener('pointermove', handleMouseMove)
+            window.removeEventListener('pointerup', handleMouseUp)
+            window.removeEventListener('pointercancel', handleMouseUp)
         }
     }, [handleMouseMove])
 
@@ -249,8 +312,10 @@ function RoadmapPage() {
     }
 
     const resetView = () => {
-        setZoom(1)
-        setPan({ x: 0, y: 0 })
+        const rect = containerRef.current?.getBoundingClientRect()
+        const view = fitRoadmapViewport(nodes, rect?.width || 800, rect?.height || 500)
+        setZoom(view.zoom)
+        setPan(view.pan)
     }
 
     // Get course data for a node
@@ -339,15 +404,12 @@ function RoadmapPage() {
 
     // Auto-save on changes
     useEffect(() => {
-        if (skipNextAutoSave.current) {
-            skipNextAutoSave.current = false
-            return
-        }
-        if (currentRoadmap && (nodes.length > 0 || connections.length > 0)) {
+        if (!isDeleting && currentRoadmap && JSON.stringify([nodes, connections, pan, zoom]) !== savedSnapshot.current) {
+            setSaveStatus('Unsaved changes')
             const timeout = setTimeout(saveRoadmap, 1000)
             return () => clearTimeout(timeout)
         }
-    }, [nodes, connections, pan, zoom])
+    }, [currentRoadmap?.id, nodes, connections, pan, zoom, isDeleting])
 
     if (isLoading) {
         return (
@@ -358,26 +420,28 @@ function RoadmapPage() {
     }
 
     return (
-        <div className="h-[calc(100vh-8rem)] flex flex-col">
+        <div className="min-h-[650px] h-[calc(100dvh-8rem)] flex flex-col text-gray-900 dark:text-white">
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                 <div>
                     <h1 className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-3">
                         <Map className="w-7 h-7 text-primary-fg" />
                         Learning Roadmap
                     </h1>
                     <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                        Plan your learning journey by connecting courses
+                        Create a roadmap, add your courses, then connect them in the order you want to learn.
                     </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                     {/* Roadmap Selector */}
                     <select
+                        aria-label="Choose roadmap"
+                        disabled={!roadmaps.length}
                         value={currentRoadmap?.id || ''}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                             const roadmap = roadmaps.find(r => r.id === e.target.value)
-                            if (roadmap) loadRoadmap(roadmap)
+                            if (roadmap && await saveRoadmap() !== false) loadRoadmap(roadmap)
                         }}
                         className="px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-white dark:bg-dark-surface text-sm"
                     >
@@ -385,23 +449,23 @@ function RoadmapPage() {
                             <option value="">No roadmaps</option>
                         )}
                         {roadmaps.map(r => (
-                            <option key={r.id} value={r.id}>{r.title}</option>
+                            <option key={r.id} value={r.id}>{r.title || r.name}</option>
                         ))}
                     </select>
 
                     <button
                         onClick={() => setShowNewRoadmapModal(true)}
-                        className="p-2 rounded-lg bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white hover:bg-gray-200 dark:hover:bg-white/20 transition-colors border border-light-border dark:border-dark-border"
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors text-sm font-medium"
                         title="Create new roadmap"
                     >
-                        <Plus className="w-5 h-5" />
+                        <Plus className="w-4 h-4" />New roadmap
                     </button>
 
                     {currentRoadmap && (
                         <button
-                            onClick={() => deleteRoadmap(currentRoadmap.id)}
+                            onClick={() => setShowDeleteDialog(true)}
                             className="p-2 rounded-lg text-light-text-secondary hover:text-error hover:bg-error/10 transition-colors"
-                            title="Delete roadmap"
+                            aria-label="Delete roadmap" title="Delete roadmap"
                         >
                             <Trash2 className="w-5 h-5" />
                         </button>
@@ -409,28 +473,31 @@ function RoadmapPage() {
                 </div>
             </div>
 
+            {loadError && <div role="alert" className="mb-4 rounded-xl bg-red-500/10 p-4 text-sm text-red-500">{loadError}<button onClick={loadData} className="ml-3 underline">Try again</button></div>}
+            {currentRoadmap && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-neutral-400"><p>{nodes.length} courses · {connections.length} connections · Drag cards to arrange your plan</p><span role="status">{saveStatus}{saveStatus === 'Save failed' && <button onClick={saveRoadmap} className="ml-2 text-blue-500 underline">Retry</button>}</span></div>}
             {/* Main Content */}
-            <div className="flex-1 flex gap-4 overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4 overflow-hidden">
                 {/* Course Panel (Left) */}
-                {showCoursePanel && (
-                    <div className="w-72 bg-white dark:bg-dark-surface rounded-xl border border-light-border dark:border-dark-border flex flex-col overflow-hidden">
+                {currentRoadmap && showCoursePanel && (
+                    <div className="w-full md:w-72 md:shrink-0 max-h-56 md:max-h-none bg-white dark:bg-dark-surface rounded-xl border border-light-border dark:border-dark-border flex flex-col overflow-hidden">
                         <div className="p-4 border-b border-light-border dark:border-dark-border">
                             <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary flex items-center gap-2">
                                 <BookOpen className="w-5 h-5 text-primary-fg" />
                                 Courses
                             </h3>
                             <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                                Click to add to canvas
+                                Choose courses for this roadmap
                             </p>
                         </div>
+                        <div className="px-3 pt-3"><input aria-label="Search courses for roadmap" value={courseSearch} onChange={e => setCourseSearch(e.target.value)} placeholder="Search your courses…" className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                         <div className="flex-1 overflow-y-auto p-2">
-                            {courses.map(course => {
+                            {courses.filter(course => course.title.toLowerCase().includes(courseSearch.toLowerCase())).map(course => {
                                 const isOnCanvas = nodes.some(n => n.courseId === course.id)
                                 return (
                                     <button
                                         key={course.id}
                                         onClick={() => !isOnCanvas && addCourseToCanvas(course)}
-                                        disabled={isOnCanvas}
+                                        disabled={!currentRoadmap || isOnCanvas}
                                         className={`w-full p-3 rounded-lg text-left mb-2 transition-colors ${isOnCanvas
                                             ? 'bg-primary/10 dark:bg-primary/50/10 cursor-not-allowed opacity-60'
                                             : 'bg-light-surface dark:bg-dark-bg hover:bg-primary/5 dark:hover:bg-primary/50/10'
@@ -466,9 +533,10 @@ function RoadmapPage() {
                                     </button>
                                 )
                             })}
+                            {courses.length > 0 && !courses.some(course => course.title.toLowerCase().includes(courseSearch.toLowerCase())) && <p className="p-4 text-sm text-neutral-500">No courses match your search.</p>}
                             {courses.length === 0 && (
                                 <div className="text-center py-8 text-light-text-secondary dark:text-dark-text-secondary text-sm">
-                                    No courses yet
+                                    No courses yet. <Link to="/" className="text-blue-500 underline">Add your first course</Link>
                                 </div>
                             )}
                         </div>
@@ -478,42 +546,43 @@ function RoadmapPage() {
                 {/* Canvas Area */}
                 <div
                     ref={containerRef}
-                    className="flex-1 bg-light-surface dark:bg-dark-bg rounded-xl border border-light-border dark:border-dark-border overflow-hidden relative"
+                    className="flex-1 min-h-[320px] bg-light-surface dark:bg-dark-bg rounded-xl border border-light-border dark:border-dark-border overflow-hidden relative"
                 >
                     {/* Toolbar */}
-                    <div className="absolute top-4 left-4 z-10 flex gap-2">
+                    {currentRoadmap && <div className="absolute top-4 left-4 z-10 flex gap-2">
                         <button
                             onClick={() => setShowCoursePanel(prev => !prev)}
                             className={`p-2 rounded-lg shadow-md transition-colors border border-light-border dark:border-dark-border ${showCoursePanel
                                 ? 'bg-white dark:bg-dark-surface text-primary-fg'
                                 : 'bg-white dark:bg-dark-surface text-gray-700 dark:text-dark-text-secondary hover:bg-light-surface dark:hover:bg-dark-bg'
                                 }`}
-                            title="Toggle course panel"
+                            aria-label="Toggle course panel" title="Toggle course panel"
                         >
                             <Grid3X3 className="w-5 h-5" />
                         </button>
                     </div>
 
+                    }
                     {/* Zoom Controls */}
-                    <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+                    {currentRoadmap && <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
                         <button
                             onClick={() => handleZoom(0.25)}
                             className="p-2 rounded-lg bg-white dark:bg-dark-surface shadow-md hover:bg-light-surface dark:hover:bg-dark-bg transition-colors"
-                            title="Zoom in"
+                            aria-label="Zoom in" title="Zoom in"
                         >
                             <ZoomIn className="w-5 h-5" />
                         </button>
                         <button
                             onClick={() => handleZoom(-0.25)}
                             className="p-2 rounded-lg bg-white dark:bg-dark-surface shadow-md hover:bg-light-surface dark:hover:bg-dark-bg transition-colors"
-                            title="Zoom out"
+                            aria-label="Zoom out" title="Zoom out"
                         >
                             <ZoomOut className="w-5 h-5" />
                         </button>
                         <button
                             onClick={resetView}
                             className="p-2 rounded-lg bg-white dark:bg-dark-surface shadow-md hover:bg-light-surface dark:hover:bg-dark-bg transition-colors"
-                            title="Reset view"
+                            aria-label="Fit to view" title="Fit to view"
                         >
                             <Maximize2 className="w-5 h-5" />
                         </button>
@@ -522,12 +591,14 @@ function RoadmapPage() {
                         </div>
                     </div>
 
+                    }
                     {/* Canvas */}
                     <div
                         ref={canvasRef}
                         className="w-full h-full cursor-grab active:cursor-grabbing canvas-bg"
-                        onMouseDown={handleCanvasMouseDown}
+                        onPointerDown={handleCanvasMouseDown}
                         style={{
+                            touchAction: 'none',
                             backgroundImage: `radial-gradient(circle, var(--border) 1px, transparent 1px)`,
                             backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
                             backgroundPosition: `${pan.x}px ${pan.y}px`
@@ -599,7 +670,7 @@ function RoadmapPage() {
 
                         {/* Nodes */}
                         <div
-                            className="absolute inset-0"
+                            className="absolute inset-0 pointer-events-none"
                             style={{
                                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                                 transformOrigin: '0 0'
@@ -616,7 +687,7 @@ function RoadmapPage() {
                                 return (
                                     <div
                                         key={node.id}
-                                        className={`absolute bg-white dark:bg-dark-surface rounded-xl shadow-lg border-2 transition-shadow cursor-move select-none ${isSelected ? 'border-primary shadow-xl ring-2 ring-primary/20' :
+                                        className={`absolute pointer-events-auto touch-none bg-white dark:bg-dark-surface rounded-xl shadow-lg border-2 transition-shadow cursor-move select-none ${isSelected ? 'border-primary shadow-xl ring-2 ring-primary/20' :
                                             isConnecting ? 'border-green-500 shadow-xl' :
                                                 'border-light-border dark:border-dark-border hover:shadow-xl'
                                             }`}
@@ -626,7 +697,8 @@ function RoadmapPage() {
                                             width: node.width,
                                             height: node.height
                                         }}
-                                        onMouseDown={(e) => handleNodeMouseDown(e, node)}
+                                        onPointerDown={(e) => handleNodeMouseDown(e, node)}
+                                        onClick={() => { if (connectingFrom && connectingFrom !== node.id) startConnecting(node.id) }}
                                     >
                                         {/* Node Content */}
                                         <div className="p-4 h-full flex flex-col">
@@ -699,7 +771,7 @@ function RoadmapPage() {
                                                         ? 'bg-green-500 text-white'
                                                         : 'bg-light-surface dark:bg-dark-bg hover:bg-primary/5 dark:hover:bg-primary/50/10 text-light-text-primary dark:text-dark-text-primary'
                                                         }`}
-                                                    title={isConnecting ? 'Click another node to connect' : 'Connect to another course'}
+                                                    aria-label={`Connect ${course.title}`} title={isConnecting ? 'Click another node to connect' : 'Connect to another course'}
                                                 >
                                                     <ArrowRight className="w-3 h-3" />
                                                 </button>
@@ -709,7 +781,7 @@ function RoadmapPage() {
                                                         removeNode(node.id)
                                                     }}
                                                     className="p-1.5 rounded-lg text-light-text-secondary hover:text-error hover:bg-error/10 transition-colors"
-                                                    title="Remove from roadmap"
+                                                    aria-label={`Remove ${course.title} from roadmap`} title="Remove from roadmap"
                                                 >
                                                     <X className="w-3 h-3" />
                                                 </button>
@@ -729,24 +801,26 @@ function RoadmapPage() {
 
                         {/* Empty state */}
                         {nodes.length === 0 && currentRoadmap && (
-                            <div className="absolute inset-0 flex items-center justify-center text-light-text-secondary dark:text-dark-text-secondary">
+                            <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none text-light-text-secondary dark:text-dark-text-secondary">
                                 <div className="text-center">
                                     <Map className="w-16 h-16 mx-auto mb-4 opacity-30" />
                                     <p className="text-lg font-medium mb-2">Start building your roadmap</p>
-                                    <p className="text-sm">Click courses from the left panel to add them here</p>
+                                    <p className="text-sm">Use the course panel to add your first course. Drag cards to arrange them.</p>
                                 </div>
                             </div>
                         )}
 
                         {/* No roadmap selected */}
                         {!currentRoadmap && (
-                            <div className="absolute inset-0 flex items-center justify-center text-light-text-secondary dark:text-dark-text-secondary">
+                            <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none text-light-text-secondary dark:text-dark-text-secondary">
                                 <div className="text-center">
-                                    <Map className="w-16 h-16 mx-auto mb-4 opacity-30" />
-                                    <p className="text-lg font-medium mb-4">No roadmap selected</p>
+                                    <span className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500"><Map className="w-8 h-8" /></span>
+                                    <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white mb-3">Build your learning path</h2>
+                                    <p className="max-w-md mx-auto text-sm leading-6 mb-5">Start by creating a roadmap. Then choose courses from your library and connect them into a clear plan.</p>
+                                    <ol className="flex flex-wrap justify-center gap-3 sm:gap-6 text-xs mb-6"><li>1. Name your roadmap</li><li>2. Add courses</li><li>3. Connect your path</li></ol>
                                     <button
                                         onClick={() => setShowNewRoadmapModal(true)}
-                                        className="px-6 py-2.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white hover:bg-gray-200 dark:hover:bg-white/20 transition-all border border-gray-300 dark:border-white/10 flex items-center gap-2"
+                                        className="pointer-events-auto mx-auto px-5 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-500 transition-colors flex items-center gap-2 font-medium"
                                     >
                                         <Plus className="w-5 h-5" />
                                         Create Your First Roadmap
@@ -765,24 +839,32 @@ function RoadmapPage() {
                 </div>
             </div>
 
+            {showDeleteDialog && currentRoadmap && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="alertdialog" aria-modal="true" aria-labelledby="delete-roadmap-heading" onKeyDown={e => handleDialogKeyDown(e, isDeleting, () => setShowDeleteDialog(false))}>
+                <div className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-neutral-900 p-6 shadow-2xl">
+                    <h2 id="delete-roadmap-heading" className="text-lg font-semibold">Delete this roadmap?</h2>
+                    <p className="mt-3 text-sm leading-6 text-gray-500 dark:text-neutral-400">“{currentRoadmap.title}” and its connections will be removed. Your courses and learning progress will stay saved.</p>
+                    <div className="mt-6 flex gap-3"><button disabled={isDeleting} onClick={() => deleteRoadmap(currentRoadmap.id)} className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50">{isDeleting ? 'Deleting…' : 'Delete roadmap'}</button><button autoFocus disabled={isDeleting} onClick={() => setShowDeleteDialog(false)} className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500">Cancel</button></div>
+                </div>
+            </div>}
             {/* New Roadmap Modal */}
             {showNewRoadmapModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="new-roadmap-heading" onKeyDown={e => handleDialogKeyDown(e, isCreating, () => setShowNewRoadmapModal(false))}>
                     <div className="bg-white dark:bg-dark-surface rounded-xl p-6 w-full max-w-md shadow-2xl">
-                        <h3 className="text-lg font-semibold mb-4 text-light-text-primary dark:text-dark-text-primary">
+                        <h3 id="new-roadmap-heading" className="text-lg font-semibold mb-4 text-light-text-primary dark:text-dark-text-primary">
                             Create New Roadmap
                         </h3>
                         <input
                             type="text"
                             value={newRoadmapTitle}
                             onChange={(e) => setNewRoadmapTitle(e.target.value)}
-                            placeholder="Roadmap title..."
+                            aria-label="Roadmap title" maxLength={100} disabled={isCreating} placeholder="e.g. My path to data science"
                             className="w-full px-4 py-3 rounded-lg border border-light-border dark:border-dark-border bg-white dark:bg-dark-surface focus:border-primary dark:focus:border-blue-400 outline-none focus:outline-none ring-0 focus:ring-0 mb-4"
                             autoFocus
-                            onKeyDown={(e) => e.key === 'Enter' && createNewRoadmap()}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); createNewRoadmap() } }}
                         />
                         <div className="flex gap-3">
                             <button
+                                disabled={isCreating}
                                 onClick={() => {
                                     setShowNewRoadmapModal(false)
                                     setNewRoadmapTitle('')
@@ -793,10 +875,10 @@ function RoadmapPage() {
                             </button>
                             <button
                                 onClick={createNewRoadmap}
-                                disabled={!newRoadmapTitle.trim()}
-                                className="flex-1 px-4 py-2 rounded-lg bg-primary text-primary-content hover:bg-primary-hover disabled:opacity-50 transition-colors"
+                                disabled={!newRoadmapTitle.trim() || isCreating}
+                                className="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
                             >
-                                Create
+                                {isCreating ? 'Creating…' : 'Create roadmap'}
                             </button>
                         </div>
                     </div>
