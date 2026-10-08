@@ -16,6 +16,7 @@ import mpegts from 'mpegts.js'
 import ResumableEmbedPlayer from './ResumableEmbedPlayer'
 import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks'
 import useStudyTime from '../../hooks/useStudyTime'
+import StreamPlayerControls from './StreamPlayerControls'
 
 
 const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext, onPrevious, courseId, onTimeUpdate, autoPlay, onAspectRatioChange }, ref) {
@@ -610,17 +611,9 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     }
 
     function toggleMute() {
-        if (videoRef.current) {
-            const isYt = video?.youtubeId || video?.url?.startsWith('http')
-
-            if (isMuted) {
-                if (!isYt) videoRef.current.volume = volume || 0.75
-                setIsMuted(false)
-            } else {
-                if (!isYt) videoRef.current.volume = 0
-                setIsMuted(true)
-            }
-        }
+        if (!videoRef.current) return
+        videoRef.current.muted = !videoRef.current.muted
+        setIsMuted(videoRef.current.muted)
     }
 
     function toggleFullscreen() {
@@ -685,6 +678,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         if (video?.youtubeId || video?.driveFileId || /youtu(?:be\.com|\.be)|drive\.google\.com/.test(video?.url || '')) return
         function handleKeyDown(e) {
             if (e.target.closest?.('[role="dialog"], [role="alertdialog"]')) return
+            if (e.target.closest?.('select, [role="textbox"]')) return
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return
             if (!settings.keyboardShortcuts) return
             // Don't intercept browser shortcuts (Ctrl+F, Ctrl+C, Cmd+A, Alt+…, etc.)
@@ -735,11 +729,11 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                     break
                 case 'arrowup':
                     e.preventDefault()
-                    setVolume(v => Math.min(1, v + 0.05))
+                    setVolume(v => Math.min(1, (videoRef.current?.volume ?? v) + 0.05))
                     break
                 case 'arrowdown':
                     e.preventDefault()
-                    setVolume(v => Math.max(0, v - 0.05))
+                    setVolume(v => Math.max(0, (videoRef.current?.volume ?? v) - 0.05))
                     break
                 case 'm':
                     e.preventDefault()
@@ -762,7 +756,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                 case '<':
                     e.preventDefault()
                     // Decrease speed
-                    const currentIdx = speedOptions.indexOf(playbackSpeed)
+                    const currentIdx = speedOptions.indexOf(videoRef.current?.playbackRate ?? playbackSpeed)
                     if (currentIdx > 0) {
                         changeSpeed(speedOptions[currentIdx - 1])
                     }
@@ -775,7 +769,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                 case '>':
                     e.preventDefault()
                     // Increase speed
-                    const currentSpeedIdx = speedOptions.indexOf(playbackSpeed)
+                    const currentSpeedIdx = speedOptions.indexOf(videoRef.current?.playbackRate ?? playbackSpeed)
                     if (currentSpeedIdx < speedOptions.length - 1) {
                         changeSpeed(speedOptions[currentSpeedIdx + 1])
                     }
@@ -891,10 +885,20 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                 }
             } else { */
                 videoRef.current.muted = isMuted
-                videoRef.current.volume = isMuted ? 0 : volume
+                videoRef.current.volume = volume
             /* } */
         }
     }, [volume, isMuted])
+
+    useEffect(() => {
+        const media = videoRef.current
+        if (!media) return
+        const syncVolume = () => { setVolume(media.volume); setIsMuted(media.muted) }
+        const syncRate = () => setPlaybackSpeed(media.playbackRate)
+        media.addEventListener('volumechange', syncVolume)
+        media.addEventListener('ratechange', syncRate)
+        return () => { media.removeEventListener('volumechange', syncVolume); media.removeEventListener('ratechange', syncRate) }
+    }, [videoUrl])
 
     // Sync internal video state with props/state
     useEffect(() => {
@@ -1097,11 +1101,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             ref={containerRef}
             className="video-container relative group w-full h-full bg-transparent"
             style={{ backgroundColor: 'transparent' }}
-            onMouseDown={handleSpeedBoostStart}
-            onMouseUp={handleSpeedBoostEnd}
-            onMouseLeave={handleSpeedBoostEnd}
-            onTouchStart={handleSpeedBoostStart}
-            onTouchEnd={handleSpeedBoostEnd}
         >
             {/* YouTube iframe */}
             {(video?.youtubeId || (video?.url && (video.url.includes('youtube.com') || video.url.includes('youtu.be')))) ? (
@@ -1218,12 +1217,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                 </div>
             )}
 
-            {/* Loading Overlay */}
-            {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                    <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin" />
-                </div>
-            )}
 
 
             {/* Error Overlay */}
@@ -1258,372 +1251,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             />
             )}
 
-            {/* Controls Overlay — hidden for YouTube/Drive embeds (they have their own built-in controls) */}
-            {!isEmbeddedPlayer && (
-            <div
-                className={`absolute inset-0 flex flex-col justify-end transition-opacity duration-200 pointer-events-none ${showControls ? 'opacity-100' : 'opacity-0'
-                    }`}
-            >
-                    {/* Gradient */}
-                    <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
-
-                    {/* Progress Bar — only for native video, not iframe embeds */}
-                    {!isEmbeddedPlayer && (
-                    <div
-                        ref={progressRef}
-                        className="relative h-1 bg-white/30 cursor-pointer mx-4 mb-2 group/progress pointer-events-auto"
-                        onClick={handleSeek}
-                    >
-                        <div
-                            className="absolute inset-y-0 left-0 bg-[var(--primary-fg)]"
-                            style={{ width: `${(currentTime / duration) * 100}%` }}
-                        />
-                        <div
-                            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-[var(--primary-fg)] rounded-full opacity-0 group-hover/progress:opacity-100 transition-opacity"
-                            style={{ left: `${(currentTime / duration) * 100}%`, marginLeft: '-6px' }}
-                        />
-                    </div>
-                    )}
-
-                    {/* Controls Bar */}
-                    <div className="relative flex items-center justify-between px-4 pb-4 text-white pointer-events-auto">
-                        
-                        {/* Left Side Group */}
-                        <div className="flex items-center gap-2">
-                            {/* Play/Pause — only for native video */}
-                            {!isEmbeddedPlayer && (
-                            <button
-                                onClick={togglePlay}
-                                className="w-10 h-10 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 backdrop-blur-sm transition-all text-white shadow-sm"
-                                title={isPlaying ? "Pause (Space)" : "Play (Space)"}
-                            >
-                                {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
-                            </button>
-                            )}
-
-                            {/* Prev/Next Pill */}
-                            <div className="h-10 px-3.5 rounded-full flex items-center bg-white/15 backdrop-blur-sm transition-all text-white gap-3 shadow-sm">
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (onPrevious) onPrevious();
-                                    }}
-                                    className={`p-1 hover:text-[var(--primary-fg)] transition-colors ${!onPrevious ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                    title="Previous Video"
-                                    disabled={!onPrevious}
-                                >
-                                    <SkipBack className="w-4.5 h-4.5 fill-current" />
-                                </button>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (onNext) onNext();
-                                    }}
-                                    className={`p-1 hover:text-[var(--primary-fg)] transition-colors ${!onNext ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                    title="Next Video (Shift+N)"
-                                    disabled={!onNext}
-                                >
-                                    <SkipForward className="w-4.5 h-4.5 fill-current" />
-                                </button>
-                            </div>
-
-                            {/* Volume Pill — only for native video */}
-                            {!isEmbeddedPlayer && (
-                            <div className="flex items-center gap-1 group/volume h-10 px-3 bg-white/15 hover:bg-white/25 backdrop-blur-sm rounded-full transition-all text-white shadow-sm">
-                                <button
-                                    onClick={toggleMute}
-                                    className="p-1 hover:text-[var(--primary-fg)] transition-colors"
-                                    title="Mute (M)"
-                                >
-                                    {isMuted || volume === 0 ? <VolumeX className="w-4.5 h-4.5" /> : <Volume2 className="w-4.5 h-4.5" />}
-                                </button>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="1"
-                                    step="0.05"
-                                    value={isMuted ? 0 : volume}
-                                    onChange={handleVolumeChange}
-                                    className="w-0 overflow-hidden group-hover/volume:w-20 group-hover/volume:ml-1.5 transition-all duration-200 accent-white cursor-pointer"
-                                />
-                            </div>
-                            )}
-
-                            {/* Time Pill — only for native video */}
-                            {!isEmbeddedPlayer && (
-                            <div className="h-10 px-4 flex items-center bg-black/40 backdrop-blur-sm rounded-full text-white text-xs font-semibold select-none shadow-sm tabular-nums">
-                                {formatDuration(currentTime)} / {formatDuration(duration)}
-                            </div>
-                            )}
-                        </div>
-
-                        {/* Right Side Pill */}
-                        <div className="flex items-center gap-1 px-3 py-1 bg-white/15 backdrop-blur-sm rounded-full transition-all text-white shadow-sm relative">
-                            
-                            {/* CC/Captions Toggle and Menu */}
-                            {(captionLanguages.existingLangs.length > 0 || captionLanguages.translatedLangs.length > 0 || captionLanguages.sourceExists || video?.id) && (
-                                <div className="relative flex items-center">
-                                    <button
-                                        onClick={() => {
-                                            setShowCCMenu(!showCCMenu);
-                                            setShowSettingsMenu(false);
-                                        }}
-                                        className={`tut-in-menu-trigger p-1.5 hover:bg-white/15 rounded-full transition-all ${captionsEnabled ? 'text-[var(--primary-fg)]' : 'opacity-70 hover:opacity-100'}`}
-                                        title="Captions Menu (C)"
-                                    >
-                                        <Captions className="w-4.5 h-4.5" />
-                                    </button>
-
-                                    {showCCMenu && (
-                                        <div className="tut-in-menu-container absolute bottom-full right-0 mb-3 bg-black/90 backdrop-blur-md rounded-xl py-2 min-w-[200px] shadow-2xl border border-white/10 text-white text-sm z-50">
-                                            <div className="px-3 py-2 border-b border-white/10 flex justify-between items-center">
-                                                <span className="font-bold text-xs uppercase tracking-wider opacity-60">Captions</span>
-                                                <button 
-                                                    onClick={() => {
-                                                        setCaptionsEnabled(!captionsEnabled)
-                                                    }}
-                                                    className="text-xs bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded"
-                                                >
-                                                    {captionsEnabled ? 'Turn Off' : 'Turn On'}
-                                                </button>
-                                            </div>
-                                            
-                                            <div className="max-h-[180px] overflow-y-auto mt-1">
-                                                {/* Source/Generated */}
-                                                {captionLanguages.sourceExists && !captionLanguages.existingLangs.includes('source') && (
-                                                    <button
-                                                        onClick={() => { setSelectedCaptionLang('source'); setCaptionsEnabled(true); setShowCCMenu(false) }}
-                                                        className={`w-full px-3 py-2 text-xs text-left hover:bg-white/10 flex items-center justify-between ${selectedCaptionLang === 'source' ? 'text-[var(--primary-fg)] font-bold bg-white/5' : ''}`}
-                                                    >
-                                                        <span>Source / Generated</span>
-                                                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                                    </button>
-                                                )}
-
-                                                {/* Pre-existing files */}
-                                                {captionLanguages.existingLangs.map(lang => (
-                                                    <button
-                                                        key={`exist-${lang}`}
-                                                        onClick={() => { setSelectedCaptionLang(lang); setCaptionsEnabled(true); setShowCCMenu(false) }}
-                                                        className={`w-full px-3 py-2 text-xs text-left hover:bg-white/10 flex items-center justify-between ${selectedCaptionLang === lang ? 'text-[var(--primary-fg)] font-bold bg-white/5' : ''}`}
-                                                    >
-                                                        <span>{lang === 'source' ? 'Original File' : lang}</span>
-                                                        <FileText className="w-3.5 h-3.5 opacity-70" />
-                                                    </button>
-                                                ))}
-
-                                                {/* Translated */}
-                                                {captionLanguages.translatedLangs.map(lang => (
-                                                    <button
-                                                        key={`trans-${lang}`}
-                                                        onClick={() => { setSelectedCaptionLang(lang); setCaptionsEnabled(true); setShowCCMenu(false) }}
-                                                        className={`w-full px-3 py-2 text-xs text-left hover:bg-white/10 flex items-center justify-between ${selectedCaptionLang === lang ? 'text-[var(--primary-fg)] font-bold bg-white/5' : ''}`}
-                                                    >
-                                                        <span>{lang.toUpperCase()}</span>
-                                                        <Languages className="w-3.5 h-3.5 opacity-70" />
-                                                    </button>
-                                                ))}
-                                                
-                                                {(!captionLanguages.sourceExists && captionLanguages.existingLangs.length === 0 && captionLanguages.translatedLangs.length === 0) && (
-                                                    <div className="px-3 py-2 text-xs opacity-50">No captions available</div>
-                                                )}
-                                            </div>
-
-                                            <div className="border-t border-white/10 mt-1 pt-1">
-                                                <label className="w-full px-3 py-1.5 text-xs text-left hover:bg-white/10 cursor-pointer flex items-center gap-2">
-                                                    <Upload className="w-3.5 h-3.5 opacity-70" />
-                                                    <span>Upload captions...</span>
-                                                    <input 
-                                                        type="file" 
-                                                        accept=".srt,.vtt,.ass,.lrc"
-                                                        className="hidden"
-                                                        ref={fileInputRef}
-                                                        onChange={handleUploadCaptions}
-                                                    />
-                                                </label>
-                                                <button
-                                                    onClick={() => {
-                                                        setShowCCMenu(false)
-                                                        setShowTranslateModal(true)
-                                                    }}
-                                                    className="w-full px-3 py-1.5 text-xs text-left hover:bg-white/10 flex items-center justify-between"
-                                                >
-                                                    <span className="flex items-center gap-2">
-                                                        <Languages className="w-3.5 h-3.5 opacity-70" /> Translate to...
-                                                    </span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Unified Settings Gear Button */}
-                            <div className="relative flex items-center">
-                                <button
-                                    onClick={() => {
-                                        setShowSettingsMenu(!showSettingsMenu);
-                                        setSettingsSubMenu('main');
-                                        setShowCCMenu(false);
-                                    }}
-                                    className={`tut-in-menu-trigger p-1.5 hover:bg-white/15 rounded-full transition-all ${showSettingsMenu ? 'text-[var(--primary-fg)]' : 'opacity-70 hover:opacity-100'}`}
-                                    title="Settings"
-                                >
-                                    <Settings className={`w-4.5 h-4.5 transition-transform duration-300 ${showSettingsMenu ? 'rotate-45' : ''}`} />
-                                </button>
-
-                                {showSettingsMenu && (
-                                    <div className="tut-in-menu-container absolute bottom-full right-0 mb-3 bg-black/90 backdrop-blur-md text-white rounded-xl py-2 min-w-[220px] shadow-2xl border border-white/10 z-50 animate-scale-in text-sm">
-                                        {settingsSubMenu === 'main' && (
-                                            <div className="flex flex-col py-1">
-                                                {/* Playback Speed */}
-                                                <button
-                                                    onClick={() => setSettingsSubMenu('speed')}
-                                                    className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-white/10 transition-colors"
-                                                >
-                                                    <span className="flex items-center gap-2">
-                                                        <Gauge className="w-4 h-4 opacity-75" /> Playback speed
-                                                    </span>
-                                                    <span className="text-xs text-white/50 flex items-center gap-1">
-                                                        {playbackSpeed === 1 ? 'Normal' : `${playbackSpeed}x`}
-                                                        <ChevronRight className="w-3 h-3 opacity-55" />
-                                                    </span>
-                                                </button>
-
-                                                {/* [DUB FEATURE HIDDEN] — Audio Track menu button hidden
-                                                <button
-                                                    onClick={() => setSettingsSubMenu('audio')}
-                                                    className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-white/10 transition-colors"
-                                                >
-                                                    <span className="flex items-center gap-2">
-                                                        <Headphones className="w-4 h-4 opacity-75" /> Audio track
-                                                    </span>
-                                                    <span className="text-xs text-white/50 flex items-center gap-1">
-                                                        {selectedDubLang === 'none' ? 'Original' : selectedDubLang.toUpperCase()}
-                                                        <ChevronRight className="w-3 h-3 opacity-55" />
-                                                    </span>
-                                                </button>
-                                                */}
-
-                                                {/* Auto-play */}
-                                                <div className="w-full px-4 py-2.5 flex items-center justify-between border-t border-white/5 mt-1 pt-2">
-                                                    <span className="flex items-center gap-2">
-                                                        <Repeat className="w-4 h-4 opacity-75" /> Auto-play next
-                                                    </span>
-                                                    <button
-                                                        onClick={() => {
-                                                            const nextVal = !localAutoPlay
-                                                            setLocalAutoPlay(nextVal)
-                                                            updateSettings({ autoPlayNext: nextVal })
-                                                        }}
-                                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${localAutoPlay ? 'bg-[var(--primary-fg)]' : 'bg-white/20'}`}
-                                                    >
-                                                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-200 ${localAutoPlay ? 'translate-x-[18px]' : 'translate-x-1'}`} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {settingsSubMenu === 'speed' && (
-                                            <div className="flex flex-col">
-                                                <button
-                                                    onClick={() => setSettingsSubMenu('main')}
-                                                    className="px-4 py-2 border-b border-white/10 flex items-center gap-2 font-bold text-left hover:bg-white/5 w-full text-xs uppercase tracking-wider opacity-85"
-                                                >
-                                                    <ChevronLeft className="w-4 h-4" /> Playback speed
-                                                </button>
-                                                <div className="max-h-[200px] overflow-y-auto py-1">
-                                                    {speedOptions.map(speed => (
-                                                        <button
-                                                            key={speed}
-                                                            onClick={() => {
-                                                                changeSpeed(speed)
-                                                                setShowSettingsMenu(false)
-                                                            }}
-                                                            className={`w-full px-8 py-2 text-left hover:bg-white/10 flex items-center justify-between text-xs ${playbackSpeed === speed ? 'text-[var(--primary-fg)] font-bold bg-white/5' : ''}`}
-                                                        >
-                                                            <span>{speed === 1 ? 'Normal' : `${speed}x`}</span>
-                                                            {playbackSpeed === speed && <Check className="w-3.5 h-3.5 text-[var(--primary-fg)]" />}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* [DUB FEATURE HIDDEN] — Audio submenu hidden
-                                        {settingsSubMenu === 'audio' && (
-                                            <div className="flex flex-col">
-                                                <button
-                                                    onClick={() => setSettingsSubMenu('main')}
-                                                    className="px-4 py-2 border-b border-white/10 flex items-center gap-2 font-bold text-left hover:bg-white/5 w-full text-xs uppercase tracking-wider opacity-85"
-                                                >
-                                                    <ChevronLeft className="w-4 h-4" /> Audio track
-                                                </button>
-                                                <div className="max-h-[200px] overflow-y-auto py-1">
-                                                    <button
-                                                        onClick={() => {
-                                                            handleDubChange('none')
-                                                            setShowSettingsMenu(false)
-                                                        }}
-                                                        className={`w-full px-8 py-2 text-left hover:bg-white/10 flex items-center justify-between text-xs ${selectedDubLang === 'none' ? 'text-[var(--primary-fg)] font-bold bg-white/5' : ''}`}
-                                                    >
-                                                        <span>Original (No Dub)</span>
-                                                        {selectedDubLang === 'none' && <Check className="w-3.5 h-3.5 text-[var(--primary-fg)]" />}
-                                                    </button>
-                                                    {dubLanguages.map(lang => (
-                                                        <button
-                                                            key={lang}
-                                                            onClick={() => {
-                                                                handleDubChange(lang)
-                                                                setShowSettingsMenu(false)
-                                                            }}
-                                                            className={`w-full px-8 py-2 text-left hover:bg-white/10 flex items-center justify-between text-xs ${selectedDubLang === lang ? 'text-[var(--primary-fg)] font-bold bg-white/5' : ''}`}
-                                                        >
-                                                            <span>{lang.toUpperCase()}</span>
-                                                            {selectedDubLang === lang && <Check className="w-3.5 h-3.5 text-[var(--primary-fg)]" />}
-                                                        </button>
-                                                    ))}
-                                                </div>
-
-                                                <div className="border-t border-white/10 mt-1 pt-1 px-2 pb-1">
-                                                    <button
-                                                        onClick={() => {
-                                                            setShowSettingsMenu(false)
-                                                            setShowDubModal(true)
-                                                        }}
-                                                        className="w-full px-3 py-1.5 text-xs text-center border border-white/20 rounded hover:bg-white/10 transition-colors"
-                                                    >
-                                                        Generate New Dub
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-                                        */}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* PiP */}
-                            <button
-                                onClick={togglePiP}
-                                className={`p-1.5 hover:bg-white/15 rounded-full transition-all ${isPiP ? 'text-[var(--primary-fg)]' : 'opacity-70 hover:opacity-100'}`}
-                                title="Picture-in-Picture (P)"
-                            >
-                                <PictureInPicture className="w-4.5 h-4.5" />
-                            </button>
-
-                            {/* Fullscreen */}
-                            <button
-                                onClick={toggleFullscreen}
-                                className="p-1.5 hover:bg-white/15 rounded-full transition-all opacity-70 hover:opacity-100"
-                                title="Fullscreen (F)"
-                            >
-                                {isFullscreen ? <Minimize className="w-4.5 h-4.5" /> : <Maximize className="w-4.5 h-4.5" />}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {!isEmbeddedPlayer && !error && <StreamPlayerControls mediaRef={videoRef} containerRef={containerRef} />}
             {/* Auto-play Countdown Overlay */}
             {showAutoPlayCountdown && (
                 <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-40">
