@@ -1,354 +1,45 @@
-import { useState, useEffect, useMemo } from 'react'
-import { BarChart3, Clock, BookOpen, CheckCircle, Trophy, Flame, TrendingUp, Calendar } from 'lucide-react'
-import { getAllCourses, getRecentlyWatchedVideos, getInstructorAvatarAsync } from '../utils/db'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { BarChart3, Clock, BookOpen, CheckCircle, Trophy, ArrowUpRight, RefreshCw, Play, CalendarDays } from 'lucide-react'
+import { getAllCourses, getCourseContent } from '../utils/db'
+import * as api from '../utils/api'
+import { withPlaybackBookmark } from '../utils/playbackBookmarks'
+import { learningStats, learningTime } from '../utils/learningStats'
 import LoadingSpinner from '../components/common/LoadingSpinner'
-import { formatDuration } from '../utils/db'
 
-function StatisticsPage() {
-    const [courses, setCourses] = useState([])
-    const [recentlyWatched, setRecentlyWatched] = useState([])
-    const [isLoading, setIsLoading] = useState(true)
-    const [instructorAvatars, setInstructorAvatars] = useState({})
-
-    useEffect(() => {
-        loadData()
-    }, [])
-
-    async function loadData() {
+const card='rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-neutral-900 p-5 sm:p-6'
+export default function StatisticsPage() {
+    const [courses,setCourses]=useState([]),[videos,setVideos]=useState([])
+    const [loading,setLoading]=useState(true),[error,setError]=useState(''),[refreshing,setRefreshing]=useState(false)
+    async function load() {
+        setRefreshing(true);setError('')
         try {
-            setIsLoading(true)
-            const [allCourses, recent] = await Promise.all([
-                getAllCourses(),
-                getRecentlyWatchedVideos(100)
-            ])
-            setCourses(allCourses)
-            setRecentlyWatched(recent)
-
-            // Load avatars for all unique instructors from instructors store
-            const uniqueInstructors = [...new Set(allCourses.map(c => c.instructor).filter(Boolean))]
-            const avatars = {}
-            await Promise.all(
-                uniqueInstructors.map(async (name) => {
-                    avatars[name] = await getInstructorAvatarAsync(name)
-                })
-            )
-            setInstructorAvatars(avatars)
-        } catch (err) {
-            console.error('Failed to load statistics:', err)
-        } finally {
-            setIsLoading(false)
-        }
+            const library=await getAllCourses()
+            const lessons=api.IS_BROWSER_MODE?await api.get('/api/videos'):(await Promise.all(library.map(course=>getCourseContent(course.id)))).flatMap(content=>content.videos||[])
+            setCourses(library);setVideos(lessons.map(withPlaybackBookmark))
+        } catch(err) {setError(err.message||'Could not load your statistics.')}
+        finally {setLoading(false);setRefreshing(false)}
     }
-
-    // Calculate statistics
-    const stats = useMemo(() => {
-        const totalCourses = courses.length
-        const completedCourses = courses.filter(c => c.completionPercentage === 100).length
-        const inProgressCourses = courses.filter(c => c.completionPercentage > 0 && c.completionPercentage < 100).length
-
-        const totalVideos = courses.reduce((sum, c) => sum + (c.totalVideos || 0), 0)
-        const completedVideos = courses.reduce((sum, c) => sum + (c.completedVideos || 0), 0)
-
-        const totalDurationSeconds = courses.reduce((sum, c) => sum + (c.totalDuration || 0), 0)
-        const watchedDurationSeconds = recentlyWatched.reduce((sum, item) => {
-            return sum + ((item.video.duration || 0) * (item.video.watchProgress || 0))
-        }, 0)
-
-        // Get instructor stats
-        const instructorMap = new Map()
-        courses.forEach(course => {
-            if (!course.instructor) return
-            if (!instructorMap.has(course.instructor)) {
-                instructorMap.set(course.instructor, {
-                    name: course.instructor,
-                    avatar: instructorAvatars[course.instructor] || null,
-                    courses: 0,
-                    videos: 0,
-                    completedVideos: 0
-                })
-            }
-            const inst = instructorMap.get(course.instructor)
-            inst.courses++
-            inst.videos += course.totalVideos || 0
-            inst.completedVideos += course.completedVideos || 0
-        })
-        const topInstructors = Array.from(instructorMap.values())
-            .sort((a, b) => b.completedVideos - a.completedVideos)
-            .slice(0, 5)
-
-        // Calculate learning streak (days with activity)
-        const activityDays = new Set()
-        recentlyWatched.forEach(item => {
-            if (item.video.lastWatchedAt) {
-                const date = new Date(item.video.lastWatchedAt).toDateString()
-                activityDays.add(date)
-            }
-        })
-
-        // Calculate streak
-        let streak = 0
-        const today = new Date()
-        for (let i = 0; i < 365; i++) {
-            const checkDate = new Date(today)
-            checkDate.setDate(checkDate.getDate() - i)
-            if (activityDays.has(checkDate.toDateString())) {
-                streak++
-            } else if (i > 0) { // Allow missing today
-                break
-            }
-        }
-
-        // Activity this week
-        const weekStart = new Date(today)
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-        const weekActivity = Array.from({ length: 7 }, (_, i) => {
-            const date = new Date(weekStart)
-            date.setDate(date.getDate() + i)
-            const dateStr = date.toDateString()
-            const dayVideos = recentlyWatched.filter(item => {
-                if (!item.video.lastWatchedAt) return false
-                return new Date(item.video.lastWatchedAt).toDateString() === dateStr
-            })
-            return {
-                day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i],
-                count: dayVideos.length,
-                isToday: date.toDateString() === today.toDateString()
-            }
-        })
-
-        return {
-            totalCourses,
-            completedCourses,
-            inProgressCourses,
-            totalVideos,
-            completedVideos,
-            totalDurationSeconds,
-            watchedDurationSeconds,
-            topInstructors,
-            streak,
-            weekActivity,
-            completionRate: totalVideos > 0 ? (completedVideos / totalVideos) * 100 : 0
-        }
-    }, [courses, recentlyWatched, instructorAvatars])
-
-    if (isLoading) {
-        return (
-            <div className="min-h-[60vh] flex items-center justify-center">
-                <LoadingSpinner message="Calculating statistics..." />
-            </div>
-        )
-    }
-
-    return (
-        <div className="py-6">
-            {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-3">
-                    <BarChart3 className="w-7 h-7 text-primary-fg" />
-                    Learning Statistics
-                </h1>
-                <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                    Track your learning progress and achievements
-                </p>
-            </div>
-
-            {/* Main Stats Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                {/* Total Watch Time */}
-                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 text-white">
-                    <Clock className="w-8 h-8 mb-3 opacity-80" />
-                    <div className="text-2xl font-bold">
-                        {Math.floor(stats.watchedDurationSeconds / 3600)}h {Math.floor((stats.watchedDurationSeconds % 3600) / 60)}m
-                    </div>
-                    <div className="text-sm opacity-80">Watch Time</div>
-                </div>
-
-                {/* Videos Completed */}
-                <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-5 text-white">
-                    <CheckCircle className="w-8 h-8 mb-3 opacity-80" />
-                    <div className="text-2xl font-bold">{stats.completedVideos}</div>
-                    <div className="text-sm opacity-80">Videos Completed</div>
-                </div>
-
-                {/* Courses Completed */}
-                <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-5 text-white">
-                    <Trophy className="w-8 h-8 mb-3 opacity-80" />
-                    <div className="text-2xl font-bold">{stats.completedCourses}</div>
-                    <div className="text-sm opacity-80">Courses Completed</div>
-                </div>
-
-                {/* Learning Streak */}
-                <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-5 text-white">
-                    <Flame className="w-8 h-8 mb-3 opacity-80" />
-                    <div className="text-2xl font-bold">{stats.streak} days</div>
-                    <div className="text-sm opacity-80">Learning Streak</div>
-                </div>
-            </div>
-
-            {/* Weekly Activity & Progress */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                {/* Weekly Activity Chart */}
-                <div className="bg-white dark:bg-dark-surface rounded-xl border border-light-border dark:border-dark-border p-6">
-                    <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-4 flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-primary-fg" />
-                        This Week's Activity
-                    </h3>
-                    <div className="flex items-end justify-between gap-2 h-40">
-                        {stats.weekActivity.map((day, index) => {
-                            const maxCount = Math.max(...stats.weekActivity.map(d => d.count), 1)
-                            const height = (day.count / maxCount) * 100
-                            return (
-                                <div key={index} className="flex-1 flex flex-col items-center">
-                                    <div className="w-full flex flex-col items-center justify-end h-28">
-                                        <div
-                                            className={`w-full max-w-8 rounded-t-lg transition-all ${day.isToday
-                                                ? 'bg-primary-fg text-primary-content'
-                                                : 'bg-primary-fg text-primary-content/40 dark:bg-white/40'
-                                                }`}
-                                            style={{ height: `${Math.max(height, 4)}%` }}
-                                        />
-                                    </div>
-                                    <span className={`text-xs mt-2 ${day.isToday
-                                        ? 'text-primary-fg font-semibold'
-                                        : 'text-light-text-secondary dark:text-dark-text-secondary'
-                                        }`}>
-                                        {day.day}
-                                    </span>
-                                    <span className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                                        {day.count}
-                                    </span>
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-
-                {/* Overall Progress */}
-                <div className="bg-white dark:bg-dark-surface rounded-xl border border-light-border dark:border-dark-border p-6">
-                    <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-4 flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-primary-fg" />
-                        Overall Progress
-                    </h3>
-                    <div className="space-y-4">
-                        {/* Videos Progress */}
-                        <div>
-                            <div className="flex justify-between text-sm mb-2">
-                                <span className="text-light-text-secondary dark:text-dark-text-secondary">
-                                    Videos Completed
-                                </span>
-                                <span className="font-medium text-light-text-primary dark:text-dark-text-primary">
-                                    {stats.completedVideos} / {stats.totalVideos}
-                                </span>
-                            </div>
-                            <div className="h-3 bg-light-surface dark:bg-dark-bg rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-gradient-to-r from-green-400 to-green-500 rounded-full transition-all"
-                                    style={{ width: `${stats.completionRate}%` }}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Courses Progress */}
-                        <div>
-                            <div className="flex justify-between text-sm mb-2">
-                                <span className="text-light-text-secondary dark:text-dark-text-secondary">
-                                    Courses Completed
-                                </span>
-                                <span className="font-medium text-light-text-primary dark:text-dark-text-primary">
-                                    {stats.completedCourses} / {stats.totalCourses}
-                                </span>
-                            </div>
-                            <div className="h-3 bg-light-surface dark:bg-dark-bg rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-gradient-to-r from-purple-400 to-purple-500 rounded-full transition-all"
-                                    style={{ width: `${stats.totalCourses > 0 ? (stats.completedCourses / stats.totalCourses) * 100 : 0}%` }}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Time Progress */}
-                        <div>
-                            <div className="flex justify-between text-sm mb-2">
-                                <span className="text-light-text-secondary dark:text-dark-text-secondary">
-                                    Total Content Duration
-                                </span>
-                                <span className="font-medium text-light-text-primary dark:text-dark-text-primary">
-                                    {formatDuration(stats.totalDurationSeconds)}
-                                </span>
-                            </div>
-                            <div className="h-3 bg-light-surface dark:bg-dark-bg rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-gradient-to-r from-blue-400 to-blue-500 rounded-full transition-all"
-                                    style={{ width: `${stats.totalDurationSeconds > 0 ? (stats.watchedDurationSeconds / stats.totalDurationSeconds) * 100 : 0}%` }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Top Instructors */}
-            {stats.topInstructors.length > 0 && (
-                <div className="bg-white dark:bg-dark-surface rounded-xl border border-light-border dark:border-dark-border p-6">
-                    <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-4 flex items-center gap-2">
-                        <BookOpen className="w-5 h-5 text-primary-fg" />
-                        Most Watched Instructors
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                        {stats.topInstructors.map((instructor, index) => (
-                            <div
-                                key={instructor.name}
-                                className="flex items-center gap-3 p-3 rounded-lg bg-light-surface dark:bg-dark-bg"
-                            >
-                                <div className="relative">
-                                    {instructor.avatar ? (
-                                        <img
-                                            src={instructor.avatar}
-                                            alt={instructor.name}
-                                            className="w-12 h-12 rounded-full object-cover"
-                                        />
-                                    ) : (
-                                        <div className="w-12 h-12 rounded-full bg-primary-fg/10 dark:bg-primary-fg/20 flex items-center justify-center">
-                                            <span className="text-lg font-bold text-primary-fg">
-                                                {instructor.name.charAt(0).toUpperCase()}
-                                            </span>
-                                        </div>
-                                    )}
-                                    {/* Rank badge */}
-                                    <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${index === 0 ? 'bg-yellow-400 text-yellow-900' :
-                                        index === 1 ? 'bg-gray-300 text-gray-700' :
-                                            index === 2 ? 'bg-orange-400 text-orange-900' :
-                                                'bg-primary-fg/10 dark:bg-primary-fg/20 text-primary-fg'
-                                        }`}>
-                                        {index + 1}
-                                    </div>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-sm truncate text-light-text-primary dark:text-dark-text-primary">
-                                        {instructor.name}
-                                    </div>
-                                    <div className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                                        {instructor.completedVideos} videos watched
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Empty State */}
-            {courses.length === 0 && (
-                <div className="text-center py-16">
-                    <BarChart3 className="w-16 h-16 mx-auto mb-4 text-light-text-secondary dark:text-dark-text-secondary opacity-50" />
-                    <h2 className="text-xl font-semibold mb-2">No statistics yet</h2>
-                    <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                        Import courses and start learning to see your statistics
-                    </p>
-                </div>
-            )}
+    useEffect(()=>{load()},[])
+    const stats=useMemo(()=>learningStats(courses,videos),[courses,videos])
+    if(loading)return <LoadingSpinner message="Loading your learning overview…" />
+    const metrics=[
+        {label:'Lessons completed',value:stats.completed,detail:`of ${stats.total} lessons`,icon:CheckCircle,color:'text-emerald-500 bg-emerald-500/10'},
+        {label:'Courses finished',value:stats.finished,detail:`of ${courses.length} courses`,icon:Trophy,color:'text-violet-500 bg-violet-500/10'},
+        {label:'Saved playback time',value:learningTime(stats.savedSeconds),detail:'Completed videos + saved positions',icon:Clock,color:'text-blue-500 bg-blue-500/10'},
+        {label:'Courses in progress',value:stats.active,detail:`${stats.notStarted} not started`,icon:BookOpen,color:'text-amber-500 bg-amber-500/10'},
+    ]
+    return <div className="py-4 sm:py-6 space-y-6 text-gray-900 dark:text-white">
+        <header className="flex flex-wrap items-center justify-between gap-4"><div><div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-blue-500 mb-2"><BarChart3 className="w-4 h-4" />Your learning, at a glance</div><h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Learning Statistics</h1><p className="mt-2 text-sm text-gray-500 dark:text-neutral-400">A clearer view of what you’ve finished and what’s next.</p></div><button onClick={load} disabled={refreshing} className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-white/10 px-4 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-white/5 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${refreshing?'animate-spin':''}`} />Refresh</button></header>
+        {error&&<p role="alert" className="rounded-xl bg-red-500/10 p-4 text-sm text-red-500">{error}</p>}
+        {error ? null : courses.length===0?<div className={`${card} text-center py-16`}><BookOpen className="mx-auto w-10 h-10 text-blue-500 mb-4" /><h2 className="text-xl font-semibold">Your learning starts here</h2><p className="text-sm text-neutral-500 mt-2">Add a course to start building your progress.</p><Link to="/" className="inline-flex mt-6 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white">Go to courses</Link></div>:<>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">{metrics.map(({label,value,detail,icon:Icon,color})=><div key={label} className={card}><span className={`inline-flex rounded-xl p-2.5 ${color}`}><Icon className="w-5 h-5" /></span><div className="mt-4 text-2xl sm:text-3xl font-bold tabular-nums">{value}</div><h2 className="mt-1 text-sm font-medium">{label}</h2><p className="mt-2 text-xs leading-5 text-gray-500 dark:text-neutral-500">{detail}</p></div>)}</div>
+        <div className="grid lg:grid-cols-[1fr_1.4fr] gap-5">
+            <section className={card}><h2 className="font-semibold">Overall progress</h2><div className="flex items-center gap-5 py-6"><svg viewBox="0 0 120 120" className="h-28 w-28 sm:h-32 sm:w-32 shrink-0" role="img" aria-label={`${Math.round(stats.percent)} percent of lessons completed`}><circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" strokeWidth="9" className="text-gray-100 dark:text-white/5" /><circle cx="60" cy="60" r="50" fill="none" stroke="#3b82f6" strokeWidth="9" strokeLinecap="round" strokeDasharray="314.159" strokeDashoffset={314.159*(1-stats.percent/100)} transform="rotate(-90 60 60)" /><text x="60" y="63" textAnchor="middle" fill="currentColor" fontSize="24" fontWeight="700">{Math.round(stats.percent)}%</text><text x="60" y="81" textAnchor="middle" fill="#737373" fontSize="10">completed</text></svg><div className="space-y-3 min-w-0 text-sm"><p><strong className="text-blue-500">{stats.completed}</strong> lessons finished</p><p><strong>{Math.max(0,stats.total-stats.completed)}</strong> lessons to go</p><p className="text-xs text-gray-500 dark:text-neutral-500">Known video duration<br /><span className="text-sm text-gray-700 dark:text-neutral-300">{learningTime(stats.knownSeconds)}</span></p></div></div><p className="text-xs leading-5 text-gray-500 dark:text-neutral-500">Playback time is estimated from saved positions. Replays aren’t counted, and videos with unknown duration may be excluded.</p></section>
+            <section className={card}><div className="flex items-center justify-between gap-3"><h2 className="font-semibold flex items-center gap-2"><CalendarDays className="w-4 h-4 text-blue-500" />Recent lesson activity</h2><span className="text-xs text-gray-500 whitespace-nowrap">Last 7 days</span></div><div className="mt-6 grid grid-cols-7 gap-2 sm:gap-4 items-end h-40">{stats.days.map((day,index)=><div key={index} className="flex h-full flex-col items-center justify-end gap-2"><span className="text-xs tabular-nums text-gray-500">{day.count}</span><div className="w-full max-w-9 rounded-t-lg bg-blue-500/10 flex items-end" style={{height:'100px'}}><div className={`w-full rounded-t-lg ${index===6?'bg-blue-500':'bg-blue-500/50'}`} style={{height:`${day.count/Math.max(1,...stats.days.map(d=>d.count))*100}%`,minHeight:day.count?4:0}} /></div><span className={`text-[11px] sm:text-xs ${index===6?'font-semibold text-blue-500':'text-gray-500'}`}>{day.label}</span></div>)}</div><p className="mt-5 text-xs leading-5 text-gray-500 dark:text-neutral-500">Each lesson appears on its most recent watched date.</p></section>
         </div>
-    )
+        {stats.continueCourse&&<Link to={`/course/${stats.continueCourse.id}`} className="flex items-center justify-between gap-4 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5 sm:p-6 hover:bg-blue-500/10"><div className="flex items-center gap-4 min-w-0"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"><Play className="w-5 h-5" fill="currentColor" /></span><div className="min-w-0"><span className="text-xs text-blue-500 font-medium">Continue learning</span><h2 className="mt-1 font-semibold truncate">{stats.continueCourse.title}</h2><p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">{stats.continueCourse.lastVideo?.title||'Pick up where you left off'}</p></div></div><ArrowUpRight className="w-5 h-5 shrink-0 text-blue-500" /></Link>}
+        <section className={card}><div className="mb-5 flex items-center justify-between"><h2 className="font-semibold">Your courses</h2><span className="text-xs text-gray-500">{courses.length} in your library</span></div><div className="divide-y divide-gray-100 dark:divide-white/5">{stats.rows.map(course=><Link key={course.id} to={`/course/${course.id}`} className="block py-4 first:pt-0 last:pb-0 group"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h3 className="text-sm font-medium group-hover:text-blue-500">{course.title}</h3><p className="mt-1 text-xs text-gray-500">{course.completed} of {course.total} lessons completed</p></div><span className="text-sm font-semibold tabular-nums text-blue-500">{Math.round(course.percent)}%</span></div><div className="mt-3 h-1.5 rounded-full bg-gray-100 dark:bg-white/5 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{width:`${course.percent}%`}} /></div></Link>)}</div></section>
+        </>}
+    </div>
 }
-
-export default StatisticsPage
