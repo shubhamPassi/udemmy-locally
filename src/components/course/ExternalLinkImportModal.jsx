@@ -137,10 +137,11 @@ function ExternalLinkImportModal({ isOpen, onClose, onImport }) {
         try {
             setIsDownloadingThumbnail(true)
             const result = await api.post('/api/data/download-image', { url })
-            if (!result?.base64?.startsWith('data:image/')) {
+            const imageSrc = result?.base64 || result?.imageSrc
+            if (!imageSrc) {
                 throw new Error('Downloaded file was not an image')
             }
-            setFormData(prev => ({ ...prev, thumbnailData: result.base64 }))
+            setFormData(prev => ({ ...prev, thumbnailData: imageSrc }))
             setThumbnailUrl('')
             setErrors(prev => ({ ...prev, thumbnail: null }))
         } catch (err) {

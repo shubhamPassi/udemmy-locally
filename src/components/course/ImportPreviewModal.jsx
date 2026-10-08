@@ -129,13 +129,14 @@ function ImportPreviewModal({
         try {
             setIsDownloadingThumbnail(true)
             const result = await api.post('/api/data/download-image', { url })
-            if (!result?.base64?.startsWith('data:image/')) {
+            const imageSrc = result?.base64 || result?.imageSrc
+            if (!imageSrc) {
                 throw new Error('Downloaded file was not an image')
             }
-            setThumbnail(result.base64)
-            setThumbnailPreview(result.base64)
+            setThumbnail(imageSrc)
+            setThumbnailPreview(imageSrc)
             setThumbnailUrl('')
-            showNotification('Thumbnail downloaded', 'success')
+            showNotification('Thumbnail ready', 'success')
         } catch (err) {
             console.error('Failed to download thumbnail:', err)
             showNotification(err.message || 'Failed to download image from URL', 'error')

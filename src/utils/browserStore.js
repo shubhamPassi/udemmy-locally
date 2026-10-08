@@ -2,6 +2,7 @@
 import { saveLibraryRecovery, restoreLibraryRecovery } from './browserPersistence.js'
 import { clearPlaybackBookmarks } from './playbackBookmarks.js'
 import { clearStudyHistory } from './studyTime.js'
+import { loadBrowserImage } from './browserImages.js'
 const tables = ['courses', 'modules', 'videos', 'notes', 'instructors', 'roadmaps', 'transcripts', 'summaries']
 let database
 const dirtyCourses = new Set()
@@ -134,7 +135,7 @@ export async function request(method, path, body = {}) {
             return { success:true }
         }
         if (id === 'course-thumbnail') return { thumbnailData: null }
-        if (id === 'download-image') throw new Error('Use the image URL or upload a thumbnail in browser mode.')
+        if (id === 'download-image') return loadBrowserImage(body.url)
         if (id === 'detect-durations') return { updated: 0, failed: 0 }
         if (id === 'export') {
             const data = { version: 4, exportedAt: now }
