@@ -176,7 +176,7 @@ function RoadmapPage() {
             await deleteRoadmapDb(id)
             const newRoadmaps = roadmaps.filter(r => r.id !== id)
             setRoadmaps(newRoadmaps)
-    
+
             if (currentRoadmap?.id === id) {
                 if (newRoadmaps.length > 0) {
                     loadRoadmap(newRoadmaps[0])
@@ -238,7 +238,7 @@ function RoadmapPage() {
     }
 
     const handleCanvasMouseDown = (e) => {
-        if (!currentRoadmap || e.button !== 0 || draggedNode) return
+        if (!currentRoadmap || e.button !== 0 || draggedNode || e.target.closest('button, a')) return
         if (e.target === canvasRef.current || e.target.closest('.canvas-bg')) {
             setIsDragging(true)
             setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
@@ -394,7 +394,7 @@ function RoadmapPage() {
                 cp2: { x: to.x - offset, y: to.y }
             }
         } else {
-            // Vertical flow - curve vertically then horizontally  
+            // Vertical flow - curve vertically then horizontally
             return {
                 cp1: { x: from.x, y: from.y + (dy > 0 ? offset : -offset) },
                 cp2: { x: to.x, y: to.y + (dy > 0 ? -offset : offset) }
