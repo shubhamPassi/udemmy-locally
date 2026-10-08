@@ -15,6 +15,7 @@ import { getAllCourses, getInstructorAvatarAsync } from '../../utils/db'
 import * as api from '../../utils/api'
 import { beginProgressReset, cancelProgressReset } from '../../utils/playbackBookmarks'
 import { useNotification } from '../../contexts/NotificationContext'
+import ClearProgressDialog from '../common/ClearProgressDialog'
 
 function scheduleAfterFirstPaint(callback) {
     const run = () => {
@@ -30,9 +31,10 @@ function scheduleAfterFirstPaint(callback) {
 
 function Sidebar() {
     const [clearingProgress, setClearingProgress] = useState(false)
+    const [showClearProgress, setShowClearProgress] = useState(false)
     const { showNotification } = useNotification()
     async function clearProgress() {
-        if (!confirm('Clear all watched positions, completed lessons, and watch history? Your courses and notes will be kept.')) return
+        if (clearingProgress) return
         beginProgressReset()
         setClearingProgress(true)
         document.querySelectorAll('video').forEach(video => video.pause())
@@ -215,7 +217,7 @@ function Sidebar() {
 
                 {/* Bottom Section - Profile & Collapse Toggle */}
                 <div className="border-t border-gray-200 dark:border-white/5 p-3 bg-gray-50 dark:bg-black/20">
-                    {api.IS_BROWSER_MODE && <button onClick={clearProgress} disabled={clearingProgress} aria-label="Clear progress" title="Clear progress" className="flex items-center gap-3 px-3 py-3 rounded-full w-full text-sm text-neutral-500 hover:text-red-500 hover:bg-red-500/10 disabled:opacity-50">
+                    {api.IS_BROWSER_MODE && <button onClick={() => setShowClearProgress(true)} disabled={clearingProgress} aria-label="Clear progress" title="Clear progress" className="flex items-center gap-3 px-3 py-3 rounded-full w-full text-sm font-medium text-red-600 dark:text-red-400 bg-red-500/5 hover:bg-red-500/15 disabled:opacity-50">
                         <RotateCcw className="w-5 h-5 shrink-0" />
                         {(isExpanded || isMobileOpen) && <span>{clearingProgress ? 'Clearing…' : 'Clear progress'}</span>}
                     </button>}
@@ -243,6 +245,7 @@ function Sidebar() {
                     </button>
                 </div>
             </aside>
+            {showClearProgress && <ClearProgressDialog busy={clearingProgress} onCancel={() => setShowClearProgress(false)} onConfirm={clearProgress} />}
         </>
     )
 }

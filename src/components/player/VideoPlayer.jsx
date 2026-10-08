@@ -679,6 +679,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         // Embedded players and the native Drive player provide their own controls.
         if (video?.youtubeId || video?.driveFileId || /youtu(?:be\.com|\.be)|drive\.google\.com/.test(video?.url || '')) return
         function handleKeyDown(e) {
+            if (e.target.closest?.('[role="dialog"], [role="alertdialog"]')) return
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return
             if (!settings.keyboardShortcuts) return
             // Don't intercept browser shortcuts (Ctrl+F, Ctrl+C, Cmd+A, Alt+…, etc.)

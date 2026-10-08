@@ -1,7 +1,7 @@
 export function playerShortcut(event) {
     const target = event.target
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.isComposing ||
-        target?.isContentEditable || target?.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"], [role="dialog"]')) return null
+        target?.isContentEditable || target?.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"], [role="dialog"], [role="alertdialog"]')) return null
     const key = event.key.toLowerCase()
     if (key === ' ' && target?.closest?.('button, a, [role="button"]')) return null
     if (event.shiftKey && key === 'n') return { type: 'next' }
