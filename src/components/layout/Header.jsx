@@ -1,5 +1,6 @@
+import { useDurationVisibility, toggleDurationVisibility } from '../../utils/durationVisibility'
 import { Link, useLocation } from 'react-router-dom'
-import { Sun, Moon, Settings, Menu, Search, X, FolderOpen, Youtube, HardDrive, ChevronDown, Plus, Link2 } from 'lucide-react'
+import { Sun, Moon, Settings, Menu, Search, X, FolderOpen, Youtube, HardDrive, ChevronDown, Plus, Link2, Eye, EyeOff } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useSidebar } from '../../contexts/SidebarContext'
 import { useSearch } from '../../contexts/SearchContext'
@@ -15,6 +16,7 @@ const GoogleDriveImportModal = lazy(() => import('../course/GoogleDriveImportMod
 const ExternalLinkImportModal = lazy(() => import('../course/ExternalLinkImportModal'))
 
 function Header() {
+    const hideUpcomingDurations=useDurationVisibility()
     const { settings } = useSettings()
     const { dispatchImport, dispatchYouTube, dispatchGoogleDrive, dispatchExternalLink } = useImport()
     const { theme, toggleTheme, isDark } = useTheme()
@@ -184,6 +186,7 @@ function Header() {
                         )}
 
                         {/* Theme Toggle */}
+                        <button type="button" onClick={toggleDurationVisibility} aria-pressed={hideUpcomingDurations} aria-label={hideUpcomingDurations ? 'Show upcoming video durations' : 'Hide upcoming video durations'} title={hideUpcomingDurations ? 'Show upcoming video durations' : 'Hide upcoming video durations'} className="p-2 rounded-full text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-all duration-200">{hideUpcomingDurations ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button>
                         <button
                             onClick={toggleTheme}
                             className="p-2 rounded-full text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-all duration-200"

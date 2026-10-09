@@ -1,3 +1,4 @@
+import { useDurationVisibility } from '../../utils/durationVisibility'
 import { contentDuration } from '../../utils/courseDuration'
 import { courseCoverage, subscribeCoverage, coverageVersion, readCoverage, watchedSeconds } from '../../utils/watchCoverage'
 import { lazy, Suspense, useState, useMemo, useRef, useEffect, useCallback, useSyncExternalStore } from 'react'
@@ -63,14 +64,7 @@ function PlaylistSidebar({
     onSeek,
     onWidthChange
 }) {
-    const [hideUpcomingDurations,setHideUpcomingDurations]=useState(()=>{
-        try{return localStorage.getItem('tutin_hide_upcoming_durations')==='true'}catch{return false}
-    })
-    function toggleUpcomingDurations(){
-        const next=!hideUpcomingDurations
-        setHideUpcomingDurations(next)
-        try{localStorage.setItem('tutin_hide_upcoming_durations',String(next))}catch{}
-    }
+    const hideUpcomingDurations=useDurationVisibility()
     const [expandedModules, setExpandedModules] = useState(() => {
         // Large courses initially expand only the selected lesson's module path.
         const largeCourse = collectAllVideos(modules).length > 100
@@ -433,7 +427,6 @@ function PlaylistSidebar({
                 </div>
 
                 {/* Content Area */}
-                {activeTab==='playlist' && !isBulkEditing && <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-light-border dark:border-dark-border"><span className="text-xs text-light-text-secondary dark:text-dark-text-secondary">Hide upcoming durations</span><button type="button" role="switch" aria-label="Hide upcoming durations" aria-checked={hideUpcomingDurations} onClick={toggleUpcomingDurations} className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${hideUpcomingDurations?'bg-blue-600':'bg-gray-300 dark:bg-neutral-600'}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${hideUpcomingDurations?'translate-x-4':'translate-x-0'}`} style={{left:2}} /></button></div>}
                 <div className="flex-1 overflow-hidden relative flex flex-col">
                     {/* Playlist Tab */}
                     <div className={`flex-1 overflow-hidden flex-col ${activeTab === 'playlist' ? 'flex' : 'hidden'}`}>
