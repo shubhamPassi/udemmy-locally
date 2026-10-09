@@ -1,4 +1,3 @@
-import { courseDuration } from '../../utils/courseDuration'
 import { courseCoverage, subscribeCoverage, coverageVersion, readCoverage, watchedSeconds } from '../../utils/watchCoverage'
 import { lazy, Suspense, useState, useMemo, useRef, useEffect, useCallback, useSyncExternalStore } from 'react'
 import {
@@ -371,11 +370,6 @@ function PlaylistSidebar({
                                 {Math.round(progressPercentage)}%
                             </span>
                         </div>
-                        {coverage.total > 0 && (
-                            <div className="text-xs text-light-text-secondary dark:text-dark-text-secondary mb-2">
-                                {courseDuration(coverage.total)}
-                            </div>
-                        )}
                         {coverage.known < coverage.count && <p className="mb-2 text-xs text-neutral-500">Partial total · {coverage.known}/{coverage.count} durations known{metadataStatus?.done < metadataStatus?.total ? ' · Loading metadata…' : ' · Other durations appear when available'}</p>}
                         <div className="progress-bar h-2 w-full bg-light-bg dark:bg-dark-bg rounded-full overflow-hidden">
                             <div
