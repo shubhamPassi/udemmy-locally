@@ -1,6 +1,6 @@
 import { pickBrowserFolder, scanBrowserFolder } from '../utils/browserFiles'
 import { importVideos } from '../utils/importDurations'
-import { matchReconnectFile } from '../utils/reconnectFiles'
+import { createReconnectMatcher } from '../utils/reconnectFiles'
 import { batchWork } from '../utils/batchWork'
 import { updateVideo, updateCourse } from '../utils/db'
 import usePlaybackMeasurement from '../hooks/usePlaybackMeasurement'
@@ -92,12 +92,16 @@ function CoursePlayerPage() {
         setReconnecting(true);setReconnectMessage('')
         try{
             const handle=await pickBrowserFolder(),scanned=importVideos((await scanBrowserFolder(handle)).modules)
-            const videos=await getVideosByCourse(courseId)
+            const savedContent=await getCourseContent(courseId)
+            const videos=savedContent.videos||[]
+            if(!scanned.length)throw Error(`No videos found in “${handle.name}”. Choose the course folder containing your video files.`)
+            if(!videos.length)throw Error('The saved course lessons could not be loaded. Reload the course, then reconnect its folder.')
+            const matchFile=createReconnectMatcher(scanned,{originalRoot:savedContent.course?.folderPath||course?.folderPath,selectedRoot:handle.name})
             let restored=0
-            await batchWork(videos,async video=>{const match=matchReconnectFile(video,scanned);if(match){await updateVideo(video.id,{fileHandle:match.fileHandle,filePath:match.filePath,fileAccessUpdatedAt:Date.now()});restored++}},8)
-            if(!restored)throw Error('No matching videos found. Choose the original course folder.')
+            await batchWork(videos,async video=>{const match=matchFile(video);if(match){await updateVideo(video.id,{fileHandle:match.fileHandle,filePath:match.filePath,fileName:match.fileName,fileAccessUpdatedAt:Date.now()});restored++}},8)
+            if(!restored)throw Error(`Found ${scanned.length} videos in “${handle.name}”, but none match “${course?.title||'this course'}”. Choose its original folder.`)
             await updateCourse(courseId,{folderHandle:handle,folderPath:handle.name})
-            setReconnectMessage(`${restored} videos reconnected. Select a lesson to play.`)
+            setReconnectMessage(`${restored}/${videos.length} videos reconnected.${restored<videos.length?' Some missing or duplicate-named files could not be matched.':''}`)
             await refreshModulesOnly()
         }catch(err){if(err.name!=='AbortError')setReconnectMessage(err.message)}finally{setReconnecting(false)}
     }
