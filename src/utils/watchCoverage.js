@@ -29,7 +29,9 @@ export function readCoverage(id) {
 }
 export function recordWatchedRange(id,start,end) {
     if(!id || isProgressResetting())return
-    const ranges=mergeWatchedRanges(readCoverage(id),start,end)
+    const previous=readCoverage(id)
+    const ranges=mergeWatchedRanges(previous,start,end)
+    if(ranges.length===previous.length && ranges.every((range,index)=>range[0]===previous[index][0] && range[1]===previous[index][1]))return
     cache.set(id,ranges)
     try { localStorage.setItem(prefix+id,JSON.stringify(ranges)) } catch {}
     notify()

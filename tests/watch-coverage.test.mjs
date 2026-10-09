@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mergeWatchedRanges, watchedSeconds, recordWatchedRange, courseCoverage, clearWatchCoverage } from '../src/utils/watchCoverage.js'
+import { mergeWatchedRanges, watchedSeconds, recordWatchedRange, courseCoverage, clearWatchCoverage, coverageVersion } from '../src/utils/watchCoverage.js'
 import { scanVideoMetadata } from '../src/utils/videoMetadata.js'
 
 test('watched ranges count replay once and leave sought-over gaps unwatched',()=>{
@@ -20,6 +20,15 @@ test('course totals reflect only observed ranges, keep unknown durations explici
     assert.deepEqual(result,{total:200,watched:40,remaining:160,percent:20,known:2,count:3})
     clearWatchCoverage()
     assert.equal(courseCoverage([{id:'one',duration:100}]).watched,0)
+})
+test('replaying already covered content causes no storage write or subscriber update',()=>{
+    clearWatchCoverage()
+    recordWatchedRange('replay',0,30)
+    const version=coverageVersion()
+    recordWatchedRange('replay',10,20)
+    assert.equal(coverageVersion(),version)
+    recordWatchedRange('replay',20,40)
+    assert.equal(coverageVersion(),version+1)
 })
 test('metadata runs two independent requests, publishes fast results before slow ones, and tolerates failures',async()=>{
     let release,active=0,max=0

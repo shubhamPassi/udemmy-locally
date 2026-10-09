@@ -49,6 +49,38 @@ function flattenModuleTree(modules) {
     return result
 }
 
+function CourseProgressHeader({ allVideos, metadataStatus }) {
+    const totalVideos = allVideos.length
+    const completedVideos = allVideos.filter(v => v.isCompleted).length
+
+    useSyncExternalStore(subscribeCoverage,coverageVersion,coverageVersion)
+    const coverage=courseCoverage(allVideos)
+    const partialLessons = allVideos.filter(video => !video.isCompleted && video.duration > 0).reduce((sum, video) => sum + Math.min(1, watchedSeconds(readCoverage(video.id), video.duration) / video.duration), 0)
+    const progressPercentage = totalVideos ? Math.min(100, (completedVideos + partialLessons) / totalVideos * 100) : 0
+
+
+
+    return (
+                    <div className="px-4 pt-4 pb-2">
+                        <div className="flex items-center justify-between text-sm mb-3">
+                            <span className="text-light-text-secondary dark:text-dark-text-secondary">
+                                {completedVideos}/{totalVideos} videos completed
+                            </span>
+                            <span className="font-medium text-primary-fg">
+                                {Math.round(progressPercentage)}%
+                            </span>
+                        </div>
+                        {coverage.known < coverage.count && <p className="mb-2 text-xs text-neutral-500">Partial total · {coverage.known}/{coverage.count} durations known{metadataStatus?.done < metadataStatus?.total ? ' · Loading metadata…' : ' · Other durations appear when available'}</p>}
+                        <div className="progress-bar h-2 w-full bg-light-bg dark:bg-dark-bg rounded-full overflow-hidden">
+                            <div
+                                className="progress-bar-fill h-full bg-[var(--primary-fg)] rounded-full transition-all duration-300"
+                                style={{ width: `${progressPercentage}%` }}
+                            />
+                        </div>
+                    </div>
+    )
+}
+
 function PlaylistSidebar({
     contentLoading, contentError, onRetryContent, metadataStatus,
     course,
@@ -205,19 +237,6 @@ function PlaylistSidebar({
 
     // Calculate totals from tree
     const allVideos = useMemo(() => collectAllVideos(modules), [modules])
-    const totalVideos = allVideos.length
-    const completedVideos = allVideos.filter(v => v.isCompleted).length
-    const totalDuration = allVideos.reduce((sum, v) => sum + (v.duration || 0), 0)
-
-    // Use course's stored completion percentage
-    useSyncExternalStore(subscribeCoverage,coverageVersion,coverageVersion)
-    const coverage=courseCoverage(allVideos)
-    const partialLessons = allVideos.filter(video => !video.isCompleted && video.duration > 0).reduce((sum, video) => sum + Math.min(1, watchedSeconds(readCoverage(video.id), video.duration) / video.duration), 0)
-    const progressPercentage = totalVideos ? Math.min(100, (completedVideos + partialLessons) / totalVideos * 100) : 0
-
-    // Calculate remaining time
-
-
     /**
      * Render a module and its sub-modules recursively
      */
@@ -364,23 +383,7 @@ function PlaylistSidebar({
                 {/* Header Section */}
                 <div className="flex flex-col border-b border-light-border dark:border-dark-border bg-white dark:bg-dark-surface z-10">
                     {/* Top Progress Bar */}
-                    <div className="px-4 pt-4 pb-2">
-                        <div className="flex items-center justify-between text-sm mb-3">
-                            <span className="text-light-text-secondary dark:text-dark-text-secondary">
-                                {completedVideos}/{totalVideos} videos completed
-                            </span>
-                            <span className="font-medium text-primary-fg">
-                                {Math.round(progressPercentage)}%
-                            </span>
-                        </div>
-                        {coverage.known < coverage.count && <p className="mb-2 text-xs text-neutral-500">Partial total · {coverage.known}/{coverage.count} durations known{metadataStatus?.done < metadataStatus?.total ? ' · Loading metadata…' : ' · Other durations appear when available'}</p>}
-                        <div className="progress-bar h-2 w-full bg-light-bg dark:bg-dark-bg rounded-full overflow-hidden">
-                            <div
-                                className="progress-bar-fill h-full bg-[var(--primary-fg)] rounded-full transition-all duration-300"
-                                style={{ width: `${progressPercentage}%` }}
-                            />
-                        </div>
-                    </div>
+                    <CourseProgressHeader allVideos={allVideos} metadataStatus={metadataStatus} />
 
                     {/* Tabs */}
                     <div className="flex items-center px-2 mt-2">
