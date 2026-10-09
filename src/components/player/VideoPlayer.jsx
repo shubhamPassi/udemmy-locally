@@ -28,6 +28,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     },video?.id,courseId)
     const embeddedPlayerRef = useRef(null)
     const localBookmarkRef = useRef(null)
+    const bookmarkSecondRef = useRef(null)
     const containerRef = useRef(null)
     const progressRef = useRef(null)
     const [videoUrl, setVideoUrl] = useState(null)
@@ -405,8 +406,13 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             const element = videoRef.current
             if (element.readyState < 1 || element.seeking) return
             localBookmarkRef.current = { id: video.id, time: element.currentTime, duration: element.duration }
-            writePlaybackBookmark(video.id, element.currentTime, element.duration)
-            setCurrentTime(videoRef.current.currentTime)
+            const second=Math.floor(element.currentTime)
+            if(bookmarkSecondRef.current!==`${video.id}:${second}`){
+                bookmarkSecondRef.current=`${video.id}:${second}`
+                writePlaybackBookmark(video.id,element.currentTime,element.duration)
+            }
+            currentTimeRef.current=element.currentTime
+            setCurrentTime(previous=>captionsEnabled || Math.floor(previous)!==second ? element.currentTime : previous)
             onTimeUpdate?.(videoRef.current.currentTime)
             
             /* [DUB FEATURE HIDDEN] — dub audio sync disabled
@@ -684,6 +690,8 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             // Don't intercept browser shortcuts (Ctrl+F, Ctrl+C, Cmd+A, Alt+…, etc.)
             if (e.ctrlKey || e.metaKey || e.altKey) return
 
+            const currentTime=videoRef.current?.currentTime || 0
+            const duration=videoRef.current?.duration || durationRef.current
             const key = e.key.toLowerCase()
             const speedOptions = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 
@@ -799,7 +807,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
 
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [currentTime, duration, settings.keyboardShortcuts, video?.id])
+    }, [settings.keyboardShortcuts, video?.id])
 
     // Auto-hide controls
     const hasOpenMenu = showSettingsMenu || showCCMenu || showSpeedMenu || showAudioMenu
