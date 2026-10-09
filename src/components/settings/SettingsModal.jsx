@@ -357,11 +357,11 @@ function SettingsModal({ isOpen, onClose }) {
                                                         type="text"
                                                         value={settings.openRouterModel}
                                                         onChange={(e) => updateSettings({ openRouterModel: e.target.value })}
-                                                        placeholder="google/gemini-2.0-flash-exp:free"
+                                                        placeholder="openrouter/free"
                                                         className="flex-1 px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-white dark:bg-dark-surface focus:border-primary outline-none text-xs font-mono"
                                                     />
                                                     <button
-                                                        onClick={() => updateSettings({ openRouterModel: 'google/gemini-2.0-flash-exp:free' })}
+                                                        onClick={() => updateSettings({ openRouterModel: 'openrouter/free' })}
                                                         className="px-3 py-2 text-[10px] font-bold uppercase tracking-tight bg-light-surface dark:bg-white/5 rounded-lg border border-light-border dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
                                                     >
                                                         Reset

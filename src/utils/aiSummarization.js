@@ -1,4 +1,5 @@
-import { isServerAvailable, put } from './api'
+import {requestAISummary,summaryConfiguration} from './summaryInputs.js'
+import { isServerAvailable, put } from './api.js'
 /**
  * AI Summarization Utilities
  * 
@@ -6,7 +7,7 @@ import { isServerAvailable, put } from './api'
  * All processing happens in-browser, offline after initial model download.
  */
 
-import { updateVideo, getVideo } from './db'
+import { updateVideo, getVideo } from './db.js'
 
 // Transformers.js pipeline (loaded on demand)
 let transcriptionPipeline = null
@@ -108,12 +109,13 @@ async function extractAndProcessAudio(fileOrHandle, onProgress) {
         sampleRate: 16000
     })
 
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
-
-    // Convert to mono Float32Array
-    const audioData = audioBuffer.getChannelData(0)
-
-    await audioContext.close()
+    let audioData
+    try{
+        const audioBuffer=await audioContext.decodeAudioData(arrayBuffer)
+        audioData=audioBuffer.getChannelData(0)
+    }catch{
+        throw new Error('This browser could not decode the video audio. Import an SRT or VTT subtitle file in the AI Transcript tab and summarize its text instead.')
+    }finally{await audioContext.close()}
 
     onProgress?.({ stage: 'extracting_audio', progress: 1, message: 'Audio extracted!' })
 
@@ -259,7 +261,7 @@ async function generateAISummary(transcript, apiKey, model, onProgress) {
     onProgress?.({ stage: 'summarizing', progress: 0.1, message: 'Connecting to AI...' })
 
     // Use provided API key (from Settings → API Keys)
-    const OPENROUTER_API_KEY = apiKey || import.meta.env.VITE_OPENROUTER_API_KEY
+    const OPENROUTER_API_KEY = apiKey || import.meta.env?.VITE_OPENROUTER_API_KEY
 
     if (!OPENROUTER_API_KEY) {
         throw new Error('OpenRouter API key not configured. Go to Settings → API Keys to add it.')
@@ -349,103 +351,10 @@ Create detailed study notes from the transcript below. Write as if you're taking
 
 ${truncatedTranscript}`
 
-    try {
-        onProgress?.({ stage: 'summarizing', progress: 0.3, message: 'Generating summary...' })
-
-        // Retry logic for rate limiting (429 errors)
-        const maxRetries = 3
-        let lastError = null
-
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': window.location.origin,
-                        'X-Title': 'TutIn Course Player'
-                    },
-                    body: JSON.stringify({
-                        model: model || 'google/gemini-2.0-flash-exp:free',
-                        messages: [
-                            {
-                                role: 'user',
-                                content: prompt
-                            }
-                        ],
-                        max_tokens: 2000,
-                        temperature: 0.3
-                    })
-                })
-
-                if (response.status === 429) {
-                    // Rate limited - wait and retry
-                    const waitTime = Math.pow(2, attempt) * 2000 // 4s, 8s, 16s
-                    onProgress?.({
-                        stage: 'summarizing',
-                        progress: 0.3,
-                        message: `Rate limited. Retrying in ${waitTime / 1000}s... (${attempt}/${maxRetries})`
-                    })
-                    await new Promise(resolve => setTimeout(resolve, waitTime))
-                    continue
-                }
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(`API error: ${response.status} - ${errorData.error?.message || response.statusText}`)
-                }
-
-                const data = await response.json()
-
-                onProgress?.({ stage: 'summarizing', progress: 1, message: 'Summary complete!' })
-
-                const summary = data.choices?.[0]?.message?.content?.trim()
-
-                if (!summary) {
-                    throw new Error('No summary content received from API')
-                }
-
-                return summary
-            } catch (err) {
-                lastError = err
-                if (attempt < maxRetries && err.message?.includes('429')) {
-                    const waitTime = Math.pow(2, attempt) * 2000
-                    onProgress?.({
-                        stage: 'summarizing',
-                        progress: 0.3,
-                        message: `Error, retrying in ${waitTime / 1000}s... (${attempt}/${maxRetries})`
-                    })
-                    await new Promise(resolve => setTimeout(resolve, waitTime))
-                } else {
-                    throw err
-                }
-            }
-        }
-
-        throw lastError || new Error('Max retries exceeded')
-    } catch (err) {
-        console.error('Gemini API summarization failed:', err)
-        // Fallback to simple summary if API fails
-        return generateFallbackSummary(transcript, err.message)
-    }
-}
-
-/**
- * Fallback summary if API fails
- */
-function generateFallbackSummary(transcript, errorReason) {
-    const sentences = transcript.match(/[^.!?]+[.!?]+/g) || [transcript]
-    const maxSentences = Math.min(5, sentences.length)
-    const summary = sentences.slice(0, maxSentences).join(' ').trim()
-
-    return `## Summary
-
-### Overview
-${summary}
-
----
-*Note: AI-powered summary unavailable (${errorReason}). This is an extractive summary from the first ${maxSentences} sentences.*`
+    onProgress?.({ stage: 'summarizing', progress: 0.3, message: 'Generating summary…' })
+    const summary=await requestAISummary(prompt,OPENROUTER_API_KEY,model,onProgress)
+    onProgress?.({ stage: 'summarizing', progress: 1, message: 'Summary complete!' })
+    return summary
 }
 
 /**
@@ -511,6 +420,7 @@ export function chunksToVTT(chunks) {
  */
 export async function processVideoForSummary(videoId, fileSource, onProgress, apiKey, model, device = 'auto') {
     try {
+        summaryConfiguration(apiKey || import.meta.env?.VITE_OPENROUTER_API_KEY,model)
         // Step 1: Extract audio
         const audioData = await extractAndProcessAudio(fileSource, onProgress)
 
@@ -550,7 +460,7 @@ export async function processVideoForSummary(videoId, fileSource, onProgress, ap
         } catch (summaryErr) {
             console.warn('Summary generation skipped or failed:', summaryErr.message)
             summaryError = summaryErr.message
-            onProgress?.({ stage: 'complete', progress: 1, message: 'Transcription done (Summary skipped: API key missing)' })
+            onProgress?.({ stage: 'complete', progress: 1, message: 'Transcript saved; summary could not be generated.' })
             return { transcript, summary: null, captionChunks, summaryError }
         }
 

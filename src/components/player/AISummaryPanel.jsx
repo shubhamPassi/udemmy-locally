@@ -1,8 +1,11 @@
+import {summaryConfiguration,summaryTranscript} from '../../utils/summaryInputs'
+import {parseSubtitles} from '../../utils/subtitles'
+import {restoreLocalCourse,isLocalFileHandle} from '../../utils/automaticLocalFiles'
 import { useState, useEffect, useRef } from 'react'
 import { FileText, Sparkles, Loader2, AlertCircle, Download, Copy, RefreshCw, Upload, Captions, X, Globe } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { getVideo, updateVideo } from '../../utils/db'
-import { SERVER_URL, isServerAvailable, get } from '../../utils/api'
+import { SERVER_URL, IS_BROWSER_MODE, isServerAvailable, get } from '../../utils/api'
 import { processVideoForSummary, isAIAvailable, regenerateSummaryOnly } from '../../utils/aiSummarization'
 import { verifyPermission } from '../../utils/fileSystem'
 import { useSettings } from '../../contexts/SettingsContext'
@@ -22,6 +25,7 @@ function formatTime(seconds) {
 
 function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTime = 0 }) {
     const { settings, updateSettings } = useSettings()
+    const summaryKey=settings.openRouterApiKey||import.meta.env.VITE_OPENROUTER_API_KEY
     const [transcript, setTranscript] = useState(null)
     const [summary, setSummary] = useState(null)
     const [captionChunks, setCaptionChunks] = useState([])
@@ -38,6 +42,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
     // Load existing data when video changes
     useEffect(() => {
         activeVideoIdRef.current = video?.id
+        setTranscript(null);setSummary(null);setCaptionChunks([])
         
         if (video?.id) {
             loadExistingData()
@@ -74,12 +79,15 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
     }, [video?.id, settings.captionLanguage])
 
     async function loadExistingData(forceLang = null) {
+        const targetVideoId=video?.id
+        if(!targetVideoId)return
         try {
             const serverAvailable = await isServerAvailable()
             
             if (serverAvailable) {
                 try {
-                    const videoData = await getVideo(video.id)
+                    const videoData = await getVideo(targetVideoId)
+                    if(activeVideoIdRef.current!==targetVideoId)return
                     // In server mode, videoData just has flags, we must fetch the content
                     if (videoData.has_transcript) {
                         const transcriptText = await fetch(`${SERVER_URL}/api/transcripts/${video.id}/text`).then(r => r.text())
@@ -108,10 +116,13 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
                     console.error('Server AI fetch error', e)
                 }
             } else {
-                const videoData = await getVideo(video.id)
-                setTranscript(videoData?.transcript || null)
+                const videoData = await getVideo(targetVideoId)
+                if(activeVideoIdRef.current!==targetVideoId)return
+                let imported=[];try{imported=JSON.parse(localStorage.getItem('tutin_subtitles_'+video.id))||[]}catch{}
+                const existingTranscript=summaryTranscript(videoData,imported)
+                setTranscript(existingTranscript||null)
                 setSummary(videoData?.summary || null)
-                setCaptionChunks(videoData?.captionChunks || [])
+                setCaptionChunks(videoData?.captionChunks?.length?videoData.captionChunks:imported.map(cue=>({text:cue.text,timestamp:[cue.start,cue.end]})))
                 // Check if transcript exists but no caption chunks (old transcript without CC support)
                 const hasCaptions = videoData?.captionChunks && videoData.captionChunks.length > 0
                 setMissingCaptions(!!videoData?.transcript && !hasCaptions)
@@ -123,6 +134,8 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
 
     async function handleGenerateSummary() {
         const targetVideoId = video.id
+        try{summaryConfiguration(summaryKey,settings.openRouterModel)}catch(err){setError(err.message);return}
+        if(transcript||captionChunks.length){await handleRegenerateSummary();return}
 
         if (!isAIAvailable()) {
             setError('AI features require a modern browser with WebAssembly support.')
@@ -130,19 +143,26 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
         }
 
         // Get file source - try fileHandle first, then fallback to backend stream URL
-        let fileSource = video?.fileHandle || (video?.filePath ? `${SERVER_URL}/video/${encodeURIComponent(video.filePath)}` : null)
+        let latest
+        try{latest=await getVideo(video.id)}catch(err){setError(err.message);return}
+        if(activeVideoIdRef.current!==targetVideoId)return
+        let fileSource = isLocalFileHandle(latest?.fileHandle)?latest.fileHandle:isLocalFileHandle(video.fileHandle)?video.fileHandle:null
+        if(IS_BROWSER_MODE&&!fileSource&&video.filePath){
+            try{const recovered=await restoreLocalCourse(courseId,null,video.id);fileSource=recovered.content?.videos?.find(item=>item.id===video.id)?.fileHandle}catch{}
+        }
+        if(!IS_BROWSER_MODE&&!fileSource&&video.filePath)fileSource=`${SERVER_URL}/video/${encodeURIComponent(video.filePath)}`
 
         if (!fileSource) {
-            setError('Please select a video file first.')
+            setError(video.youtubeId||video.driveFileId?'Import an SRT or VTT subtitle file in the Transcript tab first. Its text can be summarized without downloading the whole online video.':'Local file access is required. Open the video and allow its folder access, then retry the summary.')
             return
         }
 
         // If using fileHandle, verify permission
         if (fileSource.getFile) {
             try {
-                const hasPermission = await verifyPermission(fileSource)
+                const hasPermission = IS_BROWSER_MODE && fileSource.queryPermission ? await fileSource.queryPermission({mode:'read'})==='granted' : await verifyPermission(fileSource)
                 if (!hasPermission) {
-                    setError('File access was denied. Please grant permission when prompted.')
+                    setError('Open the video and allow its local folder access first, then generate the summary.')
                     return
                 }
             } catch (err) {
@@ -160,7 +180,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
                 video.id,
                 fileSource,
                 setProgress,
-                settings.openRouterApiKey,
+                summaryKey,
                 settings.openRouterModel,
                 settings.aiDevice
             )
@@ -171,6 +191,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
             setSummary(result.summary)
             setCaptionChunks(result.captionChunks || [])
             setMissingCaptions(false) // Captions now available
+            if(result.summaryError)setError(result.summaryError)
 
             // Notify parent that video data has changed (for CC icon update)
             onVideoDataChange?.()
@@ -187,10 +208,25 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
         navigator.clipboard.writeText(text)
     }
 
-    function handleUploadCaptions(e) {
+    async function handleUploadCaptions(e) {
         const file = e.target.files?.[0]
         if (!file || !video?.id) return
-
+        if(IS_BROWSER_MODE){
+            const targetVideoId=video.id
+            try{
+                if(file.size>2*1024*1024)throw new Error('Subtitle file must be smaller than 2 MB.')
+                const cues=parseSubtitles(await file.text())
+                const chunks=cues.map(cue=>({text:cue.text,timestamp:[cue.start,cue.end]}))
+                const text=chunks.map(chunk=>chunk.text).join(' ')
+                await updateVideo(video.id,{transcript:text,captionChunks:chunks,transcriptGeneratedAt:new Date().toISOString()})
+                localStorage.setItem('tutin_subtitles_'+video.id,JSON.stringify(cues))
+                window.dispatchEvent(new CustomEvent('tutin-subtitles-changed',{detail:{videoId:video.id}}))
+                if(activeVideoIdRef.current!==targetVideoId)return
+                setTranscript(text);setCaptionChunks(chunks);setMissingCaptions(false);setError(null)
+                onVideoDataChange?.()
+            }catch(err){setError(err.message)}
+            e.target.value='';return
+        }
         const formData = new FormData()
         formData.append('file', file)
 
@@ -236,6 +272,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
     async function handleRegenerateSummary() {
         const targetVideoId = video.id
         const textToSummarize = transcript || captionChunks.map(c => c.text).join(' ')
+        try{summaryConfiguration(summaryKey,settings.openRouterModel)}catch(err){setError(err.message);return}
 
         if (!textToSummarize) {
             setError('No transcript available. Generate one first.')
@@ -247,7 +284,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
             setError(null)
             setProgress({ stage: 'summarizing', progress: 0, message: 'Regenerating summary...' })
 
-            const newSummary = await regenerateSummaryOnly(video.id, textToSummarize, setProgress, settings.openRouterApiKey, settings.openRouterModel)
+            const newSummary = await regenerateSummaryOnly(video.id, textToSummarize, setProgress, summaryKey, settings.openRouterModel)
             
             if (activeVideoIdRef.current !== targetVideoId) return
             
@@ -313,7 +350,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
                         <Sparkles className="w-12 h-12 mx-auto mb-4 text-primary-fg/50" />
                         <h3 className="font-medium mb-2">Generate AI Summary</h3>
                         <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-4">
-                            Transcribe and summarize this video using Whisper AI.
+                            Summarize its transcript, or transcribe a local video first. An OpenRouter API key is required; the default model is free.
                         </p>
 
                         <button
@@ -324,7 +361,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
                             Generate Summary
                         </button>
                         <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-4">
-                            First run downloads a ~40MB AI model (cached for offline use)
+                            Local transcription downloads a model once. Imported subtitles can be summarized immediately.
                         </p>
                     </div>
                 )}
@@ -444,7 +481,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
                                                 </button>
                                                 <input 
                                                     type="file" 
-                                                    accept=".srt,.vtt,.ass,.lrc"
+                                                    accept={IS_BROWSER_MODE?'.srt,.vtt':'.srt,.vtt,.ass,.lrc'}
                                                     className="hidden"
                                                     ref={fileInputRef}
                                                     onChange={handleUploadCaptions}

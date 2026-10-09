@@ -19,6 +19,11 @@ export default function SubtitleTools({videoId,host,keyboardShortcuts=true}){
         try{const stored=JSON.parse(localStorage.getItem('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{setCues([])}
     },[videoId])
     useEffect(()=>{
+        const refresh=event=>{if(event.detail?.videoId!==videoId)return;try{const stored=JSON.parse(localStorage.getItem('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{}}
+        window.addEventListener('tutin-subtitles-changed',refresh)
+        return()=>window.removeEventListener('tutin-subtitles-changed',refresh)
+    },[videoId])
+    useEffect(()=>{
         const attach=()=>{
             const target=host.current?.querySelector('[data-subtitle-controls]')||null
             setSlot(previous=>previous===target?previous:target)

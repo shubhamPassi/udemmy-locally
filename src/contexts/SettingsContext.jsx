@@ -36,7 +36,7 @@ const defaultSettings = {
     // API Keys
     googleApiKey: '', // Covers both YouTube and Google Drive APIs
     openRouterApiKey: '',
-    openRouterModel: 'google/gemini-2.0-flash-exp:free',
+    openRouterModel: 'openrouter/free',
     aiDevice: 'auto', // 'auto', 'gpu', 'cpu'
     dubbingEnabled: false,
     dubbingDevice: 'auto', // 'auto', 'gpu', 'cpu'
@@ -68,6 +68,7 @@ export function SettingsProvider({ children }) {
             if (saved) {
                 merged = { ...defaultSettings, ...JSON.parse(saved) }
             }
+            if(merged.openRouterModel==='google/gemini-2.0-flash-exp:free')merged={...merged,openRouterModel:'openrouter/free'}
 
             // Migration: Move old separate keys to consolidated googleApiKey
             const oldYoutubeKey = localStorage.getItem('youtube_api_key')
@@ -154,7 +155,7 @@ export function SettingsProvider({ children }) {
         const cancelLoad = scheduleAfterFirstPaint(() => {
             api.get('/api/settings').then(serverSettings => {
                     if (serverSettings && Object.keys(serverSettings).length > 0) {
-                        setSettings(prev => ({ ...prev, ...serverSettings }))
+                        setSettings(prev => ({ ...prev, ...serverSettings,openRouterModel:serverSettings.openRouterModel==='google/gemini-2.0-flash-exp:free'?'openrouter/free':serverSettings.openRouterModel||prev.openRouterModel }))
                     }
                 }).catch(err => {
                     console.warn('Initial settings load from server failed:', err.message)
