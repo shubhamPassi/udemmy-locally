@@ -522,6 +522,7 @@ function SettingsModal({ isOpen, onClose }) {
                                                     a.download = `tutin_backup_${new Date().toISOString().split('T')[0]}.json`
                                                     a.click()
                                                     localStorage.setItem('tutin_last_backup',new Date().toISOString())
+                                                    window.dispatchEvent(new Event('tutin-backup-exported'))
                                                     URL.revokeObjectURL(url)
                                                 } catch (err) { showNotification('Failed to export: ' + err.message, 'error') }
                                             }}
