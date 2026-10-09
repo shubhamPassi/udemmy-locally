@@ -1,3 +1,4 @@
+import { subscribeLibraryChanges } from '../utils/libraryChanges'
 import { batchWork } from '../utils/batchWork'
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
 import { Grid, List, SortAsc, ChevronDown, FolderOpen, Search } from 'lucide-react'
@@ -55,6 +56,8 @@ function HomePage() {
     // Debounced search
     const [debouncedSearch, setDebouncedSearch] = useState('')
 
+    useEffect(()=>subscribeLibraryChanges(()=>loadCourses(true)),[])
+
     // Load courses on mount
     useEffect(() => {
         loadCourses()
@@ -81,9 +84,9 @@ function HomePage() {
         localStorage.setItem('tutin_sort', sortBy)
     }, [sortBy])
 
-    async function loadCourses() {
+    async function loadCourses(quiet=false) {
         try {
-            setIsLoading(true)
+            if(!quiet)setIsLoading(true)
             const allCourses = await getAllCourses()
             setCourses(allCourses)
         } catch (err) {
@@ -371,6 +374,7 @@ function HomePage() {
         const courseData = pendingYouTube
         clearYouTube()
         ;(async () => {
+            let incompleteCourseId
             try {
                 const dupe = courses.find(c => c.title === courseData.title)
                 if (dupe) {
@@ -413,6 +417,7 @@ function HomePage() {
                     totalVideos
                 })
 
+                incompleteCourseId=savedCourse.id
                 if (courseData.modules?.[0]) {
                     const module = courseData.modules[0]
                     const moduleDuration = module.videos.reduce((sum, v) => sum + (v.duration || 0), 0)
@@ -443,6 +448,7 @@ function HomePage() {
 
                 loadCourses()
             } catch (err) {
+                if(incompleteCourseId){try{await deleteCourse(incompleteCourseId)}catch(cleanupError){console.error('Incomplete import cleanup failed',cleanupError)}}
                 console.error('Failed to save YouTube course:', err)
                 showNotification('Failed to save: ' + err.message, 'error')
             }
@@ -455,6 +461,7 @@ function HomePage() {
         const courseData = pendingGoogleDrive
         clearGoogleDrive()
         ;(async () => {
+            let incompleteCourseId
             try {
                 const dupe = courses.find(c => c.title === courseData.title)
                 if (dupe) {
@@ -480,6 +487,7 @@ function HomePage() {
                     totalVideos: courseData.totalVideos
                 })
 
+                incompleteCourseId=savedCourse.id
                 for (let i = 0; i < courseData.modules.length; i++) {
                     const module = courseData.modules[i]
                     const savedModule = await addModule({
@@ -508,6 +516,7 @@ function HomePage() {
 
                 loadCourses()
             } catch (err) {
+                if(incompleteCourseId){try{await deleteCourse(incompleteCourseId)}catch(cleanupError){console.error('Incomplete import cleanup failed',cleanupError)}}
                 console.error('Failed to save Google Drive course:', err)
                 showNotification('Failed to save: ' + err.message, 'error')
             }

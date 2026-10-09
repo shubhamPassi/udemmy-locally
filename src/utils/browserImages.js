@@ -1,3 +1,4 @@
+import { compressThumbnail } from './thumbnailCompression.js'
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
 export function normalizeImageUrl(input) {
@@ -61,7 +62,7 @@ export async function loadBrowserImage(input) {
     const blob = new Blob(parts, { type })
     return new Promise((resolve, reject) => {
         const reader = new FileReader()
-        reader.onload = () => resolve({ base64: reader.result })
+        reader.onload = async () => resolve({ base64: await compressThumbnail(reader.result) })
         reader.onerror = () => reject(new Error('Could not save the image in this browser.'))
         reader.readAsDataURL(blob)
     })

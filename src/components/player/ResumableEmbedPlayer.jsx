@@ -31,15 +31,19 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
     const [fallback, setFallback] = useState(false), [error, setError] = useState('')
     const [retrying, setRetrying] = useState(false), [attempt, setAttempt] = useState(0)
     const [mediaLoading,setMediaLoading]=useState(true)
+    const [slowBuffer,setSlowBuffer]=useState(false)
+    const bufferTimer=useRef(null)
     const retryTimer = useRef(null), retryCount = useRef(0), continuePlaying = useRef(autoPlay)
     const callbacks = useRef({ onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange })
     callbacks.current = { onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange }
     const isYouTube = !!(video.youtubeId || /youtu(?:be\.com|\.be)/.test(video.url || ''))
     const youtubeId = video.youtubeId || video.url?.match(/(?:[?&]v=|youtu\.be\/)([^?&/]+)/)?.[1]
     const driveId = video.driveFileId || video.url?.match(/(?:\/d\/|[?&]id=)([a-zA-Z0-9_-]+)/)?.[1]
-    useEffect(() => () => clearTimeout(retryTimer.current), [])
+    useEffect(() => () => {clearTimeout(retryTimer.current);clearTimeout(bufferTimer.current)}, [])
+    function clearBufferNotice(){clearTimeout(bufferTimer.current);setSlowBuffer(false)}
     function retryDrive(manual = false) {
         clearTimeout(retryTimer.current)
+        clearBufferNotice()
         if (manual) retryCount.current = 0
         nativeReady.current = false
         setError('')
@@ -221,13 +225,16 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
             }}
             onTimeUpdate={event => sampleNative(event)}
             onPlay={() => { continuePlaying.current = true }}
-            onPlaying={() => { retryCount.current = 0; setRetrying(false) }}
+            onPlaying={() => { retryCount.current = 0; setRetrying(false);clearBufferNotice() }}
+            onCanPlay={clearBufferNotice}
+            onWaiting={()=>{clearTimeout(bufferTimer.current);bufferTimer.current=setTimeout(()=>{if(native.current&&!native.current.paused)setSlowBuffer(true)},20000)}}
             onPause={event => { if (!event.currentTarget.error && !retrying) continuePlaying.current = false; sampleNative(event, true) }}
             onSeeked={event => sampleNative(event, true)}
             onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext) callbacks.current.onNext?.() }}
             onError={handleDriveError} />}
         {!isYouTube && !fallback && !error && !retrying && <StreamPlayerControls key={attempt} mediaRef={native} containerRef={container} showLoadingIndicator={!mediaLoading} />}
         {(retrying || mediaLoading) && !error && !fallback && <div role="status" aria-label="Loading video" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40"><span className="h-11 w-11 rounded-full border-4 border-white/20 border-t-white animate-spin" /></div>}
+        {slowBuffer&&!error&&!fallback&&<div className="absolute bottom-24 inset-x-4 z-30 rounded-lg bg-black/85 p-3 text-center text-xs text-white">Drive is taking longer to respond. Your progress is saved.<button onClick={()=>{remember(true);retryDrive(true)}} className="ml-3 rounded bg-blue-600 px-3 py-2">Reconnect</button></div>}
         {error && (isYouTube ? <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p> : <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-5"><div className="max-w-md text-center text-white"><p role="alert" className="text-sm leading-6">{error}</p><div className="mt-4 flex flex-wrap justify-center gap-3"><button onClick={() => retryDrive(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium">Retry video</button><button onClick={() => { clearTimeout(retryTimer.current); remember(true); setError(''); setRetrying(false); setFallback(true) }} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Use Drive preview</button></div></div></div>)}
     </div>
 })

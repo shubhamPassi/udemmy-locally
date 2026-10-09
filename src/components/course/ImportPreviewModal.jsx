@@ -1,3 +1,5 @@
+import useModalFocus from '../../hooks/useModalFocus'
+import { compressThumbnail } from '../../utils/thumbnailCompression'
 import InstructorPicker from './InstructorPicker'
 import { useState, useRef, useEffect } from 'react'
 import {
@@ -46,6 +48,8 @@ function ImportPreviewModal({
     isImporting,
     existingCourseNames = []
 }) {
+    const modalHost=useRef(null)
+    useModalFocus(!!courseStructure,modalHost,onCancel)
     const [courseName, setCourseName] = useState(courseStructure?.title || '')
     const [instructor, setInstructor] = useState('')
     const [modules, setModules] = useState(
@@ -118,9 +122,10 @@ function ImportPreviewModal({
         }
 
         const reader = new FileReader()
-        reader.onload = (event) => {
-            setThumbnailPreview(event.target.result)
-            setThumbnail(event.target.result)
+        reader.onload = async (event) => {
+            const compressed=await compressThumbnail(event.target.result)
+            setThumbnailPreview(compressed)
+            setThumbnail(compressed)
         }
         reader.readAsDataURL(file)
     }
@@ -298,7 +303,7 @@ function ImportPreviewModal({
             <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
 
             {/* Modal */}
-            <div onPaste={pasteThumbnail} className="relative bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-scale-in">
+            <div ref={modalHost} role="dialog" aria-modal="true" aria-label="Import Course" onPaste={pasteThumbnail} className="relative bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-scale-in">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-light-border dark:border-dark-border">
                     <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">

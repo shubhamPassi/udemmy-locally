@@ -1,3 +1,4 @@
+import StudyGoal from '../components/settings/StudyGoal'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Clock, BookOpen, RefreshCw, ChevronLeft, ChevronRight, ArrowDown, ArrowUp, Download, Flame, Trophy, CalendarDays } from 'lucide-react'
@@ -61,6 +62,7 @@ export default function StatisticsPage() {
     }, [])
     const stats = useMemo(() => learningStats(courses, videos), [courses, videos])
     const activity = useMemo(() => studyActivity(sessions, courses, endDate, periodDays), [sessions, courses, endDate, periodDays])
+    const todayActivity=useMemo(()=>studyActivity(sessions,courses,new Date(),1),[sessions,courses])
     const consistency = useMemo(() => studyConsistency(sessions), [sessions])
     const selectedRows = selectedHour === null ? [] : activity.rows.filter(row => activity.bins[selectedHour]?.courses[row.id]).map(row => ({ ...row, seconds: activity.bins[selectedHour].courses[row.id] }))
     const isToday = dayKey(endDate) === dayKey(new Date())
@@ -91,6 +93,7 @@ export default function StatisticsPage() {
                 { label: 'Best streak', value: `${consistency.bestStreak} ${consistency.bestStreak === 1 ? 'day' : 'days'}`, icon: Trophy, help: 'Your longest run of consecutive recorded study days.' },
                 { label: 'Total studied', value: studyTimeLabel(consistency.totalSeconds), icon: Clock, help: `Across ${consistency.studiedDays} recorded study days.` },
             ].map(({label,value,icon:Icon,help}) => <div key={label} title={help}><Icon className="h-4 w-4 text-blue-500" /><p className="mt-2 text-lg sm:text-2xl font-semibold tabular-nums">{value}</p><p className={`mt-1 text-[10px] sm:text-xs ${muted}`}>{label}</p></div>)}</div></section>
+            <StudyGoal seconds={todayActivity.totalSeconds} />
             <div className="mx-auto flex max-w-xs rounded-xl bg-gray-200/70 dark:bg-white/10 p-1" aria-label="Study time period">{[{ label: 'Day', days: 1 }, { label: 'Week', days: 7 }].map(option => <button key={option.days} aria-pressed={periodDays === option.days} onClick={() => { setPeriodDays(option.days); setSelectedHour(null) }} className={`flex-1 rounded-lg px-5 py-2 text-sm font-semibold transition-colors ${periodDays === option.days ? 'bg-white dark:bg-neutral-600 text-gray-900 dark:text-white shadow-sm' : muted}`}>{option.label}</button>)}</div>
             <section className={card}>
                 <div className="flex items-center justify-between gap-2 border-b border-gray-200 dark:border-white/10 px-4 sm:px-6 py-3">
@@ -120,7 +123,7 @@ export default function StatisticsPage() {
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/5"><div className="h-full rounded-full bg-blue-500" style={{ width: `${stats.percent}%` }} /></div>
                 <div className={`mt-3 flex flex-wrap justify-between gap-2 text-xs ${muted}`}><span>{stats.completed} of {stats.total} lessons finished</span><span>{stats.finished} of {courses.length} courses finished</span></div>
             </section>
-            <p className={`px-1 text-xs leading-5 ${muted}`}>Updates automatically while this page is open. Study time reflects recorded playback. Pauses, buffering, and skipped time don’t count. Tap a {periodDays === 1 ? 'bar to see that hour' : 'day to see its hours'}.</p>
+            <p className={`px-1 text-xs leading-5 ${muted}`}>Updates automatically while this page is open. Study time reflects recorded playback only; activity before time tracking began cannot be reconstructed. Pauses, buffering, and skipped time don’t count. Tap a {periodDays === 1 ? 'bar to see that hour' : 'day to see its hours'}.</p>
         </>}
     </div>
 }

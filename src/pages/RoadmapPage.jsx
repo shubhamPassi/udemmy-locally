@@ -40,6 +40,10 @@ function RoadmapPage() {
     const [saveStatus, setSaveStatus] = useState('Saved')
     const [showDeleteDialog, setShowDeleteDialog] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
+    const [history,setHistory]=useState([]),[renameTitle,setRenameTitle]=useState(''),[renaming,setRenaming]=useState(false)
+    function rememberEdit(){setHistory(previous=>[...previous.slice(-19),{nodes,connections}])}
+    function undoEdit(){const previous=history[history.length-1];if(!previous)return;setNodes(previous.nodes);setConnections(previous.connections);setHistory(history.slice(0,-1));setConnectingFrom(null)}
+    async function renameRoadmap(){const title=renameTitle.trim();if(!title)return;try{const updated={...currentRoadmap,title,name:title};await updateRoadmap({id:currentRoadmap.id,title,name:title});setCurrentRoadmap(updated);setRoadmaps(previous=>previous.map(roadmap=>roadmap.id===updated.id?updated:roadmap));setRenaming(false)}catch{showNotification('Could not rename roadmap.','error')}}
 
     // Canvas state
     const [nodes, setNodes] = useState([])
@@ -93,6 +97,7 @@ function RoadmapPage() {
         const normalized = { ...roadmap, title: roadmap.title || roadmap.name }
         // Also restore pan/zoom from viewport if stored that way by server
         const viewport = roadmap.viewport || {}
+        setHistory([]);setRenaming(false)
         activeRoadmapId.current = normalized.id
         savedSnapshot.current = JSON.stringify([normalized.nodes || [], normalized.connections || [], normalized.pan || viewport.pan || { x: 0, y: 0 }, normalized.zoom || viewport.zoom || 1])
         setSaveStatus('Saved')
@@ -214,6 +219,7 @@ function RoadmapPage() {
             height: 160
         }
 
+        rememberEdit()
         const nextNodes = [...nodes, newNode]
         setNodes(nextNodes)
         const view = fitRoadmapViewport(nextNodes, rect.width, rect.height)
@@ -223,6 +229,7 @@ function RoadmapPage() {
 
     // Remove node
     function removeNode(nodeId) {
+        rememberEdit()
         setNodes(prev => prev.filter(n => n.id !== nodeId))
         setConnections(prev => prev.filter(c => c.fromNodeId !== nodeId && c.toNodeId !== nodeId))
         setSelectedNode(null)
@@ -232,6 +239,7 @@ function RoadmapPage() {
     const handleNodeMouseDown = (e, node) => {
         if (e.button !== 0 || e.target.closest('button, a')) return
         e.stopPropagation()
+        rememberEdit()
         setDraggedNode(node)
         setDragStart({ x: e.clientX - node.x * zoom, y: e.clientY - node.y * zoom })
         setSelectedNode(node.id)
@@ -289,6 +297,7 @@ function RoadmapPage() {
                     c.fromNodeId === connectingFrom && c.toNodeId === nodeId
                 )
                 if (!exists) {
+                    rememberEdit()
                     setConnections(prev => [...prev, {
                         id: generateId(),
                         fromNodeId: connectingFrom,
@@ -303,6 +312,7 @@ function RoadmapPage() {
     }
 
     function removeConnection(connectionId) {
+        rememberEdit()
         setConnections(prev => prev.filter(c => c.id !== connectionId))
     }
 
@@ -475,6 +485,7 @@ function RoadmapPage() {
 
             {loadError && <div role="alert" className="mb-4 rounded-xl bg-red-500/10 p-4 text-sm text-red-500">{loadError}<button onClick={loadData} className="ml-3 underline">Try again</button></div>}
             {currentRoadmap && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-neutral-400"><p>{nodes.length} courses · {connections.length} connections · Drag cards to arrange your plan</p><span role="status">{saveStatus}{saveStatus === 'Save failed' && <button onClick={saveRoadmap} className="ml-2 text-blue-500 underline">Retry</button>}</span></div>}
+            {currentRoadmap && <div className="mb-3 flex flex-wrap gap-2"><button onClick={()=>{setRenameTitle(currentRoadmap.title);setRenaming(true)}} className="rounded-lg border border-gray-200 dark:border-white/10 px-3 py-2 text-xs">Rename</button><button disabled={!history.length} onClick={undoEdit} className="rounded-lg border border-gray-200 dark:border-white/10 px-3 py-2 text-xs disabled:opacity-40">Undo</button>{renaming&&<><input autoFocus aria-label="New roadmap name" maxLength={100} value={renameTitle} onChange={event=>setRenameTitle(event.target.value)} onKeyDown={event=>{if(event.key==='Enter')renameRoadmap();if(event.key==='Escape')setRenaming(false)}} className="rounded-lg border border-gray-200 dark:border-white/10 bg-transparent px-3 py-2 text-sm"/><button onClick={renameRoadmap} className="rounded-lg bg-blue-600 px-3 py-2 text-xs text-white">Save name</button><button onClick={()=>setRenaming(false)} className="px-3 text-xs">Cancel</button></>}</div>}
             {/* Main Content */}
             <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4 overflow-hidden">
                 {/* Course Panel (Left) */}
@@ -635,7 +646,7 @@ function RoadmapPage() {
                                                 d={`M ${from.x} ${from.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${to.x} ${to.y}`}
                                                 fill="none"
                                                 stroke="transparent"
-                                                strokeWidth="20"
+                                                strokeWidth="20" role="button" tabIndex={0} aria-label="Remove course connection" onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();removeConnection(conn.id)}}}
                                                 style={{ pointerEvents: 'stroke' }}
                                                 onClick={(e) => { e.stopPropagation(); removeConnection(conn.id); }}
                                             />
@@ -833,7 +844,7 @@ function RoadmapPage() {
                     {/* Connection hint */}
                     {connectingFrom && (
                         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-green-500 text-white rounded-lg shadow-lg text-sm">
-                            Click another course node to create a connection
+                            Click another course node to create a connection <button onClick={()=>setConnectingFrom(null)} className="ml-3 underline">Cancel</button>
                         </div>
                     )}
                 </div>

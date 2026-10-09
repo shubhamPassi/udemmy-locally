@@ -63,7 +63,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     const [isSpeedBoosting, setIsSpeedBoosting] = useState(false)
     const [isTransitioning, setIsTransitioning] = useState(false)
     const [speedBeforeBoost, setSpeedBeforeBoost] = useState(1)
-    const speedBoostTimeoutRef = useRef(null)
     const wasSpeedBoostingRef = useRef(false)
     const pendingAutoPlayRef = useRef(false) // Track autoplay intent during video transitions
     const [showTranslateModal, setShowTranslateModal] = useState(false)
@@ -1032,45 +1031,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
 
     // Whether the control bar is currently visible
     const controlsVisible = showControls
-
-    // Speed boost handlers (hold to 2x speed)
-    function handleSpeedBoostStart(e) {
-        // Don't trigger on controls area or if clicking on interactive elements
-        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('[data-no-speed-boost]')) {
-            return
-        }
-
-        // Start timer for long press
-        speedBoostTimeoutRef.current = setTimeout(() => {
-            if (isPlaying) {
-                setSpeedBeforeBoost(playbackSpeed)
-                setPlaybackSpeed(2)
-                setIsSpeedBoosting(true)
-                if (videoRef.current && !(video?.youtubeId || video?.url?.startsWith('http'))) {
-                    videoRef.current.playbackRate = 2
-                }
-            }
-        }, 500) // 500ms hold to activate
-    }
-
-    function handleSpeedBoostEnd() {
-        // Clear the timeout if released before activation
-        if (speedBoostTimeoutRef.current) {
-            clearTimeout(speedBoostTimeoutRef.current)
-            speedBoostTimeoutRef.current = null
-        }
-
-        // Restore original speed if we were boosting
-        if (isSpeedBoosting) {
-            setPlaybackSpeed(speedBeforeBoost)
-            setIsSpeedBoosting(false)
-            // Set flag to prevent click from pausing video
-            wasSpeedBoostingRef.current = true
-            if (videoRef.current && !(video?.youtubeId || video?.url?.startsWith('http'))) {
-                videoRef.current.playbackRate = speedBeforeBoost
-            }
-        }
-    }
 
     // Handle video click - don't toggle play if we just finished speed boosting
     function handleVideoClick() {

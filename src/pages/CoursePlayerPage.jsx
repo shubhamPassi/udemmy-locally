@@ -1,3 +1,4 @@
+import { subscribeLibraryChanges } from '../utils/libraryChanges'
 import { applyVideoDurations } from '../utils/moduleMetadata'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
@@ -145,6 +146,8 @@ function CoursePlayerPage() {
         return Math.min(natural, windowHeight - 136)
     }, [playerWrapperWidth, windowHeight, videoAspect, sidebarCollapsed, sidebarWidth])
 
+
+    useEffect(()=>subscribeLibraryChanges(detail=>{if(!detail?.courseId||detail.courseId===courseId)playlistRefreshRef.current?.()}),[courseId])
 
     // Load course data (reload when progress calculation mode changes)
     useEffect(() => {

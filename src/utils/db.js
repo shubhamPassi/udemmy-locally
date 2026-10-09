@@ -1,3 +1,4 @@
+import { compressThumbnail } from './thumbnailCompression.js'
 import * as api from './api.js'
 import { sharedRequest } from './sharedRequest.js'
 import { exportProgressBackup, restoreProgressBackup } from './progressBackup.js'
@@ -21,6 +22,7 @@ export function generateId(prefix = '') {
 // ============= COURSE OPERATIONS =============
 
 export async function addCourse(courseData) {
+    if(courseData.thumbnailData)courseData={...courseData,thumbnailData:await compressThumbnail(courseData.thumbnailData)}
     if(courseData.instructor)courseData={...courseData,instructor:canonicalInstructor(courseData.instructor,await getAllCourses())}
     return api.post(`/api/courses`, { id: generateId('course_'), ...courseData })
 }
@@ -37,6 +39,7 @@ export async function getCourseContent(courseId) {
 export const getAllCourses = sharedRequest(async () => normalizeCourseInstructors(await api.get('/api/courses')))
 
 export async function updateCourse(courseId, updates) {
+    if(updates.thumbnailData)updates={...updates,thumbnailData:await compressThumbnail(updates.thumbnailData)}
     if(updates.instructor!==undefined)updates={...updates,instructor:canonicalInstructor(updates.instructor,await getAllCourses())}
     return api.put(`/api/courses/${courseId}`, updates)
 }

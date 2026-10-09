@@ -1,3 +1,5 @@
+import InstructorManager from '../components/course/InstructorManager'
+import { subscribeLibraryChanges } from '../utils/libraryChanges'
 import { useDurationVisibility } from '../utils/durationVisibility'
 import { instructorKey } from '../utils/instructorNames'
 import { useState, useEffect, useMemo, useRef } from 'react'
@@ -8,6 +10,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner'
 import { useNotification } from '../contexts/NotificationContext'
 
 function InstructorsPage() {
+    useEffect(()=>subscribeLibraryChanges(()=>loadCourses(true)),[])
     const hideDurations=useDurationVisibility()
     const [courses, setCourses] = useState([])
     const [isLoading, setIsLoading] = useState(true)
@@ -23,9 +26,9 @@ function InstructorsPage() {
         loadCourses()
     }, [])
 
-    async function loadCourses() {
+    async function loadCourses(quiet=false) {
         try {
-            setIsLoading(true)
+            if(!quiet)setIsLoading(true)
             const allCourses = await getAllCourses()
             setCourses(allCourses)
 
@@ -50,11 +53,11 @@ function InstructorsPage() {
         const instructorMap = new Map()
 
         courses.forEach(course => {
-            if (!course.instructor) return
+            const instructorName=course.instructor || 'Unassigned courses'
 
-            if (!instructorMap.has(course.instructor)) {
-                instructorMap.set(course.instructor, {
-                    name: course.instructor,
+            if (!instructorMap.has(instructorName)) {
+                instructorMap.set(instructorName, {
+                    name: instructorName,
                     avatar: instructorAvatars[course.instructor] || null,
                     courses: [],
                     totalVideos: 0,
@@ -62,7 +65,7 @@ function InstructorsPage() {
                 })
             }
 
-            const instructor = instructorMap.get(course.instructor)
+            const instructor = instructorMap.get(instructorName)
             instructor.courses.push(course)
             instructor.totalVideos += course.totalVideos || 0
             instructor.completedVideos += course.completedVideos || 0
@@ -193,7 +196,7 @@ function InstructorsPage() {
                         <div>
                             <h2 className="font-semibold text-lg text-light-text-primary dark:text-dark-text-primary">
                                 {selectedInstructor.name}
-                            </h2>
+                            </h2><InstructorManager name={selectedInstructor.name} courses={selectedInstructor.courses} onDone={loadCourses}/>
                             <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
                                 {selectedInstructor.courses.length} course{selectedInstructor.courses.length !== 1 ? 's' : ''} • {selectedInstructor.totalVideos} videos
                             </p>

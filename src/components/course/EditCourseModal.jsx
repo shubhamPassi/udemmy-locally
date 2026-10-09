@@ -1,3 +1,4 @@
+import useModalFocus from '../../hooks/useModalFocus'
 import InstructorPicker from './InstructorPicker'
 import { useState, useRef, useEffect } from 'react'
 import { X, Upload, Image, Trash2, Folder, Video, Clock, Link2, Loader2 } from 'lucide-react'
@@ -7,6 +8,8 @@ import * as api from '../../utils/api'
 import { validateCourseTitle, sanitizeHTML } from '../../utils/validation'
 
 function EditCourseModal({ course, isOpen, onClose, onSave }) {
+    const modalHost=useRef(null)
+    useModalFocus(isOpen,modalHost,onClose)
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -254,7 +257,7 @@ function EditCourseModal({ course, isOpen, onClose, onSave }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-            <div className="relative bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col animate-scale-in">
+            <div ref={modalHost} role="dialog" aria-modal="true" aria-label="Edit Course" className="relative bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col animate-scale-in">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-light-border dark:border-dark-border">
                     <h2 className="text-xl font-semibold">Edit Course</h2>

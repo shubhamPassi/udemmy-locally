@@ -1,3 +1,4 @@
+import WindowedLesson from './WindowedLesson'
 import { useDurationVisibility } from '../../utils/durationVisibility'
 import { contentDuration } from '../../utils/courseDuration'
 import { courseCoverage, subscribeCoverage, coverageVersion, readCoverage, watchedSeconds } from '../../utils/watchCoverage'
@@ -29,21 +30,6 @@ function collectAllVideos(modules) {
         result.push(...(mod.videos || []))
         if (mod.subModules?.length > 0) {
             result.push(...collectAllVideos(mod.subModules))
-        }
-    }
-    return result
-}
-
-/**
- * Collect all top-level and sub-modules in a single list
- * (No longer used for Bulk Edit, but kept if needed elsewhere)
- */
-function flattenModuleTree(modules) {
-    const result = []
-    for (const mod of modules) {
-        result.push(mod)
-        if (mod.subModules?.length > 0) {
-            result.push(...flattenModuleTree(mod.subModules))
         }
     }
     return result
@@ -309,8 +295,9 @@ function PlaylistSidebar({
                             const isCompleted = video.isCompleted
 
                             return (
-                                <div
+                                <WindowedLesson key={video.id} active={isActive || allVideos.length<=100}><div
                                     key={video.id}
+                                    role="button" tabIndex={0} aria-label={`Play ${video.title}`} onKeyDown={event=>{if(event.target!==event.currentTarget)return;if(event.key==='Enter'||event.key===' '){event.preventDefault();onVideoSelect(video)}}}
                                     onClick={() => onVideoSelect(video)}
                                     className={`
                                         w-full flex items-start gap-3 py-2 text-left cursor-pointer
@@ -324,6 +311,7 @@ function PlaylistSidebar({
                                 >
                                     {/* Checkbox */}
                                     <button
+                                        aria-label={`${isCompleted?'Mark incomplete':'Mark complete'}: ${video.title}`}
                                         onClick={(e) => handleToggleComplete(e, video)}
                                         className={`
                                             w-4 h-4 rounded border flex-shrink-0 mt-0.5
@@ -346,14 +334,14 @@ function PlaylistSidebar({
                                             <span>{contentDuration(video.duration)}</span>
                                         </div>}
                                     </div>
-                                </div>
+                                </div></WindowedLesson>
                             )
                         })}
                     </div>
                 )}
             </div>
         )
-    }, [expandedModules, currentVideo?.id, toggleModule, handleToggleComplete, onVideoSelect, hideUpcomingDurations])
+    }, [expandedModules, currentVideo?.id, toggleModule, handleToggleComplete, onVideoSelect, hideUpcomingDurations, allVideos.length])
 
     const playlistRows = useMemo(() => playlistDisplay(modules).map(module => renderModule(module, 0)), [modules, renderModule])
 

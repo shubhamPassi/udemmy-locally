@@ -2,9 +2,9 @@ import { mergeWatchedRanges, recordWatchedRange } from './watchCoverage.js'
 import { saveStudySession } from './studyTime.js'
 import { invalidatePlaybackBookmarks } from './playbackBookmarks.js'
 export function exportProgressBackup() {
-    const backup={version:1,bookmarks:{},coverage:{},sessions:{}}
+    const backup={version:1,bookmarks:{},coverage:{},sessions:{},subtitles:{}}
     for(const key of Object.keys(localStorage)) {
-        const group=key.startsWith('tutin_playback_')?'bookmarks':key.startsWith('tutin_coverage_')?'coverage':key.startsWith('tutin_study_session_')?'sessions':null
+        const group=key.startsWith('tutin_playback_')?'bookmarks':key.startsWith('tutin_coverage_')?'coverage':key.startsWith('tutin_study_session_')?'sessions':key.startsWith('tutin_subtitles_')?'subtitles':null
         if(!group)continue
         try{backup[group][key]=JSON.parse(localStorage.getItem(key))}catch{}
     }
@@ -12,6 +12,11 @@ export function exportProgressBackup() {
 }
 export function restoreProgressBackup(backup) {
     if(backup?.version!==1)return
+    for(const [key,cues] of Object.entries(backup.subtitles||{})){
+        if(!key.startsWith('tutin_subtitles_')||!Array.isArray(cues))continue
+        const valid=cues.filter(cue=>Number.isFinite(cue?.start)&&cue.start>=0&&Number.isFinite(cue.end)&&cue.end>cue.start&&typeof cue.text==='string')
+        localStorage.setItem(key,JSON.stringify(valid))
+    }
     for(const [key,value] of Object.entries(backup.bookmarks||{})) {
         if(!key.startsWith('tutin_playback_')||!value||(!Number.isFinite(value.position)&&typeof value.isCompleted!=='boolean'))continue
         if(value.position!==undefined&&value.position<0)continue

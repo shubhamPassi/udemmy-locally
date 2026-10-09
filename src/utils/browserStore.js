@@ -1,3 +1,4 @@
+import { publishLibraryChange } from './libraryChanges.js'
 // Hosted app data stays in this browser. Structured cloning preserves folder/file handles.
 import { saveLibraryRecovery, restoreLibraryRecovery } from './browserPersistence.js'
 import { clearPlaybackBookmarks } from './playbackBookmarks.js'
@@ -203,6 +204,7 @@ export async function request(method, path, body = {}) {
         if (table === 'modules') await removeRelated(existing?.courseId, id)
         if (existing?.courseId) invalidateCourse(existing.courseId)
         if (['courses','modules','videos'].includes(table)) await saveRecovery()
+        publishLibraryChange(table,existing?.courseId|| (table==='courses'?id:null))
         return { success: true }
     }
     const existing = id ? await operation(table, 'get', id) : null
@@ -215,5 +217,6 @@ export async function request(method, path, body = {}) {
     const affectsTotals = table === 'modules' || (table === 'videos' && (!existing || ['duration','isCompleted','moduleId','courseId'].some(key => key in body)))
     if (row.courseId && affectsTotals) invalidateCourse(row.courseId)
     if (['courses','modules','videos'].includes(table) && action !== 'progress') scheduleRecovery()
+    if(['courses','modules','videos','instructors'].includes(table) && action!=='progress')publishLibraryChange(table,row.courseId|| (table==='courses'?row.id:null))
     return result
 }

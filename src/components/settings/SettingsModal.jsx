@@ -1,3 +1,5 @@
+import useModalFocus from '../../hooks/useModalFocus'
+import StorageStatus from './StorageStatus'
 import { useState, useRef } from 'react'
 import {
     X, Sun, Moon, Monitor, Palette, Layout, Type, Settings,
@@ -28,6 +30,9 @@ const completionThresholds = [
 ]
 
 function SettingsModal({ isOpen, onClose }) {
+    const modalHost=useRef(null)
+    useModalFocus(isOpen,modalHost,onClose)
+
     const { settings, updateSettings, resetSettings } = useSettings()
     const { theme, setTheme } = useTheme()
     const [activeTab, setActiveTab] = useState('general')
@@ -60,7 +65,7 @@ function SettingsModal({ isOpen, onClose }) {
             />
 
             {/* Modal */}
-            <div className="relative bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-[672px] h-[600px] flex flex-col animate-scale-in overflow-hidden">
+            <div ref={modalHost} role="dialog" aria-modal="true" aria-label="Settings" className="relative bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-[672px] h-[600px] flex flex-col animate-scale-in overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-light-border dark:border-dark-border">
                     <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">
@@ -493,6 +498,7 @@ function SettingsModal({ isOpen, onClose }) {
                                     </div>
                                 </div>
 
+                                <StorageStatus />
                                 {/* Export */}
                                 <div className="p-4 rounded-lg border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-bg">
                                     <div className="flex items-center justify-between gap-4">
@@ -515,6 +521,7 @@ function SettingsModal({ isOpen, onClose }) {
                                                     a.href = url
                                                     a.download = `tutin_backup_${new Date().toISOString().split('T')[0]}.json`
                                                     a.click()
+                                                    localStorage.setItem('tutin_last_backup',new Date().toISOString())
                                                     URL.revokeObjectURL(url)
                                                 } catch (err) { showNotification('Failed to export: ' + err.message, 'error') }
                                             }}
