@@ -1,11 +1,15 @@
-import { useState, useEffect } from 'react'
+import useModalFocus from '../../hooks/useModalFocus'
+import { useState, useEffect, useRef } from 'react'
 import { X, Youtube, Save, AlertTriangle, PlayCircle, List, Loader, Settings } from 'lucide-react'
 import { formatDuration, parseISODuration } from '../../utils/db'
 import { useSettings } from '../../contexts/SettingsContext'
 import { IS_BROWSER_MODE } from '../../utils/api'
 import { fetchPublicImport } from '../../utils/publicImport'
 
-function YouTubeImportModal({ isOpen, onClose, onImport }) {
+function YouTubeImportModal({ isOpen, onClose, onImport, targetCourseTitle }) {
+    const modalHost=useRef(null),fetchVersion=useRef(0)
+    const [isSaving,setIsSaving]=useState(false)
+    useModalFocus(isOpen,modalHost,()=>{if(!isSaving)onClose()})
     const { settings } = useSettings()
     const apiKey = settings.googleApiKey
     const [url, setUrl] = useState('')
@@ -16,7 +20,9 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
 
     // Reset when opened
     useEffect(() => {
+        fetchVersion.current++
         if (isOpen) {
+            setIsLoading(false)
             setUrl('')
             setError(null)
             setPreviewData(null)
@@ -29,10 +35,12 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
 
 
     async function handleFetchInfo() {
-        if (!url) return
+        if (!url || isLoading || isSaving) return
+        const version=++fetchVersion.current
+        const commitPreview=data=>{if(fetchVersion.current===version)setPreviewData(data)}
         setIsLoading(true)
         setError(null)
-        setPreviewData(null)
+        commitPreview(null)
 
         try {
             // Detect Type
@@ -41,7 +49,9 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
 
             const urlObj = new URL(url)
             if (!['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'].includes(urlObj.hostname)) throw new Error('Please use a YouTube video or playlist link')
-            if (urlObj.searchParams.has('list')) {
+            if(targetCourseTitle && (urlObj.searchParams.has('v') || urlObj.hostname==='youtu.be' || /^\/(shorts|embed|live)\//.test(urlObj.pathname))){
+                id=urlObj.searchParams.get('v') || (urlObj.hostname==='youtu.be'?urlObj.pathname.split('/')[1]:urlObj.pathname.split('/')[2])
+            } else if (urlObj.searchParams.has('list')) {
                 type = 'playlist'
                 id = urlObj.searchParams.get('list')
             } else if (urlObj.searchParams.has('v')) {
@@ -58,7 +68,7 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
             setImportType(type)
 
             if (IS_BROWSER_MODE) {
-                setPreviewData(await fetchPublicImport('youtube', id, type))
+                commitPreview(await fetchPublicImport('youtube', id, type))
                 return
             }
 
@@ -109,7 +119,7 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
                     videoData = data
                 }
 
-                setPreviewData({
+                commitPreview({
                     title: videoData.title,
                     author: videoData.author_name,
                     thumbnail: videoData.thumbnail_url,
@@ -191,7 +201,7 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
                     nextPageToken = itemsData.nextPageToken
                 } while (nextPageToken && videos.length < 200) // Limit to 200 for sanity
 
-                setPreviewData({
+                commitPreview({
                     title: playlistInfo.title,
                     author: playlistInfo.channelTitle,
                     thumbnail: playlistInfo.thumbnails?.high?.url,
@@ -202,15 +212,17 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
 
         } catch (err) {
             console.error(err)
-            setError(err.message)
+            if(fetchVersion.current===version)setError(err.message)
         } finally {
-            setIsLoading(false)
+            if(fetchVersion.current===version)setIsLoading(false)
         }
     }
 
-    function handleConfirm() {
-        if (!previewData) return
-        onImport({
+    async function handleConfirm() {
+        if (!previewData || isSaving) return
+        setIsSaving(true);setError(null)
+        try {
+        await onImport({
             title: previewData.title,
             instructor: previewData.author,
             channelAvatar: previewData.channelAvatar, // Passed separately for instructors store
@@ -228,40 +240,45 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
                 }))
             }]
         })
+        } catch(err) { setError(err.message || 'Could not add the videos. Please retry.') }
+        finally { setIsSaving(false) }
     }
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+            <div className="absolute inset-0 bg-black/50" onClick={()=>{if(!isSaving)onClose()}} />
 
-            <div className="relative bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-scale-in">
+            <div ref={modalHost} role="dialog" aria-modal="true" aria-label={targetCourseTitle?'Add YouTube videos':'Import from YouTube'} className="relative bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-scale-in">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-light-border dark:border-dark-border">
                     <h2 className="text-xl font-semibold flex items-center gap-2">
                         <Youtube className="w-6 h-6 text-red-600" />
-                        Import from YouTube
+                        {targetCourseTitle?'Add YouTube videos':'Import from YouTube'}
                     </h2>
-                    <button onClick={onClose} className="p-2 hover:bg-light-surface dark:hover:bg-dark-bg rounded-lg">
+                    <button disabled={isSaving} aria-label="Close YouTube import" onClick={onClose} className="p-2 hover:bg-light-surface dark:hover:bg-dark-bg rounded-lg">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {targetCourseTitle&&<p className="text-sm text-neutral-400">Add to <strong className="text-gray-900 dark:text-white">{targetCourseTitle}</strong>. Existing lessons and progress stay saved.</p>}
                     {/* URL Input */}
                     <div>
                         <label className="block text-sm font-medium mb-2">YouTube URL</label>
                         <div className="flex gap-2">
                             <input
+                                aria-label="YouTube URL"
                                 type="text"
                                 value={url}
-                                onChange={(e) => setUrl(e.target.value)}
+                                disabled={isSaving || isLoading}
+                                onChange={(e) => { setUrl(e.target.value);setPreviewData(null);setError(null) }}
                                 placeholder="Paste video or playlist link (e.g., https://www.youtube.com/playlist?list=...)"
                                 className="flex-1 px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-white dark:bg-dark-bg focus:ring-2 focus:ring-red-500 outline-none"
                             />
                             <button
                                 onClick={handleFetchInfo}
-                                disabled={!url || isLoading}
+                                disabled={!url || isLoading || isSaving}
                                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                             >
                                 {isLoading ? <Loader className="w-5 h-5 animate-spin" /> : 'Fetch'}
@@ -317,16 +334,16 @@ function YouTubeImportModal({ isOpen, onClose, onImport }) {
 
                 {/* Footer */}
                 <div className="flex justify-end gap-3 p-4 border-t border-light-border dark:border-dark-border">
-                    <button onClick={onClose} className="px-4 py-2 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg">
+                    <button disabled={isSaving} onClick={onClose} className="px-4 py-2 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg">
                         Cancel
                     </button>
                     <button
                         onClick={handleConfirm}
-                        disabled={!previewData}
+                        disabled={!previewData || isSaving || isLoading}
                         className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
                     >
                         <Save className="w-4 h-4" />
-                        Import Course
+                        {isSaving?'Adding…':targetCourseTitle?'Add to playlist':'Import Course'}
                     </button>
                 </div>
             </div>

@@ -1,3 +1,4 @@
+import { appendYouTubeVideos } from '../../utils/youtubePlaylist'
 import WindowedLesson from './WindowedLesson'
 import { useDurationVisibility } from '../../utils/durationVisibility'
 import { contentDuration } from '../../utils/courseDuration'
@@ -5,12 +6,13 @@ import { courseCoverage, subscribeCoverage, coverageVersion, readCoverage, watch
 import { lazy, Suspense, useState, useMemo, useRef, useEffect, useCallback, useSyncExternalStore } from 'react'
 import {
     ChevronDown, ChevronRight, ChevronLeft, Check,
-    Pencil, GripVertical, Folder, FolderOpen
+    Pencil, GripVertical, Folder, FolderOpen, Plus
 } from 'lucide-react'
 import { markVideoComplete, updateModule, updateVideo } from '../../utils/db'
 import { useNotification } from '../../contexts/NotificationContext'
 import { playlistDisplay } from '../../utils/playlistDisplay'
 
+const YouTubeImportModal = lazy(() => import('../course/YouTubeImportModal'))
 const EditModuleModal = lazy(() => import('./EditModuleModal'))
 const NotesPanel = lazy(() => import('./NotesPanel'))
 const BulkEditPlaylist = lazy(() => import('./BulkEditPlaylist'))
@@ -83,6 +85,7 @@ function PlaylistSidebar({
     onSeek,
     onWidthChange
 }) {
+    const [showAddYouTube,setShowAddYouTube]=useState(false)
     const hideUpcomingDurations=useDurationVisibility()
     const [expandedModules, setExpandedModules] = useState(() => {
         // Large courses initially expand only the selected lesson's module path.
@@ -415,6 +418,7 @@ function PlaylistSidebar({
                     {/* Playlist Toolbar */}
                     <div className={`items-center justify-between p-3 border-t border-light-border dark:border-dark-border bg-light-surface/50 dark:bg-dark-bg/50 ${activeTab === 'playlist' && !isBulkEditing ? 'flex' : 'hidden'}`}>
                         <h3 className="text-sm font-semibold">Playlist</h3>
+                        {allVideos.some(video=>video.youtubeId||/youtu(?:be\.com|\.be)/.test(video.url||''))&&<button onClick={()=>setShowAddYouTube(true)} className="flex items-center gap-1 text-xs text-primary-fg" aria-label="Add YouTube video to this playlist"><Plus className="h-3.5 w-3.5"/>Add video</button>}
                         <button
                             onClick={() => setIsBulkEditing(true)}
                             className="flex items-center gap-1 text-sm text-primary-fg hover:text-primary-dark"
@@ -511,6 +515,12 @@ function PlaylistSidebar({
         <>
             {sidebarContent}
 
+            <Suspense fallback={null}>{showAddYouTube&&<YouTubeImportModal isOpen={true} onClose={()=>setShowAddYouTube(false)} targetCourseTitle={course?.title||'this playlist'} onImport={async data=>{
+                const result=await appendYouTubeVideos(courseId,data.modules.flatMap(module=>module.videos||[]),currentVideo?.youtubeId?currentVideo.moduleId:undefined)
+                setShowAddYouTube(false)
+                showNotification(result.added?`${result.added} video${result.added===1?'':'s'} added${result.skipped?`; ${result.skipped} already in the playlist`:''}.`:'These videos are already in the playlist.',result.added?'success':'info')
+                await onRefresh?.()
+            }}/>}</Suspense>
             {/* Edit Module Modal */}
             <Suspense fallback={null}>
                 {editingModule && (
