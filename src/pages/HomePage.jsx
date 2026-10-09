@@ -16,15 +16,21 @@ const EditCourseModal = lazy(() => import('../components/course/EditCourseModal'
 const SyncPreviewModal = lazy(() => import('../components/course/SyncPreviewModal'))
 
 function scheduleAfterFirstPaint(callback) {
-    const run = () => {
-        if ('requestIdleCallback' in window) {
-            window.requestIdleCallback(callback, { timeout: 3000 })
-        } else {
-            window.setTimeout(callback, 1200)
-        }
+    let idle, fallback, cancelled=false
+    const connection=navigator.connection
+    if(connection?.saveData || ['slow-2g','2g'].includes(connection?.effectiveType))return ()=>{}
+    const invoke=()=>{if(!cancelled&&!document.hidden)callback()}
+    const timer=window.setTimeout(()=>{
+        if(cancelled || document.hidden)return
+        if('requestIdleCallback' in window)idle=window.requestIdleCallback(invoke,{timeout:3000})
+        else fallback=window.setTimeout(invoke,1200)
+    },500)
+    return ()=>{
+        cancelled=true
+        window.clearTimeout(timer)
+        window.clearTimeout(fallback)
+        if(idle!==undefined)window.cancelIdleCallback?.(idle)
     }
-
-    return window.setTimeout(run, 500)
 }
 
 function HomePage() {
@@ -55,11 +61,11 @@ function HomePage() {
     }, [])
 
     useEffect(() => {
-        const timer = scheduleAfterFirstPaint(() => {
+        const cancelPrefetch = scheduleAfterFirstPaint(() => {
             import('./CoursePlayerPage').catch(() => {})
         })
 
-        return () => window.clearTimeout(timer)
+        return cancelPrefetch
     }, [])
 
     // Debounce search
