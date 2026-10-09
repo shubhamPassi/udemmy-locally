@@ -9,13 +9,13 @@ function savedAppearance(){
     }catch{return {size:26,background:'transparent'}}
 }
 export default function SubtitleTools({videoId,host,keyboardShortcuts=true}){
-    const [cues,setCues]=useState([]),[enabled,setEnabled]=useState(true),[open,setOpen]=useState(false),[error,setError]=useState('')
+    const [cues,setCues]=useState([]),[enabled,setEnabled]=useState(false),[open,setOpen]=useState(false),[error,setError]=useState('')
     const [slot,setSlot]=useState(null),[appearance,setAppearance]=useState(savedAppearance)
     const [showAppearance,setShowAppearance]=useState(false),[panelHeight,setPanelHeight]=useState(360)
     const input=useRef(null),menu=useRef(null),importedTrack=useRef(null),trackVideo=useRef(null),appliedCues=useRef(null),enabledRef=useRef(enabled)
     enabledRef.current=enabled
     useEffect(()=>{
-        setError('');setOpen(false);setShowAppearance(false)
+        setError('');setOpen(false);setShowAppearance(false);setEnabled(false)
         try{const stored=JSON.parse(localStorage.getItem('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{setCues([])}
     },[videoId])
     useEffect(()=>{
@@ -77,7 +77,7 @@ export default function SubtitleTools({videoId,host,keyboardShortcuts=true}){
             if(file.size>2*1024*1024)throw Error('Subtitle file must be smaller than 2 MB.')
             const parsed=parseSubtitles(await file.text())
             localStorage.setItem('tutin_subtitles_'+videoId,JSON.stringify(parsed))
-            setCues(parsed);setEnabled(true);setError('');setOpen(false)
+            setCues(parsed);setError('');setOpen(false)
         }catch(err){setError(err.message)}
         event.target.value=''
     }
