@@ -1,3 +1,4 @@
+import usePlaybackMeasurement from '../hooks/usePlaybackMeasurement'
 import { subscribeLibraryChanges } from '../utils/libraryChanges'
 import { applyVideoDurations } from '../utils/moduleMetadata'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
@@ -100,6 +101,7 @@ function CoursePlayerPage() {
     const handlePlaylistRefresh = useCallback(() => playlistRefreshRef.current?.(), [])
     const [instructorAvatar, setInstructorAvatar] = useState(null)
     const videoRef = useRef(null)
+    usePlaybackMeasurement(videoRef,currentVideo?.id)
 
     // ── Adaptive player sizing (YouTube-style JS-driven height) ──────────────
     // videoAspect: actual pixel dimensions reported by VideoPlayer after load.

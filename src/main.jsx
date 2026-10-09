@@ -19,3 +19,5 @@ createRoot(document.getElementById('root')).render(
         </BrowserRouter>
     </StrictMode>,
 )
+
+window.addEventListener('load',()=>{const timing=performance.getEntriesByType('navigation')[0];if(timing)document.documentElement.dataset.startupTiming=JSON.stringify({domInteractiveMs:Math.round(timing.domInteractive),loadMs:Math.round(performance.now())})},{once:true})

@@ -297,7 +297,6 @@ function PlaylistSidebar({
                             return (
                                 <WindowedLesson key={video.id} active={isActive || allVideos.length<=100}><div
                                     key={video.id}
-                                    role="button" tabIndex={0} aria-label={`Play ${video.title}`} onKeyDown={event=>{if(event.target!==event.currentTarget)return;if(event.key==='Enter'||event.key===' '){event.preventDefault();onVideoSelect(video)}}}
                                     onClick={() => onVideoSelect(video)}
                                     className={`
                                         w-full flex items-start gap-3 py-2 text-left cursor-pointer
@@ -327,9 +326,9 @@ function PlaylistSidebar({
 
                                     {/* Title */}
                                     <div className="flex-1 min-w-0">
-                                        <div className={`line-clamp-2 ${isCompleted ? 'text-light-text-secondary dark:text-dark-text-secondary line-through' : ''} ${isActive ? 'text-primary-fg font-medium' : ''}`}>
+                                        <button type="button" aria-label={`Play ${video.title}`} onClick={event=>{event.stopPropagation();onVideoSelect(video)}} className={`block w-full text-left line-clamp-2 ${isCompleted ? 'text-light-text-secondary dark:text-dark-text-secondary line-through' : ''} ${isActive ? 'text-primary-fg font-medium' : ''}`}>
                                             {video.title}
-                                        </div>
+                                        </button>
                                         {(!hideUpcomingDurations || isCompleted) && <div className="flex items-center gap-2 mt-0.5 text-xs text-light-text-secondary dark:text-dark-text-secondary">
                                             <span>{contentDuration(video.duration)}</span>
                                         </div>}

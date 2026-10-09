@@ -178,7 +178,7 @@ function SettingsModal({ isOpen, onClose }) {
                                                 </div>
                                             </div>
                                             <button
-                                                onClick={() => updateSettings({ resumePlayback: !settings.resumePlayback })}
+                                                aria-label="Resume playback" role="switch" aria-checked={settings.resumePlayback} onClick={() => updateSettings({ resumePlayback: !settings.resumePlayback })}
                                                 className={`w-12 h-6 rounded-full transition-colors relative ${settings.resumePlayback ? 'bg-primary dark:bg-primary-fg/30 text-primary-content' : 'bg-gray-300 dark:bg-gray-600'}`}
                                             >
                                                 <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${settings.resumePlayback ? 'translate-x-7' : 'translate-x-1'}`} />
@@ -250,7 +250,7 @@ function SettingsModal({ isOpen, onClose }) {
                                         </div>
                                     </div>
                                     <button
-                                        onClick={() => updateSettings({ keyboardShortcuts: !settings.keyboardShortcuts })}
+                                        aria-label="Keyboard shortcuts" role="switch" aria-checked={settings.keyboardShortcuts} onClick={() => updateSettings({ keyboardShortcuts: !settings.keyboardShortcuts })}
                                         className={`
                        w-12 h-6 rounded-full transition-colors relative
                        ${settings.keyboardShortcuts ? 'bg-primary dark:bg-primary-fg/30 text-primary-content' : 'bg-gray-300 dark:bg-gray-600'}
@@ -484,7 +484,7 @@ function SettingsModal({ isOpen, onClose }) {
                                             </div>
                                         </div>
                                         <button
-                                            onClick={() => updateSettings({ autoDetectThumbnails: !settings.autoDetectThumbnails })}
+                                            aria-label="Auto-detect thumbnails" role="switch" aria-checked={settings.autoDetectThumbnails} onClick={() => updateSettings({ autoDetectThumbnails: !settings.autoDetectThumbnails })}
                                             className={`
                        w-12 h-6 rounded-full transition-colors relative
                        ${settings.autoDetectThumbnails ? 'bg-primary dark:bg-primary-fg/30 text-primary-content' : 'bg-gray-300 dark:bg-gray-600'}
