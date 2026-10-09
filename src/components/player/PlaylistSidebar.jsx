@@ -1,10 +1,11 @@
+import { contentDuration } from '../../utils/courseDuration'
 import { courseCoverage, subscribeCoverage, coverageVersion, readCoverage, watchedSeconds } from '../../utils/watchCoverage'
 import { lazy, Suspense, useState, useMemo, useRef, useEffect, useCallback, useSyncExternalStore } from 'react'
 import {
     ChevronDown, ChevronRight, ChevronLeft, Check,
     Pencil, GripVertical, Folder, FolderOpen
 } from 'lucide-react'
-import { formatDuration, markVideoComplete, updateModule, updateVideo } from '../../utils/db'
+import { markVideoComplete, updateModule, updateVideo } from '../../utils/db'
 import { useNotification } from '../../contexts/NotificationContext'
 import { playlistDisplay } from '../../utils/playlistDisplay'
 
@@ -262,11 +263,11 @@ function PlaylistSidebar({
                         <div className="flex items-center gap-2 mt-0.5">
                             {totalModuleCount > 0 ? (
                                 <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary select-none">
-                                    {totalModuleCompleted}/{totalModuleCount} videos • {formatDuration(moduleDuration)}
+                                    {totalModuleCompleted}/{totalModuleCount} videos • {contentDuration(moduleDuration)}
                                 </p>
                             ) : hasSubModules ? (
                                 <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary select-none">
-                                    {module.subModules.length} sub-modules • {formatDuration(moduleDuration)}
+                                    {module.subModules.length} sub-modules • {contentDuration(moduleDuration)}
                                 </p>
                             ) : null}
                         </div>
@@ -320,7 +321,7 @@ function PlaylistSidebar({
                                             {video.title}
                                         </div>
                                         <div className="flex items-center gap-2 mt-0.5 text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                                            <span>{formatDuration(video.duration)}</span>
+                                            <span>{contentDuration(video.duration)}</span>
                                         </div>
                                     </div>
                                 </div>
