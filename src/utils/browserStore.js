@@ -157,7 +157,21 @@ export async function request(method, path, body = {}) {
             saveLibraryRecovery({courses:[],modules:[],videos:[]})
             return { success: true }
         }
-        if (id === 'import') { for (const name of tables) for (const row of body[name] || []) await save(name, row); restoreProgressBackup(body.progress); await saveRecovery(); return { success: true } }
+        if (id === 'import') {
+            for (const name of tables) for (const row of body[name] || []) {
+                if (!row?.id) continue
+                // JSON backups cannot contain File System Access handles. Keep any
+                // handles already granted in this browser when a row is restored.
+                const existing = await operation(name, 'get', row.id)
+                await save(name, { ...existing, ...row,
+                    ...(existing?.fileHandle && !row.fileHandle ? { fileHandle: existing.fileHandle } : {}),
+                    ...(existing?.folderHandle && !row.folderHandle ? { folderHandle: existing.folderHandle } : {}) })
+            }
+            restoreProgressBackup(body.progress)
+            await saveRecovery()
+            publishLibraryChange('courses', null)
+            return { success: true }
+        }
     }
     if (table === 'analytics' && id === 'history') {
         const courses = await all('courses'), modules = await all('modules')
