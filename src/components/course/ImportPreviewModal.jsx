@@ -2,7 +2,7 @@ import InstructorPicker from './InstructorPicker'
 import { useState, useRef, useEffect } from 'react'
 import {
     X, Upload, Folder, FolderOpen, Video, Clock, AlertTriangle,
-    ChevronDown, ChevronRight, Image, Link2, Loader2
+    ChevronDown, ChevronRight, Image, Link2, Loader2, Search, ClipboardPaste
 } from 'lucide-react'
 import { formatDuration } from '../../utils/db'
 import { courseDuration } from '../../utils/courseDuration'
@@ -61,6 +61,7 @@ function ImportPreviewModal({
     const [isDownloadingThumbnail, setIsDownloadingThumbnail] = useState(false)
     const [expandedModules, setExpandedModules] = useState({})
     const [durationStatus,setDurationStatus]=useState({total:0,done:0,failed:0})
+    const [imageSearchOpened,setImageSearchOpened]=useState(false)
     const fileInputRef = useRef(null)
     const { showNotification } = useNotification()
 
@@ -122,6 +123,25 @@ function ImportPreviewModal({
             setThumbnail(event.target.result)
         }
         reader.readAsDataURL(file)
+    }
+
+    function pasteThumbnail(event) {
+        const image=[...(event.clipboardData?.items||[])].find(item=>item.type.startsWith('image/'))?.getAsFile()
+        if(!image)return
+        event.preventDefault()
+        handleThumbnailUpload({target:{files:[image]}})
+    }
+    async function pasteImageFromClipboard() {
+        try {
+            const items=await navigator.clipboard.read()
+            for(const item of items) {
+                const type=item.types.find(type=>type.startsWith('image/'))
+                if(type){handleThumbnailUpload({target:{files:[await item.getType(type)]}});return}
+            }
+            showNotification('Copy the image itself from Google Images, then paste it here.', 'info')
+        } catch {
+            showNotification('Use Ctrl+V (or Cmd+V) in this form to paste the copied image.', 'info')
+        }
     }
 
     function removeThumbnail() {
@@ -276,7 +296,7 @@ function ImportPreviewModal({
             <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
 
             {/* Modal */}
-            <div className="relative bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-scale-in">
+            <div onPaste={pasteThumbnail} className="relative bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-scale-in">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-light-border dark:border-dark-border">
                     <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">
@@ -346,15 +366,18 @@ function ImportPreviewModal({
                             </div>
                             <div className="flex flex-col gap-2">
                                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleThumbnailUpload} className="hidden" id="thumbnail-upload" />
-                                <label htmlFor="thumbnail-upload" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg cursor-pointer transition-colors">
+                                <div className="flex flex-wrap gap-2"><label htmlFor="thumbnail-upload" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg cursor-pointer transition-colors">
                                     <Upload className="w-4 h-4" />
                                     Upload Image
                                 </label>
+                                <a href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(courseName.trim())}`} target="_blank" rel="noopener noreferrer" onClick={()=>setImageSearchOpened(true)} className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg"><Search className="w-4 h-4" />Browse images</a></div>
+                                {imageSearchOpened&&<button type="button" onClick={pasteImageFromClipboard} className="inline-flex items-center gap-2 text-sm text-blue-500 hover:underline"><ClipboardPaste className="w-4 h-4" />Paste copied image</button>}
                                 {thumbnail && (
                                     <button onClick={removeThumbnail} className="text-sm text-error hover:underline text-left">Remove</button>
                                 )}
                             </div>
                         </div>
+                        {imageSearchOpened&&<p className="mt-2 text-xs text-neutral-500">In Google Images, right-click the image and choose Copy image. Return here and paste it (Ctrl+V / Cmd+V), or click Paste copied image.</p>}
                         <div className="mt-3 flex gap-2">
                             <div className="relative flex-1">
                                 <Link2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-light-text-secondary dark:text-dark-text-secondary" />
