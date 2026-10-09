@@ -5,6 +5,7 @@ import { clearStudyHistory } from './studyTime.js'
 import { clearWatchCoverage } from './watchCoverage.js'
 import { loadBrowserImage } from './browserImages.js'
 import { moduleTotals } from './moduleTotals.js'
+import { exportProgressBackup, restoreProgressBackup } from './progressBackup.js'
 const tables = ['courses', 'modules', 'videos', 'notes', 'instructors', 'roadmaps', 'transcripts', 'summaries']
 let database
 const dirtyCourses = new Set()
@@ -143,6 +144,7 @@ export async function request(method, path, body = {}) {
         if (id === 'export') {
             const data = { version: 4, exportedAt: now }
             for (const name of tables) data[name] = (await all(name)).map(({fileHandle, folderHandle, ...row}) => row)
+            data.progress=exportProgressBackup()
             return data
         }
         if (id === 'reset') {
@@ -154,7 +156,7 @@ export async function request(method, path, body = {}) {
             saveLibraryRecovery({courses:[],modules:[],videos:[]})
             return { success: true }
         }
-        if (id === 'import') { for (const name of tables) for (const row of body[name] || []) await save(name, row); await saveRecovery(); return { success: true } }
+        if (id === 'import') { for (const name of tables) for (const row of body[name] || []) await save(name, row); restoreProgressBackup(body.progress); await saveRecovery(); return { success: true } }
     }
     if (table === 'analytics' && id === 'history') {
         const courses = await all('courses'), modules = await all('modules')

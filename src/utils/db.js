@@ -1,5 +1,6 @@
 import * as api from './api.js'
 import { sharedRequest } from './sharedRequest.js'
+import { exportProgressBackup, restoreProgressBackup } from './progressBackup.js'
 import { canonicalInstructor, normalizeCourseInstructors, instructorKey } from './instructorNames.js'
 import { restoreLocalModuleTitle } from './localCourseTitles.js'
 import { withPlaybackBookmark, isProgressResetting, writeCompletionBookmark } from './playbackBookmarks.js'
@@ -266,11 +267,14 @@ export async function clearAllData() {
 }
 
 export async function exportAllData() {
-    return api.get('/api/data/export')
+    const data=await api.get('/api/data/export')
+    return {...data,progress:exportProgressBackup()}
 }
 
 export async function importData(data) {
-    return api.post('/api/data/import', data)
+    const result=await api.post('/api/data/import', data)
+    restoreProgressBackup(data.progress)
+    return result
 }
 
 export async function recalculateAllCoursesProgress(mode) {

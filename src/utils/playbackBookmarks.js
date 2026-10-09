@@ -1,5 +1,6 @@
 const prefix = 'tutin_playback_'
 const cachedBookmarks = new Map()
+export function invalidatePlaybackBookmarks(){cachedBookmarks.clear()}
 let resettingProgress = false
 export const isProgressResetting = () => resettingProgress
 export function beginProgressReset() { resettingProgress = true }

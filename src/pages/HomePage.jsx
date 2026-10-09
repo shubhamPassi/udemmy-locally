@@ -1,7 +1,7 @@
 import { batchWork } from '../utils/batchWork'
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
 import { Grid, List, SortAsc, ChevronDown, FolderOpen, Search } from 'lucide-react'
-import { getAllCourses, addCourse, addModule, addVideo, setInstructorAvatar, recalculateAllCoursesProgress } from '../utils/db'
+import { getAllCourses, addCourse, addModule, addVideo, deleteCourse, setInstructorAvatar, recalculateAllCoursesProgress } from '../utils/db'
 import { useSettings } from '../contexts/SettingsContext'
 import { useSearch } from '../contexts/SearchContext'
 import { useNotification } from '../contexts/NotificationContext'
@@ -157,8 +157,14 @@ function HomePage() {
             }
         }
 
-        await saveModulesRecursive(courseData.modules || [])
-        return savedCourse
+        try {
+            await saveModulesRecursive(courseData.modules || [])
+            return savedCourse
+        } catch(error) {
+            try { await deleteCourse(savedCourse.id) }
+            catch(cleanupError) { console.error('Could not remove incomplete import:',cleanupError); throw new Error('Import failed and its incomplete course could not be removed. Remove the incomplete course before retrying.') }
+            throw error
+        }
     }
 
     // Search and sort courses
