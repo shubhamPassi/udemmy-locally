@@ -227,8 +227,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
             onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext) callbacks.current.onNext?.() }}
             onError={handleDriveError} />}
         {!isYouTube && !fallback && !error && !retrying && <StreamPlayerControls key={attempt} mediaRef={native} containerRef={container} />}
-        {retrying && !fallback && <div role="status" className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm">Reconnecting to Drive…</div>}
-        {mediaLoading && !retrying && !error && !fallback && <div role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm">Loading video…</div>}
+        {(retrying || mediaLoading) && !error && !fallback && <div role="status" aria-label="Loading video" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40"><span className="h-11 w-11 rounded-full border-4 border-white/20 border-t-white animate-spin" /></div>}
         {error && (isYouTube ? <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p> : <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-5"><div className="max-w-md text-center text-white"><p role="alert" className="text-sm leading-6">{error}</p><div className="mt-4 flex flex-wrap justify-center gap-3"><button onClick={() => retryDrive(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium">Retry video</button><button onClick={() => { clearTimeout(retryTimer.current); remember(true); setError(''); setRetrying(false); setFallback(true) }} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Use Drive preview</button></div></div></div>)}
     </div>
 })

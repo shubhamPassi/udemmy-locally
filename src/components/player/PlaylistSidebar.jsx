@@ -1,4 +1,5 @@
-import { courseCoverage, subscribeCoverage, coverageVersion } from '../../utils/watchCoverage'
+import { courseDuration } from '../../utils/courseDuration'
+import { courseCoverage, subscribeCoverage, coverageVersion, readCoverage, watchedSeconds } from '../../utils/watchCoverage'
 import { lazy, Suspense, useState, useMemo, useRef, useEffect, useCallback, useSyncExternalStore } from 'react'
 import {
     ChevronDown, ChevronRight, ChevronLeft, Check,
@@ -209,10 +210,11 @@ function PlaylistSidebar({
     // Use course's stored completion percentage
     useSyncExternalStore(subscribeCoverage,coverageVersion,coverageVersion)
     const coverage=courseCoverage(allVideos)
-    const progressPercentage = coverage.percent
+    const partialLessons = allVideos.filter(video => !video.isCompleted && video.duration > 0).reduce((sum, video) => sum + Math.min(1, watchedSeconds(readCoverage(video.id), video.duration) / video.duration), 0)
+    const progressPercentage = totalVideos ? Math.min(100, (completedVideos + partialLessons) / totalVideos * 100) : 0
 
     // Calculate remaining time
-    const remainingDuration = coverage.remaining
+
 
     /**
      * Render a module and its sub-modules recursively
@@ -366,16 +368,15 @@ function PlaylistSidebar({
                                 {completedVideos}/{totalVideos} videos completed
                             </span>
                             <span className="font-medium text-primary-fg">
-                                {progressPercentage.toFixed(1)}%
+                                {Math.round(progressPercentage)}%
                             </span>
                         </div>
                         {coverage.total > 0 && (
                             <div className="text-xs text-light-text-secondary dark:text-dark-text-secondary mb-2">
-                                {formatDuration(coverage.watched)} watched · {formatDuration(remainingDuration)} remaining · {formatDuration(coverage.total)} total
+                                {courseDuration(coverage.total)}
                             </div>
                         )}
                         {coverage.known < coverage.count && <p className="mb-2 text-xs text-neutral-500">Partial total · {coverage.known}/{coverage.count} durations known{metadataStatus?.done < metadataStatus?.total ? ' · Loading metadata…' : ' · Other durations appear when available'}</p>}
-                        <p className="mb-2 text-[10px] text-neutral-500">Watched coverage measures unique sections viewed from this update onward.</p>
                         <div className="progress-bar h-2 w-full bg-light-bg dark:bg-dark-bg rounded-full overflow-hidden">
                             <div
                                 className="progress-bar-fill h-full bg-[var(--primary-fg)] rounded-full transition-all duration-300"

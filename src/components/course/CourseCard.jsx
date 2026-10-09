@@ -1,6 +1,7 @@
+import { courseDuration } from '../../utils/courseDuration'
 import { Link, useNavigate } from 'react-router-dom'
 import { Play, Clock, Video, Pencil, Trash2, RefreshCw, Link2 } from 'lucide-react'
-import { formatDuration, deleteCourse, getInstructorAvatarAsync, updateCourse } from '../../utils/db'
+import { deleteCourse, getInstructorAvatarAsync, updateCourse } from '../../utils/db'
 import { useState, useEffect } from 'react'
 import { useNotification } from '../../contexts/NotificationContext'
 
@@ -65,7 +66,7 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
     }
 
     const completionPercentage = course.completionPercentage || 0
-    const formattedDuration = formatDuration(course.totalDuration)
+    const formattedDuration = courseDuration(course.totalDuration)
 
     async function handleDelete(e) {
         e.preventDefault()
