@@ -131,17 +131,19 @@ function ImportPreviewModal({
         event.preventDefault()
         handleThumbnailUpload({target:{files:[image]}})
     }
-    async function pasteImageFromClipboard() {
+    function browseImages() {
+        const url=`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(courseName.trim())}`
+        const popup=window.open(url,'course-thumbnail-search','popup=yes,width=1000,height=750,scrollbars=yes,resizable=yes')
+        if(!popup){showNotification('Allow pop-ups for this site to browse Google Images.', 'info');return}
+        popup.opener=null
+        setImageSearchOpened(true)
+    }
+    async function pasteImageUrl() {
         try {
-            const items=await navigator.clipboard.read()
-            for(const item of items) {
-                const type=item.types.find(type=>type.startsWith('image/'))
-                if(type){handleThumbnailUpload({target:{files:[await item.getType(type)]}});return}
-            }
-            showNotification('Copy the image itself from Google Images, then paste it here.', 'info')
-        } catch {
-            showNotification('Use Ctrl+V (or Cmd+V) in this form to paste the copied image.', 'info')
-        }
+            const text=(await navigator.clipboard.readText()).trim()
+            if(!/^https?:\/\/\S+$/i.test(text)) {showNotification('In Google Images, right-click the image and choose Copy image address.', 'info');return}
+            setThumbnailUrl(text)
+        } catch {showNotification('Paste the copied image address into the image URL field with Ctrl+V / Cmd+V.', 'info')}
     }
 
     function removeThumbnail() {
@@ -370,14 +372,14 @@ function ImportPreviewModal({
                                     <Upload className="w-4 h-4" />
                                     Upload Image
                                 </label>
-                                <a href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(courseName.trim())}`} target="_blank" rel="noopener noreferrer" onClick={()=>setImageSearchOpened(true)} className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg"><Search className="w-4 h-4" />Browse images</a></div>
-                                {imageSearchOpened&&<button type="button" onClick={pasteImageFromClipboard} className="inline-flex items-center gap-2 text-sm text-blue-500 hover:underline"><ClipboardPaste className="w-4 h-4" />Paste copied image</button>}
+                                <button type="button" onClick={browseImages} className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg"><Search className="w-4 h-4" />Browse images</button></div>
+                                {imageSearchOpened&&<button type="button" onClick={pasteImageUrl} className="inline-flex items-center gap-2 text-sm text-blue-500 hover:underline"><ClipboardPaste className="w-4 h-4" />Paste image URL</button>}
                                 {thumbnail && (
                                     <button onClick={removeThumbnail} className="text-sm text-error hover:underline text-left">Remove</button>
                                 )}
                             </div>
                         </div>
-                        {imageSearchOpened&&<p className="mt-2 text-xs text-neutral-500">In Google Images, right-click the image and choose Copy image. Return here and paste it (Ctrl+V / Cmd+V), or click Paste copied image.</p>}
+                        {imageSearchOpened&&<p className="mt-2 text-xs text-neutral-500">In the Google Images pop-up, right-click your image → Copy image address. Return here → Paste image URL → Use URL.</p>}
                         <div className="mt-3 flex gap-2">
                             <div className="relative flex-1">
                                 <Link2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-light-text-secondary dark:text-dark-text-secondary" />
