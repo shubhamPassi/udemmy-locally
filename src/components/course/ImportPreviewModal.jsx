@@ -1,3 +1,4 @@
+import InstructorPicker from './InstructorPicker'
 import { useState, useRef, useEffect } from 'react'
 import {
     X, Upload, Folder, FolderOpen, Video, Clock, AlertTriangle,
@@ -329,14 +330,7 @@ function ImportPreviewModal({
                         <label className="block text-sm font-medium mb-2">
                             Instructor <span className="text-light-text-secondary dark:text-dark-text-secondary font-normal">(optional)</span>
                         </label>
-                        <input
-                            type="text"
-                            value={instructor}
-                            onChange={(e) => setInstructor(e.target.value.slice(0, 100))}
-                            className="w-full px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-white dark:bg-dark-bg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
-                            placeholder="Enter instructor name"
-                            maxLength={100}
-                        />
+                        <InstructorPicker value={instructor} onChange={setInstructor} />
                     </div>
 
                     {/* Thumbnail */}

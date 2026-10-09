@@ -1,3 +1,4 @@
+import InstructorPicker from './InstructorPicker'
 import { useState, useRef, useEffect } from 'react'
 import { X, Upload, Image, Trash2, Folder, Video, Clock, Link2, Loader2 } from 'lucide-react'
 import { updateCourse, formatDuration } from '../../utils/db'
@@ -350,14 +351,7 @@ function EditCourseModal({ course, isOpen, onClose, onSave }) {
                         <label className="block text-sm font-medium mb-2">
                             Instructor
                         </label>
-                        <input
-                            type="text"
-                            value={formData.instructor}
-                            onChange={(e) => handleChange('instructor', e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-white dark:bg-dark-bg focus:border-primary dark:focus:border-blue-400 outline-none focus:outline-none ring-0 focus:ring-0"
-                            placeholder="Instructor name"
-                            maxLength={100}
-                        />
+                        <InstructorPicker value={formData.instructor} onChange={value => handleChange('instructor', value)} />
                     </div>
 
                     {/* Description */}

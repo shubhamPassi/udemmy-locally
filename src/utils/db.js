@@ -1,4 +1,5 @@
 import * as api from './api.js'
+import { canonicalInstructor, normalizeCourseInstructors, instructorKey } from './instructorNames.js'
 import { restoreLocalModuleTitle } from './localCourseTitles.js'
 import { withPlaybackBookmark, isProgressResetting, writeCompletionBookmark } from './playbackBookmarks.js'
 
@@ -18,6 +19,7 @@ export function generateId(prefix = '') {
 // ============= COURSE OPERATIONS =============
 
 export async function addCourse(courseData) {
+    if(courseData.instructor)courseData={...courseData,instructor:canonicalInstructor(courseData.instructor,await getAllCourses())}
     return api.post(`/api/courses`, { id: generateId('course_'), ...courseData })
 }
 
@@ -31,10 +33,11 @@ export async function getCourseContent(courseId) {
 }
 
 export async function getAllCourses() {
-    return api.get(`/api/courses`)
+    return normalizeCourseInstructors(await api.get(`/api/courses`))
 }
 
 export async function updateCourse(courseId, updates) {
+    if(updates.instructor!==undefined)updates={...updates,instructor:canonicalInstructor(updates.instructor,await getAllCourses())}
     return api.put(`/api/courses/${courseId}`, updates)
 }
 
@@ -254,7 +257,7 @@ export async function removeInstructorAvatar(instructorName) {
 
 export async function getCoursesByInstructor(instructorName) {
     if (!instructorName) return []
-    return api.get(`/api/courses?instructor=${encodeURIComponent(instructorName)}`)
+    return (await getAllCourses()).filter(course=>instructorKey(course.instructor)===instructorKey(instructorName))
 }
 
 // ============= DATA MANAGEMENT =============

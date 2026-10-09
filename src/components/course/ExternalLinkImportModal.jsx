@@ -1,3 +1,4 @@
+import InstructorPicker from './InstructorPicker'
 import { useState, useRef, useEffect } from 'react'
 import { X, Upload, Link2, Folder, Video, Clock, Image, Sparkles, Loader2 } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
@@ -341,14 +342,7 @@ function ExternalLinkImportModal({ isOpen, onClose, onImport }) {
                         <label className="block text-sm font-medium mb-2">
                             Instructor <span className="text-light-text-secondary dark:text-dark-text-secondary font-normal">(optional)</span>
                         </label>
-                        <input
-                            type="text"
-                            value={formData.instructor}
-                            onChange={(e) => handleChange('instructor', e.target.value.slice(0, 100))}
-                            className="w-full px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-white dark:bg-dark-bg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
-                            placeholder="Enter instructor name"
-                            maxLength={100}
-                        />
+                        <InstructorPicker value={formData.instructor} onChange={value => setFormData(previous => ({ ...previous, instructor: value }))} />
                     </div>
 
                     {/* Thumbnail */}

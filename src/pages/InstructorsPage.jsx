@@ -1,3 +1,4 @@
+import { instructorKey } from '../utils/instructorNames'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Users, Search, BookOpen, Play, X, Clock, Camera } from 'lucide-react'
@@ -72,7 +73,7 @@ function InstructorsPage() {
 
     // Get selected instructor's courses
     const selectedInstructor = filterInstructor
-        ? instructors.find(i => i.name === filterInstructor)
+        ? instructors.find(i => instructorKey(i.name) === instructorKey(filterInstructor))
         : null
 
     const clearFilter = () => {
