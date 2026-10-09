@@ -30,6 +30,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
     const lastCachedSecond = useRef(null)
     const [fallback, setFallback] = useState(false), [error, setError] = useState('')
     const [retrying, setRetrying] = useState(false), [attempt, setAttempt] = useState(0)
+    const [mediaLoading,setMediaLoading]=useState(true)
     const retryTimer = useRef(null), retryCount = useRef(0), continuePlaying = useRef(autoPlay)
     const callbacks = useRef({ onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange })
     callbacks.current = { onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange }
@@ -44,6 +45,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
         setError('')
         setFallback(false)
         setRetrying(true)
+        setMediaLoading(true)
         setAttempt(value => value + 1)
     }
     function handleDriveError(event) {
@@ -64,10 +66,10 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
     const flushStudyTime=useStudyTime(()=>{
         if(isYouTube) {
             const yt=player.current
-            return yt?.getCurrentTime?{time:yt.getCurrentTime(),rate:yt.getPlaybackRate(),playing:yt.getPlayerState()===1}:null
+            return yt?.getCurrentTime?{time:yt.getCurrentTime(),duration:yt.getDuration(),rate:yt.getPlaybackRate(),playing:yt.getPlayerState()===1}:null
         }
         const media=native.current
-        return media?{element:media,time:media.currentTime,rate:media.playbackRate,seeking:media.seeking,playing:!media.paused&&!media.seeking&&media.readyState>=3}:null
+        return media?{element:media,time:media.currentTime,duration:media.duration,rate:media.playbackRate,seeking:media.seeking,playing:!media.paused&&!media.seeking&&media.readyState>=3}:null
     },video.id,courseId)
 
     function remember(force = false) {
@@ -178,6 +180,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
                 playerVars: { enablejsapi: 1, origin: window.location.origin, start: Math.floor(position.current), autoplay: autoPlay ? 1 : 0, rel: 0 },
                 events: {
                     onReady: event => {
+                        setMediaLoading(false)
                         const length = event.target.getDuration()
                         if (length > 0) { duration.current = length; updateVideo(video.id, { duration: length }).catch(console.error) }
                         if (position.current > 0) event.target.seekTo(position.current, true)
@@ -210,6 +213,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
                 duration.current = element.duration
                 if (position.current > 0) element.currentTime = Math.min(position.current, Math.max(0, element.duration - 1))
                 nativeReady.current = true
+                setMediaLoading(false)
                 setRetrying(false)
                 setError('')
                 updateVideo(video.id, { duration: element.duration }).catch(console.error)
@@ -224,6 +228,7 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
             onError={handleDriveError} />}
         {!isYouTube && !fallback && !error && !retrying && <StreamPlayerControls key={attempt} mediaRef={native} containerRef={container} />}
         {retrying && !fallback && <div role="status" className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm">Reconnecting to Drive…</div>}
+        {mediaLoading && !retrying && !error && !fallback && <div role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm">Loading video…</div>}
         {error && (isYouTube ? <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p> : <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-5"><div className="max-w-md text-center text-white"><p role="alert" className="text-sm leading-6">{error}</p><div className="mt-4 flex flex-wrap justify-center gap-3"><button onClick={() => retryDrive(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium">Retry video</button><button onClick={() => { clearTimeout(retryTimer.current); remember(true); setError(''); setRetrying(false); setFallback(true) }} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Use Drive preview</button></div></div></div>)}
     </div>
 })

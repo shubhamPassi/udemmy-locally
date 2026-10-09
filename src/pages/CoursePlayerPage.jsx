@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ChevronLeft, Menu } from 'lucide-react'
-import { getCourse, getCourseContent, getInstructorAvatarAsync, buildModuleTree } from '../utils/db'
+import { getCourse, getCourseContent, getVideosByCourse, getInstructorAvatarAsync, buildModuleTree } from '../utils/db'
 import { useSettings } from '../contexts/SettingsContext'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import VideoPlayer from '../components/player/CourseVideoPlayer'
@@ -10,6 +10,7 @@ import { IS_BROWSER_MODE } from '../utils/api'
 import { resumeTime } from '../utils/playbackBookmarks'
 import PlaylistSidebar from '../components/player/PlaylistSidebar'
 import { playlistDisplay } from '../utils/playlistDisplay'
+import { scanVideoMetadata } from '../utils/videoMetadata'
 function findModulePath(modules, targetModuleId) {
     if (!modules || !targetModuleId) return []
 
@@ -77,6 +78,9 @@ function CoursePlayerPage() {
     const [autoPlay, setAutoPlay] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
+    const [contentLoading,setContentLoading]=useState(true),[contentError,setContentError]=useState('')
+    const [metadataVideos,setMetadataVideos]=useState([]),[metadataStatus,setMetadataStatus]=useState({total:0,done:0,failed:0})
+    const loadEpoch=useRef(0),metadataDurations=useRef(new Map())
     const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 1024)
     const [sidebarWidth, setSidebarWidth] = useState(() => {
         const saved = localStorage.getItem('sidebarPanelWidth')
@@ -142,6 +146,7 @@ function CoursePlayerPage() {
     // Load course data (reload when progress calculation mode changes)
     useEffect(() => {
         loadCourseData()
+        return () => { loadEpoch.current++ }
     }, [courseId])
 
     // Refresh only course progress when calculation mode changes (don't interrupt video)
@@ -187,78 +192,42 @@ function CoursePlayerPage() {
     }, [course?.instructor])
 
     async function loadCourseData() {
-        try {
-            setIsLoading(true)
-            setError(null)
-
-            const { course: courseData, flat: modulesWithVideos, tree: moduleTree } = await fetchCourseContent(courseId)
-            if (!courseData) {
-                setError('Course not found')
-                return
-            }
-            setCourse(courseData)
-
-            setModules(moduleTree)
-
-            // Only set first video if no video is currently selected
-            if (!currentVideo && modulesWithVideos.length > 0) {
-                let videoToPlay = null
-
-                // Get a flat list of all videos to easily find the next one
-                const allVideos = []
-                for (const module of modulesWithVideos) {
-                    if (module.videos?.length > 0) {
-                        allVideos.push(...module.videos)
-                    }
-                }
-
-                if (allVideos.length > 0) {
-                    // Find the most recently watched video
-                    let mostRecentVideo = null
-                    for (const video of allVideos) {
-                        if (video.lastWatchedAt) {
-                            if (!mostRecentVideo || new Date(video.lastWatchedAt) > new Date(mostRecentVideo.lastWatchedAt)) {
-                                mostRecentVideo = video
-                            }
-                        }
-                    }
-
-                    if (mostRecentVideo) {
-                        // If it's in progress, resume it
-                        if (!mostRecentVideo.isCompleted && (mostRecentVideo.watchProgress || 0) < 0.95) {
-                            videoToPlay = mostRecentVideo
-                        } else {
-                            // If it's completed, play the next video in the course
-                            const currentIndex = allVideos.findIndex(v => v.id === mostRecentVideo.id)
-                            if (currentIndex !== -1 && currentIndex < allVideos.length - 1) {
-                                videoToPlay = allVideos[currentIndex + 1]
-                            }
-                        }
-                    }
-
-                    // Fallback to first unwatched video
-                    if (!videoToPlay) {
-                        videoToPlay = allVideos.find(v => !v.isCompleted)
-                    }
-
-                    // Final fallback to the very first video
-                    if (!videoToPlay) {
-                        videoToPlay = allVideos[0]
-                    }
-                }
-
-                if (videoToPlay) {
-                    setCurrentVideo(videoToPlay)
-                    setAutoPlay(false) // Don't autoplay on initial load/reload
-                }
-            }
-        } catch (err) {
-            console.error('Failed to load course:', err)
-            setError('Failed to load course: ' + err.message)
-        } finally {
-            setIsLoading(false)
+        const epoch=++loadEpoch.current
+        const valid=()=>loadEpoch.current===epoch
+        setIsLoading(true);setError(null);setContentLoading(true);setContentError('')
+        setCurrentVideo(null);setModules([]);setCourse(null);setMetadataVideos([]);metadataDurations.current.clear()
+        function chooseVideo(videos) {
+            const recent=[...videos].filter(video=>video.lastWatchedAt).sort((a,b)=>new Date(b.lastWatchedAt)-new Date(a.lastWatchedAt))[0]
+            const selected=recent&&!recent.isCompleted?recent:videos.find(video=>!video.isCompleted)||videos[0]
+            if(selected)setCurrentVideo(previous=>previous||selected)
+            setAutoPlay(false)
         }
+        // The selected lesson does not wait for the sidebar's module tree.
+        getVideosByCourse(courseId).then(videos=>{
+            if(!valid())return
+            chooseVideo(videos);setMetadataVideos(videos);setIsLoading(false)
+        }).catch(err=>{if(valid()){setError('Could not load lessons: '+err.message);setIsLoading(false)}})
+        getCourse(courseId).then(data=>{if(valid())setCourse(data)}).catch(console.error)
+        fetchCourseContent(courseId).then(({course: data,flat,tree})=>{
+            if(!valid())return
+            function mergeMetadata(modules){return modules.map(module=>({...module,videos:module.videos.map(video=>metadataDurations.current.has(video.id)?{...video,duration:metadataDurations.current.get(video.id)}:video),subModules:mergeMetadata(module.subModules||[])}))}
+            setCourse(data);setModules(mergeMetadata(tree));setContentError('')
+            const videos=flat.flatMap(module=>module.videos||[])
+            chooseVideo(videos);setMetadataVideos(previous=>previous.length?previous:videos);setIsLoading(false);setError(null)
+        }).catch(err=>{if(valid())setContentError('Could not load course content: '+err.message)})
+          .finally(()=>{if(valid())setContentLoading(false)})
     }
+    useEffect(()=>{
+        if(!metadataVideos.length)return
+        const controller=new AbortController()
+        scanVideoMetadata(metadataVideos,controller.signal,(id,duration)=>{
+            metadataDurations.current.set(id,duration)
+            function merge(tree){return tree.map(module=>({...module,videos:(module.videos||[]).map(video=>video.id===id?{...video,duration}:video),subModules:merge(module.subModules||[])}))}
+            setModules(merge)
+            setCurrentVideo(previous=>previous?.id===id?{...previous,duration}:previous)
+        },setMetadataStatus)
+        return()=>controller.abort()
+    },[metadataVideos])
 
     const handleVideoSelect = useCallback((video) => {
         setAutoPlay(true) // Autoplay when manually selecting from playlist
@@ -267,6 +236,7 @@ function CoursePlayerPage() {
 
     // Lightweight refresh - only updates modules/videos data without reloading video player
     async function refreshModulesOnly() {
+        setContentLoading(true);setContentError('')
         try {
             const { course: courseData, flat: modulesWithVideos, tree: moduleTree } = await fetchCourseContent(courseId)
             setModules(moduleTree)
@@ -287,7 +257,8 @@ function CoursePlayerPage() {
             }
         } catch (err) {
             console.error('Failed to refresh modules:', err)
-        }
+            setContentError('Could not load course content: '+err.message)
+        } finally { setContentLoading(false) }
     }
 
     // Refresh only the current video's data (used after AI transcription)
@@ -355,24 +326,6 @@ function CoursePlayerPage() {
         }
     }
 
-    if (isLoading) {
-        return <LoadingSpinner message="Loading course..." />
-    }
-
-    if (error) {
-        return (
-            <div className="text-center py-16">
-                <p className="text-error mb-4">{error}</p>
-                <Link
-                    to="/"
-                    className="inline-flex items-center gap-2 text-primary-fg hover:underline"
-                >
-                    <ChevronLeft className="w-4 h-4" />
-                    Back to courses
-                </Link>
-            </div>
-        )
-    }
 
     return (
         <div className="-mx-4 -my-6 relative overflow-hidden">
@@ -460,13 +413,17 @@ function CoursePlayerPage() {
                         </>
                     ) : (
                         <div className="flex-1 flex items-center justify-center bg-black text-white">
-                            <p>No video selected</p>
+                            {isLoading ? <LoadingSpinner message="Loading selected lesson…" /> : error ? <div className="p-5 text-center"><p role="alert" className="text-sm">{error}</p><button onClick={loadCourseData} className="mt-3 rounded bg-blue-600 px-4 py-2">Retry lesson</button></div> : <p>No video selected</p>}
                         </div>
                     )}
                 </div>
 
                 {/* Playlist Sidebar */}
                 <PlaylistSidebar
+                    contentLoading={contentLoading}
+                    contentError={contentError}
+                    metadataStatus={metadataStatus}
+                    onRetryContent={handlePlaylistRefresh}
                     course={course}
                     modules={modules}
                     currentVideo={currentVideo}

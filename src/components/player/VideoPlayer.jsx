@@ -24,7 +24,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     const videoRef = useRef(null)
     useStudyTime(()=>{
         const media=videoRef.current
-        return media?.nodeName==='VIDEO'?{element:media,time:media.currentTime,rate:media.playbackRate,seeking:media.seeking,playing:!media.paused&&!media.seeking&&media.readyState>=3}:null
+        return media?.nodeName==='VIDEO'?{element:media,time:media.currentTime,duration:media.duration,rate:media.playbackRate,seeking:media.seeking,playing:!media.paused&&!media.seeking&&media.readyState>=3}:null
     },video?.id,courseId)
     const embeddedPlayerRef = useRef(null)
     const localBookmarkRef = useRef(null)

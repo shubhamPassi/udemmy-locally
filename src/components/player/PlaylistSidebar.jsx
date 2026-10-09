@@ -1,3 +1,4 @@
+import { courseCoverage, subscribeCoverage, coverageVersion } from '../../utils/watchCoverage'
 import { lazy, Suspense, useState, useMemo, useRef, useEffect, useCallback, useSyncExternalStore } from 'react'
 import {
     ChevronDown, ChevronRight, ChevronLeft, Check,
@@ -47,6 +48,7 @@ function flattenModuleTree(modules) {
 }
 
 function PlaylistSidebar({
+    contentLoading, contentError, onRetryContent, metadataStatus,
     course,
     modules,
     currentVideo,
@@ -205,12 +207,12 @@ function PlaylistSidebar({
     const totalDuration = allVideos.reduce((sum, v) => sum + (v.duration || 0), 0)
 
     // Use course's stored completion percentage
-    const progressPercentage = course?.completionPercentage ?? 0
+    useSyncExternalStore(subscribeCoverage,coverageVersion,coverageVersion)
+    const coverage=courseCoverage(allVideos)
+    const progressPercentage = coverage.percent
 
     // Calculate remaining time
-    const remainingDuration = allVideos
-        .filter(v => !v.isCompleted)
-        .reduce((sum, v) => sum + (v.duration || 0), 0)
+    const remainingDuration = coverage.remaining
 
     /**
      * Render a module and its sub-modules recursively
@@ -364,14 +366,16 @@ function PlaylistSidebar({
                                 {completedVideos}/{totalVideos} videos completed
                             </span>
                             <span className="font-medium text-primary-fg">
-                                {Math.round(progressPercentage)}%
+                                {progressPercentage.toFixed(1)}%
                             </span>
                         </div>
-                        {remainingDuration > 0 && (
+                        {coverage.total > 0 && (
                             <div className="text-xs text-light-text-secondary dark:text-dark-text-secondary mb-2">
-                                {formatDuration(remainingDuration)} remaining
+                                {formatDuration(coverage.watched)} watched · {formatDuration(remainingDuration)} remaining · {formatDuration(coverage.total)} total
                             </div>
                         )}
+                        {coverage.known < coverage.count && <p className="mb-2 text-xs text-neutral-500">Partial total · {coverage.known}/{coverage.count} durations known{metadataStatus?.done < metadataStatus?.total ? ' · Loading metadata…' : ' · Other durations appear when available'}</p>}
+                        <p className="mb-2 text-[10px] text-neutral-500">Watched coverage measures unique sections viewed from this update onward.</p>
                         <div className="progress-bar h-2 w-full bg-light-bg dark:bg-dark-bg rounded-full overflow-hidden">
                             <div
                                 className="progress-bar-fill h-full bg-[var(--primary-fg)] rounded-full transition-all duration-300"
@@ -428,7 +432,7 @@ function PlaylistSidebar({
                 <div className="flex-1 overflow-hidden relative flex flex-col">
                     {/* Playlist Tab */}
                     <div className={`flex-1 overflow-hidden flex-col ${activeTab === 'playlist' ? 'flex' : 'hidden'}`}>
-                        {isBulkEditing ? (
+                        {contentLoading && !modules.length ? <div role="status" className="p-6 text-sm text-neutral-400">Loading course content…</div> : contentError ? <div className="p-5 text-sm"><p role="alert">{contentError}</p><button onClick={onRetryContent} className="mt-3 rounded bg-blue-600 px-4 py-2 text-white">Retry content</button></div> : isBulkEditing ? (
                             <Suspense fallback={null}>
                                 <BulkEditPlaylist
                                     modules={modules}

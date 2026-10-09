@@ -2,6 +2,7 @@
 import { saveLibraryRecovery, restoreLibraryRecovery } from './browserPersistence.js'
 import { clearPlaybackBookmarks } from './playbackBookmarks.js'
 import { clearStudyHistory } from './studyTime.js'
+import { clearWatchCoverage } from './watchCoverage.js'
 import { loadBrowserImage } from './browserImages.js'
 const tables = ['courses', 'modules', 'videos', 'notes', 'instructors', 'roadmaps', 'transcripts', 'summaries']
 let database
@@ -130,6 +131,7 @@ export async function request(method, path, body = {}) {
             })
             clearPlaybackBookmarks()
             clearStudyHistory()
+            clearWatchCoverage()
             await saveRecovery()
             try { localStorage.setItem('tutin_progress_reset', String(Date.now())) } catch {}
             return { success:true }
@@ -147,6 +149,7 @@ export async function request(method, path, body = {}) {
             for (const name of [...tables, 'settings']) await operation(name, 'clear')
             clearPlaybackBookmarks()
             clearStudyHistory()
+            clearWatchCoverage()
             saveLibraryRecovery({courses:[],modules:[],videos:[]})
             return { success: true }
         }
