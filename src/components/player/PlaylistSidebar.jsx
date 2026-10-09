@@ -58,7 +58,7 @@ function CourseProgressHeader({ allVideos, metadataStatus, onRetryMetadata }) {
                         </div>
                         {coverage.known < coverage.count && <p className="mb-2 text-xs text-neutral-500">Partial total · {coverage.known}/{coverage.count} durations known{metadataStatus?.done < metadataStatus?.total ? ' · Loading metadata…' : ' · Other durations appear when available'}</p>}
                         {metadataStatus?.failed>0 && metadataStatus.done===metadataStatus.total && <button onClick={onRetryMetadata} className="mb-2 text-xs text-blue-500 hover:underline">Retry unavailable durations</button>}
-                        <div className="progress-bar h-2 w-full bg-light-bg dark:bg-dark-bg rounded-full overflow-hidden">
+                        <div role="progressbar" aria-label="Course completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progressPercentage)} className="progress-bar h-2 w-full bg-light-bg dark:bg-dark-bg rounded-full overflow-hidden">
                             <div
                                 className="progress-bar-fill h-full bg-[var(--primary-fg)] rounded-full transition-all duration-300"
                                 style={{ width: `${progressPercentage}%` }}

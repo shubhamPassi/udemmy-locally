@@ -10,6 +10,7 @@ import { getRoadmaps, addRoadmap, updateRoadmap, deleteRoadmap as deleteRoadmapD
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import { useNotification } from '../contexts/NotificationContext'
 import { fitRoadmapViewport } from '../utils/roadmapLayout'
+import {pushRoadmapHistory,undoRoadmapHistory} from '../utils/roadmapHistory'
 
 // Generate unique ID
 const generateId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -41,8 +42,8 @@ function RoadmapPage() {
     const [showDeleteDialog, setShowDeleteDialog] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
     const [history,setHistory]=useState([]),[renameTitle,setRenameTitle]=useState(''),[renaming,setRenaming]=useState(false)
-    function rememberEdit(){setHistory(previous=>[...previous.slice(-19),{nodes,connections}])}
-    function undoEdit(){const previous=history[history.length-1];if(!previous)return;setNodes(previous.nodes);setConnections(previous.connections);setHistory(history.slice(0,-1));setConnectingFrom(null)}
+    function rememberEdit(){setHistory(previous=>pushRoadmapHistory(previous,nodes,connections))}
+    function undoEdit(){const previous=undoRoadmapHistory(history);if(!previous)return;setNodes(previous.snapshot.nodes);setConnections(previous.snapshot.connections);setHistory(previous.history);setConnectingFrom(null)}
     async function renameRoadmap(){const title=renameTitle.trim();if(!title)return;try{const updated={...currentRoadmap,title,name:title};await updateRoadmap({id:currentRoadmap.id,title,name:title});setCurrentRoadmap(updated);setRoadmaps(previous=>previous.map(roadmap=>roadmap.id===updated.id?updated:roadmap));setRenaming(false)}catch{showNotification('Could not rename roadmap.','error')}}
 
     // Canvas state

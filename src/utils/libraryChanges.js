@@ -6,8 +6,13 @@ export function publishLibraryChange(table,courseId){
 }
 export function subscribeLibraryChanges(listener){
     if(typeof window==='undefined')return()=>{}
-    let timer
-    const schedule=detail=>{clearTimeout(timer);timer=setTimeout(()=>listener(detail),200)}
+    let timer,pending
+    const schedule=detail=>{
+        if(pending&&pending.courseId!==detail?.courseId)pending={...detail,courseId:null}
+        else pending=detail
+        clearTimeout(timer)
+        timer=setTimeout(()=>{const change=pending;pending=null;listener(change)},200)
+    }
     const local=event=>schedule(event.detail)
     const remote=event=>{if(event.key==='tutin_library_change'){try{schedule(JSON.parse(event.newValue))}catch{}}}
     window.addEventListener('tutin-library-change',local);window.addEventListener('storage',remote)

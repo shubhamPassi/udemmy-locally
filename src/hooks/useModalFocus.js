@@ -4,6 +4,8 @@ export default function useModalFocus(active,host,onClose){
     useEffect(()=>{
         if(!active)return
         const previous=document.activeElement
+        const previousOverflow=document.body.style.overflow
+        document.body.style.overflow='hidden'
         const node=host.current
         const selectors='button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]'
         const first=node?.querySelector(selectors);first?.focus()
@@ -17,6 +19,6 @@ export default function useModalFocus(active,host,onClose){
             else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
         }
         node?.addEventListener('keydown',keydown)
-        return()=>{node?.removeEventListener('keydown',keydown);previous?.focus?.()}
+        return()=>{node?.removeEventListener('keydown',keydown);document.body.style.overflow=previousOverflow;previous?.focus?.()}
     },[active,host])
 }

@@ -44,6 +44,21 @@ export async function updateCourse(courseId, updates) {
     return api.put(`/api/courses/${courseId}`, updates)
 }
 
+export async function renameInstructorCourses(courses, name) {
+    const target=String(name||'').trim().replace(/\s+/g,' ')
+    if(!target)throw new Error('Enter an instructor name.')
+    const sourceIds=new Set(courses.map(course=>course.id))
+    const others=(await getAllCourses()).filter(course=>!sourceIds.has(course.id))
+    const instructor=canonicalInstructor(target,others)
+    const original=courses.find(course=>course.instructor)?.instructor
+    const originalAvatar=original?await getInstructorAvatarAsync(original):null
+    if(originalAvatar && !await getInstructorAvatarAsync(instructor))await setInstructorAvatar(instructor,originalAvatar)
+    // Preserve the requested casing for a rename, while reusing the target
+    // instructor's spelling when merging into another existing instructor.
+    for(const course of courses)await api.put(`/api/courses/${course.id}`,{instructor})
+    return instructor
+}
+
 export async function deleteCourse(courseId) {
     return api.del(`/api/courses/${courseId}`)
 }

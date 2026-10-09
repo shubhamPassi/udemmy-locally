@@ -15,13 +15,18 @@ test('backup restores exact coverage, resume positions and study hours without d
   recordWatchedRange('lesson',10,20)
   saveStudySession('session',{videoId:'lesson',courseId:'course',hours:{'2026-10-09T10':10}})
   storage.secret='should not export'
+  storage.tutin_daily_goal='30'
+  storage.tutin_hide_upcoming_durations='true'
   const backup=exportProgressBackup()
   assert.ok(!JSON.stringify(backup).includes('secret'))
   clearWatchCoverage();clearStudyHistory();clearPlaybackBookmarks()
+  delete storage.tutin_daily_goal;delete storage.tutin_hide_upcoming_durations
   restoreProgressBackup(backup);restoreProgressBackup(backup)
   assert.equal(readPlaybackBookmark('lesson').position,40)
   assert.deepEqual(readCoverage('lesson'),[[10,20]])
   assert.equal(readStudyHours()['2026-10-09T10'],10)
+  assert.equal(storage.tutin_daily_goal,'30')
+  assert.equal(storage.tutin_hide_upcoming_durations,'true')
   restoreProgressBackup({version:1,bookmarks:{secret:{position:1}},coverage:{other:[[0,10]]},sessions:{bad:{version:1,hours:{}}}})
   assert.equal(storage.secret,'should not export')
  }finally{clearWatchCoverage();clearStudyHistory();clearPlaybackBookmarks();globalThis.localStorage=original}
@@ -37,4 +42,10 @@ test('restoring a JSON backup preserves already connected local file and folder 
  assert.deepEqual(course.folderHandle,folderHandle)
  assert.deepEqual(video.fileHandle,fileHandle)
  assert.equal(course.title,'Restored')
+})
+test('restore reports storage exhaustion instead of silently dropping study sessions',()=>{
+ const original=globalThis.localStorage
+ globalThis.localStorage={getItem:()=>null,setItem:()=>{throw Error('Storage full')}}
+ try{assert.throws(()=>restoreProgressBackup({version:1,sessions:{tutin_study_session_full:{version:1,hours:{'2026-10-09T10':10}}}}),/Storage full/)}
+ finally{globalThis.localStorage=original}
 })
