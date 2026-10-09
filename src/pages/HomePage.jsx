@@ -1,3 +1,4 @@
+import { batchWork } from '../utils/batchWork'
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
 import { Grid, List, SortAsc, ChevronDown, FolderOpen, Search } from 'lucide-react'
 import { getAllCourses, addCourse, addModule, addVideo, setInstructorAvatar, recalculateAllCoursesProgress } from '../utils/db'
@@ -131,9 +132,7 @@ function HomePage() {
                 })
 
                 const videos = module.videos || []
-                for (let j = 0; j < videos.length; j++) {
-                    const video = videos[j]
-                    await addVideo({
+                await batchWork(videos, (video, j) => addVideo({
                         courseId: savedCourse.id,
                         moduleId: savedModule.id,
                         title: video.title,
@@ -144,8 +143,7 @@ function HomePage() {
                         duration: video.duration,
                         order: j,
                         fileHandle: video.fileHandle
-                    })
-                }
+                    }), api.IS_BROWSER_MODE ? 8 : 1)
 
                 if (module.subModules && module.subModules.length > 0) {
                     await saveModulesRecursive(module.subModules, savedModule.id)
