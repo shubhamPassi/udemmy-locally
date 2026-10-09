@@ -362,7 +362,7 @@ function PlaylistSidebar({
                 <div className="flex flex-col border-b border-light-border dark:border-dark-border bg-white dark:bg-dark-surface z-10">
                     {/* Top Progress Bar */}
                     <div className="px-4 pt-4 pb-2">
-                        <div className="flex items-center justify-between text-sm mb-1">
+                        <div className="flex items-center justify-between text-sm mb-3">
                             <span className="text-light-text-secondary dark:text-dark-text-secondary">
                                 {completedVideos}/{totalVideos} videos completed
                             </span>
