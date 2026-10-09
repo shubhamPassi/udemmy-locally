@@ -60,10 +60,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     const [selectedCaptionLang, setSelectedCaptionLang] = useState(() => settings.captionLanguage || 'source')
     const [captionChunks, setCaptionChunks] = useState([])
     const [showCCMenu, setShowCCMenu] = useState(false)
-    const [isSpeedBoosting, setIsSpeedBoosting] = useState(false)
     const [isTransitioning, setIsTransitioning] = useState(false)
-    const [speedBeforeBoost, setSpeedBeforeBoost] = useState(1)
-    const wasSpeedBoostingRef = useRef(false)
     const pendingAutoPlayRef = useRef(false) // Track autoplay intent during video transitions
     const [showTranslateModal, setShowTranslateModal] = useState(false)
     // [DUB FEATURE HIDDEN] — state kept but hardcoded to disabled
@@ -384,7 +381,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             // Ensure playback speed is applied to new source
             const isYt = video?.youtubeId || video?.url?.startsWith('http')
             if (!isYt) {
-                videoRef.current.playbackRate = isSpeedBoosting ? 2 : playbackSpeed
+                videoRef.current.playbackRate = playbackSpeed
             }
 
             // Auto-resume from last watched position
@@ -941,11 +938,11 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     useEffect(() => {
         const isYt = video?.youtubeId || video?.url?.startsWith('http')
         if (!isYt) {
-            const rate = isSpeedBoosting ? 2 : playbackSpeed
+            const rate = playbackSpeed
             if (videoRef.current) videoRef.current.playbackRate = rate
             // [DUB FEATURE HIDDEN] if (dubAudioRef.current) dubAudioRef.current.playbackRate = rate
         }
-    }, [playbackSpeed, isSpeedBoosting, videoUrl])
+    }, [playbackSpeed, videoUrl])
 
     // Fetch caption languages
     useEffect(() => {
@@ -1032,16 +1029,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     // Whether the control bar is currently visible
     const controlsVisible = showControls
 
-    // Handle video click - don't toggle play if we just finished speed boosting
-    function handleVideoClick() {
-        if (wasSpeedBoostingRef.current) {
-            wasSpeedBoostingRef.current = false
-            return // Don't toggle play/pause after speed boost
-        }
-        togglePlay()
-    }
-
-    const speedOptions = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+    function handleVideoClick() { togglePlay() }
 
     // YouTube and Google Drive videos are embedded in cross-origin iframes
     // whose play/pause/seek/volume can't be controlled from outside.
@@ -1174,18 +1162,6 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                 >
                 </video>
             )}
-
-            {/* Speed Boost Indicator */}
-            {isSpeedBoosting && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-1.5 bg-black/60 backdrop-blur-md text-white rounded-full font-semibold text-sm shadow-md flex items-center gap-1.5 select-none pointer-events-none transition-all">
-                    <span>2x</span>
-                    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                        <path d="M4 6l8.5 6L4 18V6zm9 0l8.5 6-8.5 6V6z" />
-                    </svg>
-                </div>
-            )}
-
-
 
             {/* Error Overlay */}
             {error && (

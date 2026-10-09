@@ -1,3 +1,4 @@
+import { driveFailureMessage } from '../../utils/driveFailure'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { updateVideoProgress, updateVideo, markVideoComplete } from '../../utils/db'
 import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks'
@@ -32,17 +33,18 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
     const [retrying, setRetrying] = useState(false), [attempt, setAttempt] = useState(0)
     const [mediaLoading,setMediaLoading]=useState(true)
     const [slowBuffer,setSlowBuffer]=useState(false)
-    const bufferTimer=useRef(null)
+    const bufferTimer=useRef(null),bufferRetryTimer=useRef(null),failureProbe=useRef(null)
     const retryTimer = useRef(null), retryCount = useRef(0), continuePlaying = useRef(autoPlay)
     const callbacks = useRef({ onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange })
     callbacks.current = { onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange }
     const isYouTube = !!(video.youtubeId || /youtu(?:be\.com|\.be)/.test(video.url || ''))
     const youtubeId = video.youtubeId || video.url?.match(/(?:[?&]v=|youtu\.be\/)([^?&/]+)/)?.[1]
     const driveId = video.driveFileId || video.url?.match(/(?:\/d\/|[?&]id=)([a-zA-Z0-9_-]+)/)?.[1]
-    useEffect(() => () => {clearTimeout(retryTimer.current);clearTimeout(bufferTimer.current)}, [])
-    function clearBufferNotice(){clearTimeout(bufferTimer.current);setSlowBuffer(false)}
+    useEffect(() => () => {clearTimeout(retryTimer.current);clearTimeout(bufferTimer.current);clearTimeout(bufferRetryTimer.current);failureProbe.current?.abort()}, [])
+    function clearBufferNotice(){clearTimeout(bufferTimer.current);clearTimeout(bufferRetryTimer.current);setSlowBuffer(false)}
     function retryDrive(manual = false) {
         clearTimeout(retryTimer.current)
+        failureProbe.current?.abort()
         clearBufferNotice()
         if (manual) retryCount.current = 0
         nativeReady.current = false
@@ -64,7 +66,16 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
             retryTimer.current = setTimeout(() => retryDrive(), retryCount.current * 1500)
         } else {
             setRetrying(false)
-            setError('The Drive video could not be loaded. This may be a temporary connection or Drive limit, or the file may not allow downloads. Your saved position is preserved.')
+            setError(driveFailureMessage())
+            if (IS_BROWSER_MODE && driveId) {
+                const probe = new AbortController()
+                failureProbe.current = probe
+                const timeout = setTimeout(() => probe.abort(), 8000)
+                fetch(`/api/drive-video?id=${encodeURIComponent(driveId)}`, { method: 'HEAD', signal: probe.signal })
+                    .then(response => { if (!probe.signal.aborted) setError(driveFailureMessage(response.status)) })
+                    .catch(() => {})
+                    .finally(() => clearTimeout(timeout))
+            }
         }
     }
     const flushStudyTime=useStudyTime(()=>{
@@ -227,8 +238,13 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
             onPlay={() => { continuePlaying.current = true }}
             onPlaying={() => { retryCount.current = 0; setRetrying(false);clearBufferNotice() }}
             onCanPlay={clearBufferNotice}
-            onWaiting={()=>{clearTimeout(bufferTimer.current);bufferTimer.current=setTimeout(()=>{if(native.current&&!native.current.paused)setSlowBuffer(true)},20000)}}
-            onPause={event => { if (!event.currentTarget.error && !retrying) continuePlaying.current = false; sampleNative(event, true) }}
+            onWaiting={event=>{
+                const media=event.currentTarget
+                clearTimeout(bufferTimer.current);clearTimeout(bufferRetryTimer.current)
+                bufferTimer.current=setTimeout(()=>{if(native.current===media&&!media.paused&&media.readyState<3)setSlowBuffer(true)},20000)
+                bufferRetryTimer.current=setTimeout(()=>{if(native.current===media&&!media.paused&&media.readyState<3)handleDriveError({currentTarget:media})},40000)
+            }}
+            onPause={event => { clearBufferNotice(); if (!event.currentTarget.error && !retrying) continuePlaying.current = false; sampleNative(event, true) }}
             onSeeked={event => sampleNative(event, true)}
             onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext) callbacks.current.onNext?.() }}
             onError={handleDriveError} />}

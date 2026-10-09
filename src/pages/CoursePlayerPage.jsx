@@ -422,7 +422,7 @@ function CoursePlayerPage() {
                                     <h2 className="text-lg sm:text-2xl font-bold mb-2">{currentVideo.title}</h2>
                                 </div>
 
-                                {IS_BROWSER_MODE && currentVideo.filePath && !currentVideo.driveFileId && <div><button disabled={reconnecting} onClick={reconnectFolder} className="rounded-lg border border-gray-200 dark:border-white/10 px-3 py-2 text-sm text-blue-500 disabled:opacity-50">{reconnecting?'Reconnecting…':'Reconnect local folder'}</button>{reconnectMessage&&<p role="status" className="mt-2 text-xs text-neutral-500">{reconnectMessage}</p>}</div>}
+                                {IS_BROWSER_MODE && currentVideo.filePath && !currentVideo.driveFileId && (window.showDirectoryPicker ? <div><button disabled={reconnecting} onClick={reconnectFolder} className="rounded-lg border border-gray-200 dark:border-white/10 px-3 py-2 text-sm text-blue-500 disabled:opacity-50">{reconnecting?'Reconnecting…':'Reconnect local folder'}</button>{reconnectMessage&&<p role="status" className="mt-2 text-xs text-neutral-500">{reconnectMessage}</p>}</div> : <p className="text-sm text-neutral-500">Local videos can be reconnected on desktop Chrome or Edge using the original folder. On this device, use a Drive or YouTube course.</p>)}
                                 <div className="pt-6 border-t border-light-border dark:border-dark-border">
                                     <div
                                         className="inline-flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"

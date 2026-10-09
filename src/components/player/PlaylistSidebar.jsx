@@ -248,7 +248,15 @@ function PlaylistSidebar({
                 <div
                     className={`flex items-center gap-2 p-3 hover:bg-light-surface dark:hover:bg-dark-bg transition-colors cursor-pointer`}
                     style={{ paddingLeft: `${12 + depth * 16}px` }}
+                    role={hasContent ? 'button' : undefined}
+                    tabIndex={hasContent ? 0 : undefined}
+                    aria-expanded={hasContent ? !!isExpanded : undefined}
+                    aria-label={`${module.title} section`}
                     onClick={() => toggleModule(module.id)}
+                    onKeyDown={event => {
+                        if (event.target !== event.currentTarget || !hasContent) return
+                        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleModule(module.id) }
+                    }}
                 >
                     {hasContent ? (
                         isExpanded ? (
@@ -295,7 +303,7 @@ function PlaylistSidebar({
                             const isCompleted = video.isCompleted
 
                             return (
-                                <WindowedLesson key={video.id} active={isActive || allVideos.length<=100}><div
+                                <WindowedLesson key={video.id} label={video.title} active={isActive || allVideos.length<=100}><div
                                     key={video.id}
                                     onClick={() => onVideoSelect(video)}
                                     className={`
