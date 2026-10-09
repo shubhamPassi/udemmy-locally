@@ -358,30 +358,26 @@ function ImportPreviewModal({
                     {/* Thumbnail */}
                     <div>
                         <label className="block text-sm font-medium mb-2">Thumbnail (optional)</label>
-                        <div className="flex items-start gap-4">
-                            <div className="w-32 h-20 rounded-lg border-2 border-dashed border-light-border dark:border-dark-border overflow-hidden flex items-center justify-center bg-light-surface dark:bg-dark-bg">
+                        <div className="grid grid-cols-1 sm:grid-cols-[144px_minmax(0,1fr)] gap-4 items-start">
+                            <div className="w-36 aspect-video sm:mt-0 rounded-lg border-2 border-dashed border-light-border dark:border-dark-border overflow-hidden flex items-center justify-center bg-light-surface dark:bg-dark-bg">
                                 {thumbnailPreview ? (
                                     <img src={thumbnailPreview} alt="Thumbnail preview" className="w-full h-full object-cover" />
                                 ) : (
                                     <Image className="w-8 h-8 text-light-text-secondary dark:text-dark-text-secondary" />
                                 )}
                             </div>
-                            <div className="flex flex-col gap-2">
+                            <div className="min-w-0 space-y-3">
                                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleThumbnailUpload} className="hidden" id="thumbnail-upload" />
-                                <div className="flex flex-wrap gap-2"><label htmlFor="thumbnail-upload" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg cursor-pointer transition-colors">
+                                <div className="grid grid-cols-2 gap-2"><label htmlFor="thumbnail-upload" className="inline-flex justify-center items-center gap-2 h-10 px-3 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg cursor-pointer transition-colors">
                                     <Upload className="w-4 h-4" />
                                     Upload Image
                                 </label>
-                                <button type="button" onClick={browseImages} className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg"><Search className="w-4 h-4" />Browse images</button></div>
-                                {imageSearchOpened&&<button type="button" onClick={pasteImageUrl} className="inline-flex items-center gap-2 text-sm text-blue-500 hover:underline"><ClipboardPaste className="w-4 h-4" />Paste image URL</button>}
+                                <button type="button" onClick={browseImages} className="inline-flex justify-center items-center gap-2 h-10 px-3 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg"><Search className="w-4 h-4" />Browse images</button></div>
                                 {thumbnail && (
-                                    <button onClick={removeThumbnail} className="text-sm text-error hover:underline text-left">Remove</button>
+                                    <button onClick={removeThumbnail} className="text-xs text-red-500 hover:underline text-left">Remove thumbnail</button>
                                 )}
-                            </div>
-                        </div>
-                        {imageSearchOpened&&<p className="mt-2 text-xs text-neutral-500">In the Google Images pop-up, right-click your image → Copy image address. Return here → Paste image URL → Use URL.</p>}
-                        <div className="mt-3 flex gap-2">
-                            <div className="relative flex-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2">
+                            <div className="relative min-w-0">
                                 <Link2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-light-text-secondary dark:text-dark-text-secondary" />
                                 <input
                                     type="url"
@@ -393,20 +389,25 @@ function ImportPreviewModal({
                                             handleThumbnailUrlDownload()
                                         }
                                     }}
-                                    className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-light-border dark:border-dark-border bg-white dark:bg-dark-bg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                                    aria-label="Image URL"
+                                    className={`w-full h-10 pl-9 ${imageSearchOpened ? 'pr-11' : 'pr-3'} text-sm rounded-lg border border-light-border dark:border-dark-border bg-white dark:bg-dark-bg focus:ring-2 focus:ring-primary focus:border-transparent outline-none`}
                                     placeholder="Paste image URL"
                                     disabled={isDownloadingThumbnail}
                                 />
+                                {imageSearchOpened&&<button type="button" onClick={pasteImageUrl} title="Paste copied image URL" aria-label="Paste copied image URL" className="absolute right-1 top-1 h-8 w-8 flex items-center justify-center rounded-md text-blue-500 hover:bg-blue-500/10"><ClipboardPaste className="w-4 h-4" /></button>}
                             </div>
                             <button
                                 type="button"
                                 onClick={handleThumbnailUrlDownload}
                                 disabled={!thumbnailUrl.trim() || isDownloadingThumbnail}
-                                className="px-3 py-2 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                                className="h-10 justify-center whitespace-nowrap px-3 text-sm border border-light-border dark:border-dark-border rounded-lg hover:bg-light-surface dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
                             >
                                 {isDownloadingThumbnail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Image className="w-4 h-4" />}
                                 Use URL
                             </button>
+                        </div>
+                        {imageSearchOpened&&<p className="text-xs leading-5 text-neutral-500">Copy image address in Google Images, then paste it here and select Use URL.</p>}
+                            </div>
                         </div>
                     </div>
 
