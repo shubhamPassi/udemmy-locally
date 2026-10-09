@@ -169,7 +169,7 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
                 {/* Thumbnail */}
                 <div className="w-40 h-24 bg-gray-200 dark:bg-neutral-900 rounded-lg overflow-hidden flex-shrink-0 relative group-hover:ring-1 group-hover:ring-primary/20 dark:group-hover:ring-white/20 transition-all">
                     {course.thumbnailData ? (
-                        <img
+                        <img loading="lazy" decoding="async"
                             src={course.thumbnailData}
                             alt={course.title}
                             className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
@@ -236,7 +236,7 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
                 {/* Thumbnail */}
                 <div className="aspect-video bg-gray-200 dark:bg-neutral-900 relative overflow-hidden">
                     {course.thumbnailData ? (
-                        <img
+                        <img loading="lazy" decoding="async"
                             src={course.thumbnailData}
                             alt={course.title}
                             className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
@@ -293,7 +293,7 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
                             >
                                 <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-neutral-800 border border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-600 dark:text-white text-[10px] font-medium overflow-hidden flex-shrink-0">
                                     {instructorAvatar ? (
-                                        <img src={instructorAvatar} alt="" className="w-full h-full object-cover" />
+                                        <img loading="lazy" decoding="async" src={instructorAvatar} alt="" className="w-full h-full object-cover" />
                                     ) : (
                                         course.instructor.charAt(0).toUpperCase()
                                     )}

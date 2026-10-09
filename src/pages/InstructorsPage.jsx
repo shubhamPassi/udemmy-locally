@@ -174,7 +174,7 @@ function InstructorsPage() {
                             title="Click to change avatar"
                         >
                             {selectedInstructor.avatar ? (
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src={selectedInstructor.avatar}
                                     alt={selectedInstructor.name}
                                     className="w-14 h-14 rounded-full object-cover ring-2 ring-blue-200 dark:ring-primary/30"
@@ -221,7 +221,7 @@ function InstructorsPage() {
                             {/* Thumbnail */}
                             <div className="aspect-video bg-gray-100 dark:bg-dark-bg relative overflow-hidden">
                                 {course.thumbnailData ? (
-                                    <img
+                                    <img loading="lazy" decoding="async"
                                         src={course.thumbnailData}
                                         alt={course.title}
                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -307,7 +307,7 @@ function InstructorsPage() {
                                                 title="Click to change avatar"
                                             >
                                                 {instructor.avatar ? (
-                                                    <img
+                                                    <img loading="lazy" decoding="async"
                                                         src={instructor.avatar}
                                                         alt={instructor.name}
                                                         className="w-20 h-20 rounded-full object-cover ring-4 ring-gray-100 dark:ring-dark-bg group-hover:ring-blue-100 dark:group-hover:ring-primary/20 transition-all"

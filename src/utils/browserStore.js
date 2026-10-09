@@ -4,6 +4,7 @@ import { clearPlaybackBookmarks } from './playbackBookmarks.js'
 import { clearStudyHistory } from './studyTime.js'
 import { clearWatchCoverage } from './watchCoverage.js'
 import { loadBrowserImage } from './browserImages.js'
+import { moduleTotals } from './moduleTotals.js'
 const tables = ['courses', 'modules', 'videos', 'notes', 'instructors', 'roadmaps', 'transcripts', 'summaries']
 let database
 const dirtyCourses = new Set()
@@ -73,6 +74,7 @@ function flushProgress() {
 async function updateProgress(courseId) {
     const [videos, modules] = await Promise.all([by('videos', 'courseId', courseId), by('modules', 'courseId', courseId)])
     const completed = videos.filter(v => v.isCompleted).length
+    const totalsByModule = moduleTotals(videos)
     const totals = { totalVideos: videos.length, completedVideos: completed,
         totalDuration: videos.reduce((sum, v) => sum + (v.duration || 0), 0),
         completionPercentage: videos.length ? completed / videos.length * 100 : 0 }
@@ -85,8 +87,7 @@ async function updateProgress(courseId) {
       }
       merge('courses', courseId, totals)
       for (const mod of modules) {
-        const own = videos.filter(v => v.moduleId === mod.id)
-        merge('modules', mod.id, { totalDuration: own.reduce((sum, v) => sum + (v.duration || 0), 0), completedVideos: own.filter(v => v.isCompleted).length })
+        merge('modules', mod.id, totalsByModule.get(mod.id) || { totalDuration: 0, completedVideos: 0 })
       }
       tx.oncomplete = resolve
       tx.onerror = () => reject(tx.error)

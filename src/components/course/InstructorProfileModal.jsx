@@ -116,7 +116,7 @@ function InstructorProfileModal({ instructor, onClose, onAvatarChange }) {
                                 onClick={handleAvatarClick}
                             >
                                 {avatar ? (
-                                    <img src={avatar} alt={instructor} className="w-full h-full object-cover" />
+                                    <img loading="lazy" decoding="async" src={avatar} alt={instructor} className="w-full h-full object-cover" />
                                 ) : (
                                     instructor.charAt(0).toUpperCase()
                                 )}
@@ -191,7 +191,7 @@ function InstructorProfileModal({ instructor, onClose, onAvatarChange }) {
                                     {/* Thumbnail */}
                                     <div className="w-16 h-12 rounded bg-light-surface dark:bg-dark-bg flex items-center justify-center overflow-hidden flex-shrink-0">
                                         {course.thumbnailData ? (
-                                            <img src={course.thumbnailData} alt="" className="w-full h-full object-cover" />
+                                            <img loading="lazy" decoding="async" src={course.thumbnailData} alt="" className="w-full h-full object-cover" />
                                         ) : (
                                             <BookOpen className="w-6 h-6 text-light-text-secondary dark:text-dark-text-secondary" />
                                         )}
