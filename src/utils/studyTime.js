@@ -1,5 +1,7 @@
 import { isProgressResetting } from './playbackBookmarks.js'
 const prefix='tutin_study_session_'
+const sessionCache=new Map()
+let sessionSnapshot=[]
 export function hourKey(date) {
     return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}T${String(date.getHours()).padStart(2,'0')}`
 }
@@ -26,20 +28,28 @@ export function saveStudySession(id,record) {
     try {localStorage.setItem(prefix+id,JSON.stringify({version:1,...record}))}catch{}
 }
 export function readStudySessions() {
-    const records=[]
+    const records=[],seen=new Set()
     try {
         for(const key of Object.keys(localStorage)) {
             if(!key.startsWith(prefix))continue
+            seen.add(key)
             try {
-                const record=JSON.parse(localStorage.getItem(key))
-                if(record?.version!==1)continue
+                const raw=localStorage.getItem(key),cached=sessionCache.get(key)
+                if(cached?.raw===raw){if(cached.record)records.push(cached.record);continue}
+                let record
+                try{record=JSON.parse(raw)}catch{sessionCache.set(key,{raw,record:null});continue}
+                if(record?.version!==1){sessionCache.set(key,{raw,record:null});continue}
                 const hours={}
                 for(const [hour,seconds] of Object.entries(record.hours||{})) if(/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3])$/.test(hour)&&Number.isFinite(seconds)&&seconds>0) hours[hour]=seconds
-                records.push({...record,hours})
+                const validated={...record,hours}
+                sessionCache.set(key,{raw,record:validated})
+                records.push(validated)
             }catch{}
         }
     }catch{}
-    return records
+    for(const key of sessionCache.keys())if(!seen.has(key))sessionCache.delete(key)
+    if(records.length!==sessionSnapshot.length||records.some((record,index)=>record!==sessionSnapshot[index]))sessionSnapshot=records
+    return sessionSnapshot
 }
 export function readStudyHours() {
     const hours={}
@@ -48,6 +58,7 @@ export function readStudyHours() {
 }
 export function clearStudyHistory() {
     try {for(const key of Object.keys(localStorage))if(key.startsWith(prefix))localStorage.removeItem(key)}catch{}
+    sessionCache.clear();sessionSnapshot=[]
 }
 export function studyTimeLabel(seconds) {
     const value=Math.floor(Math.max(0,seconds||0))

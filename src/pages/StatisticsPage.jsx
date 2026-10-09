@@ -43,8 +43,8 @@ export default function StatisticsPage() {
     async function load() {
         setRefreshing(true); setError(''); setSessions(readStudySessions())
         try {
-            const library = await getAllCourses()
-            const lessons = api.IS_BROWSER_MODE ? await api.get('/api/videos') : (await Promise.all(library.map(course => getCourseContent(course.id)))).flatMap(content => content.videos || [])
+            const [library, browserLessons] = await Promise.all([getAllCourses(), api.IS_BROWSER_MODE ? api.get('/api/videos') : Promise.resolve(null)])
+            const lessons = browserLessons || (await Promise.all(library.map(course => getCourseContent(course.id)))).flatMap(content => content.videos || [])
             setCourses(library); setVideos(lessons.map(withPlaybackBookmark))
         } catch (err) { setError(err.message || 'Could not load your statistics.') }
         finally { setLoading(false); setRefreshing(false) }
