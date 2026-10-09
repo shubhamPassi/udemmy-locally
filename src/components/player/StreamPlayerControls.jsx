@@ -7,6 +7,7 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
     const [visible, setVisible] = useState(true)
     const hideTimer = useRef(null)
     const interacting = useRef(false)
+    const controlsBar=useRef(null),hoveringControls=useRef(false)
     useEffect(() => {
         reveal()
         const release = () => {
@@ -15,12 +16,28 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
             reveal()
         }
         const container=containerRef.current
+        // Subtitle buttons are rendered through a React portal. Native pointer
+        // events follow their actual DOM position inside this control bar.
+        const pointerOver=event=>{
+            if(event.pointerType==='touch')return
+            if(controlsBar.current?.contains(event.target)){hoveringControls.current=true;reveal()}
+        }
+        const pointerOut=event=>{
+            if(event.pointerType==='touch')return
+            if(controlsBar.current?.contains(event.target)&&!controlsBar.current.contains(event.relatedTarget)){
+                hoveringControls.current=false;reveal()
+            }
+        }
+        container?.addEventListener('pointerover',pointerOver)
+        container?.addEventListener('pointerout',pointerOut)
         container?.addEventListener('tutin-subtitle-menu-change',reveal)
         window.addEventListener('pointerup', release)
         window.addEventListener('pointercancel', release)
         return () => {
             clearTimeout(hideTimer.current)
             container?.removeEventListener('tutin-subtitle-menu-change',reveal)
+            container?.removeEventListener('pointerover',pointerOver)
+            container?.removeEventListener('pointerout',pointerOut)
             window.removeEventListener('pointerup', release)
             window.removeEventListener('pointercancel', release)
         }
@@ -39,7 +56,7 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
     function reveal() {
         setVisible(true)
         clearTimeout(hideTimer.current)
-        if (!interacting.current) hideTimer.current = setTimeout(() => {if(!containerRef.current?.querySelector('[data-subtitle-menu-open="true"]'))setVisible(false)}, 2000)
+        if (!interacting.current&&!hoveringControls.current) hideTimer.current = setTimeout(() => {if(!hoveringControls.current&&!containerRef.current?.querySelector('[data-subtitle-menu-open="true"]'))setVisible(false)}, 2000)
     }
     function toggle() {
         const media = mediaRef.current
@@ -55,11 +72,11 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
     }
     const shown = visible
     const button = 'h-10 w-6 sm:w-10 flex shrink-0 items-center justify-center rounded-full text-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400'
-    return <div data-controls-visible={shown ? 'true' : 'false'} className={`absolute inset-0 flex flex-col justify-end ${shown ? '' : 'cursor-none'}`} onMouseMove={reveal} onTouchStart={reveal} onKeyDownCapture={reveal} onMouseLeave={() => { if (!interacting.current && !containerRef.current?.querySelector('[data-subtitle-menu-open="true"]')) setVisible(false) }}>
+    return <div data-controls-visible={shown ? 'true' : 'false'} className={`absolute inset-0 flex flex-col justify-end ${shown ? '' : 'cursor-none'}`} onMouseMove={reveal} onTouchStart={reveal} onKeyDownCapture={reveal} onMouseLeave={() => { if (!interacting.current && !hoveringControls.current && !containerRef.current?.querySelector('[data-subtitle-menu-open="true"]')) setVisible(false) }}>
         <button className="absolute inset-0 w-full h-full" onClick={toggle} aria-label={state.paused ? 'Play video' : 'Pause video'} />
         {showLoadingIndicator && state.buffering && <div role="status" aria-label="Loading video" className="absolute inset-0 pointer-events-none flex items-center justify-center"><Loader2 className="w-9 h-9 text-white animate-spin" /></div>}
         {state.paused && shown && <button onClick={toggle} aria-label="Play" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-black/65 border border-white/20 text-white flex items-center justify-center hover:bg-blue-600"><Play className="w-7 h-7 ml-1" fill="currentColor" /></button>}
-        <div className={`relative px-3 sm:px-5 pt-8 pb-2 bg-gradient-to-t from-black/95 via-black/70 to-transparent transition-opacity duration-150 ${shown ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onFocusCapture={reveal} onPointerDown={() => { interacting.current = true; clearTimeout(hideTimer.current) }}>
+        <div ref={controlsBar} className={`relative px-3 sm:px-5 pt-8 pb-2 bg-gradient-to-t from-black/95 via-black/70 to-transparent transition-opacity duration-150 ${shown ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onFocusCapture={reveal} onPointerDown={() => { interacting.current = true; clearTimeout(hideTimer.current) }}>
             <input type="range" aria-label="Video position" min="0" max={state.duration || 1} step="0.1" value={Math.min(state.time, state.duration || 1)} disabled={!state.duration}
                 onChange={event => { mediaRef.current.currentTime = Number(event.target.value); reveal() }}
                 className="w-full h-4 cursor-pointer accent-blue-500" style={{ touchAction: 'none' }} />
