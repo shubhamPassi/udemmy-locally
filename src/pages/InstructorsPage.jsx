@@ -1,3 +1,4 @@
+import { useDurationVisibility } from '../utils/durationVisibility'
 import { instructorKey } from '../utils/instructorNames'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -7,6 +8,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner'
 import { useNotification } from '../contexts/NotificationContext'
 
 function InstructorsPage() {
+    const hideDurations=useDurationVisibility()
     const [courses, setCourses] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
@@ -253,10 +255,10 @@ function InstructorsPage() {
                                         <Play className="w-3.5 h-3.5" />
                                         {course.totalVideos} videos
                                     </span>
-                                    <span className="flex items-center gap-1">
+                                    {!hideDurations && <span className="flex items-center gap-1">
                                         <Clock className="w-3.5 h-3.5" />
                                         {formatDuration(course.totalDuration)}
-                                    </span>
+                                    </span>}
                                 </div>
                             </div>
                         </Link>

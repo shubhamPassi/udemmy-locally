@@ -1,3 +1,4 @@
+import { useDurationVisibility } from '../../utils/durationVisibility'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { X, Camera, BookOpen, Clock, Trash2 } from 'lucide-react'
@@ -5,6 +6,7 @@ import { getCoursesByInstructor, getInstructorAvatarAsync, setInstructorAvatar, 
 import { useNotification } from '../../contexts/NotificationContext'
 
 function InstructorProfileModal({ instructor, onClose, onAvatarChange }) {
+    const hideDurations=useDurationVisibility()
     const [courses, setCourses] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [avatar, setAvatar] = useState(null)
@@ -145,10 +147,10 @@ function InstructorProfileModal({ instructor, onClose, onAvatarChange }) {
                                     <BookOpen className="w-4 h-4" />
                                     {totalCourses} courses
                                 </span>
-                                <span className="flex items-center gap-1">
+                                {!hideDurations && <span className="flex items-center gap-1">
                                     <Clock className="w-4 h-4" />
                                     {formatDuration(totalDuration)}
-                                </span>
+                                </span>}
                             </div>
                         </div>
 
@@ -200,8 +202,8 @@ function InstructorProfileModal({ instructor, onClose, onAvatarChange }) {
                                         <h4 className="font-medium truncate">{course.title}</h4>
                                         <div className="flex items-center gap-2 text-xs text-light-text-secondary dark:text-dark-text-secondary">
                                             <span>{course.totalVideos || 0} videos</span>
-                                            <span>•</span>
-                                            <span>{formatDuration(course.totalDuration || 0)}</span>
+                                            {!hideDurations && <span>•</span>}
+                                            {!hideDurations && <span>{formatDuration(course.totalDuration || 0)}</span>}
                                         </div>
                                     </div>
 

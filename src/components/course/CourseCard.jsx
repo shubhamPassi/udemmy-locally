@@ -1,3 +1,4 @@
+import { useDurationVisibility } from '../../utils/durationVisibility'
 import { courseDuration } from '../../utils/courseDuration'
 import { Link, useNavigate } from 'react-router-dom'
 import { Play, Clock, Video, Pencil, Trash2, RefreshCw, Link2 } from 'lucide-react'
@@ -18,6 +19,7 @@ function scheduleAfterFirstPaint(callback) {
 }
 
 function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
+    const hideDurations=useDurationVisibility()
     const navigate = useNavigate()
     const [isDeleting, setIsDeleting] = useState(false)
     const [isSyncing, setIsSyncing] = useState(false)
@@ -198,10 +200,10 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
                             <Video className="w-4 h-4" />
                             {course.completedVideos}/{course.totalVideos}
                         </span>
-                        <span className="flex items-center gap-1.5">
+                        {!hideDurations && <span className="flex items-center gap-1.5">
                             <Clock className="w-4 h-4" />
                             {formattedDuration}
-                        </span>
+                        </span>}
                     </div>
                     {/* Progress Bar */}
                     <div className="mt-3 progress-bar h-1.5 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
@@ -262,9 +264,9 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
                     </div>
 
                     {/* Duration badge */}
-                    <div className="absolute bottom-3 right-3 px-2 py-1 bg-black/70 backdrop-blur-md text-white text-[10px] font-medium rounded-md border border-white/10">
+                    {!hideDurations && <div className="absolute bottom-3 right-3 px-2 py-1 bg-black/70 backdrop-blur-md text-white text-[10px] font-medium rounded-md border border-white/10">
                         {formattedDuration}
-                    </div>
+                    </div>}
 
                     {/* Quick actions */}
                     <div

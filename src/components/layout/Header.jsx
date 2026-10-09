@@ -186,7 +186,7 @@ function Header() {
                         )}
 
                         {/* Theme Toggle */}
-                        <button type="button" onClick={toggleDurationVisibility} aria-pressed={hideUpcomingDurations} aria-label={hideUpcomingDurations ? 'Show upcoming video durations' : 'Hide upcoming video durations'} title={hideUpcomingDurations ? 'Show upcoming video durations' : 'Hide upcoming video durations'} className="p-2 rounded-full text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-all duration-200">{hideUpcomingDurations ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button>
+                        <button type="button" onClick={toggleDurationVisibility} aria-pressed={hideUpcomingDurations} aria-label={hideUpcomingDurations ? 'Show course and upcoming video durations' : 'Hide course and upcoming video durations'} title={hideUpcomingDurations ? 'Show course and upcoming video durations' : 'Hide course and upcoming video durations'} className="p-2 rounded-full text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-all duration-200">{hideUpcomingDurations ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button>
                         <button
                             onClick={toggleTheme}
                             className="p-2 rounded-full text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-all duration-200"

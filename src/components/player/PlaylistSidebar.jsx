@@ -265,11 +265,11 @@ function PlaylistSidebar({
                         <div className="flex items-center gap-2 mt-0.5">
                             {totalModuleCount > 0 ? (
                                 <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary select-none">
-                                    {totalModuleCompleted}/{totalModuleCount} videos • {contentDuration(moduleDuration)}
+                                    {totalModuleCompleted}/{totalModuleCount} videos{!hideUpcomingDurations && <> • {contentDuration(moduleDuration)}</>}
                                 </p>
                             ) : hasSubModules ? (
                                 <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary select-none">
-                                    {module.subModules.length} sub-modules • {contentDuration(moduleDuration)}
+                                    {module.subModules.length} sub-modules{!hideUpcomingDurations && <> • {contentDuration(moduleDuration)}</>}
                                 </p>
                             ) : null}
                         </div>
