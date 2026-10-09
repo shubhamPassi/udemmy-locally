@@ -30,7 +30,9 @@ export default defineConfig({
         // Chunk splitting for better caching
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['lucide-react', 'recharts', 'react-markdown'],
+          'ui-vendor': ['lucide-react'],
+          'markdown-vendor': ['react-markdown'],
+          'charts-vendor': ['recharts'],
           'video-vendor': ['react-player', 'hls.js', 'mpegts.js'],
           'ai-vendor': ['@xenova/transformers']
         }
