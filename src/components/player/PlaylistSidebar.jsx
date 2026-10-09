@@ -49,7 +49,7 @@ function flattenModuleTree(modules) {
     return result
 }
 
-function CourseProgressHeader({ allVideos, metadataStatus }) {
+function CourseProgressHeader({ allVideos, metadataStatus, onRetryMetadata }) {
     const totalVideos = allVideos.length
     const completedVideos = allVideos.filter(v => v.isCompleted).length
 
@@ -71,6 +71,7 @@ function CourseProgressHeader({ allVideos, metadataStatus }) {
                             </span>
                         </div>
                         {coverage.known < coverage.count && <p className="mb-2 text-xs text-neutral-500">Partial total · {coverage.known}/{coverage.count} durations known{metadataStatus?.done < metadataStatus?.total ? ' · Loading metadata…' : ' · Other durations appear when available'}</p>}
+                        {metadataStatus?.failed>0 && metadataStatus.done===metadataStatus.total && <button onClick={onRetryMetadata} className="mb-2 text-xs text-blue-500 hover:underline">Retry unavailable durations</button>}
                         <div className="progress-bar h-2 w-full bg-light-bg dark:bg-dark-bg rounded-full overflow-hidden">
                             <div
                                 className="progress-bar-fill h-full bg-[var(--primary-fg)] rounded-full transition-all duration-300"
@@ -82,7 +83,7 @@ function CourseProgressHeader({ allVideos, metadataStatus }) {
 }
 
 function PlaylistSidebar({
-    contentLoading, contentError, onRetryContent, metadataStatus,
+    contentLoading, contentError, onRetryContent, metadataStatus, onRetryMetadata,
     course,
     modules,
     currentVideo,
@@ -383,7 +384,7 @@ function PlaylistSidebar({
                 {/* Header Section */}
                 <div className="flex flex-col border-b border-light-border dark:border-dark-border bg-white dark:bg-dark-surface z-10">
                     {/* Top Progress Bar */}
-                    <CourseProgressHeader allVideos={allVideos} metadataStatus={metadataStatus} />
+                    <CourseProgressHeader allVideos={allVideos} metadataStatus={metadataStatus} onRetryMetadata={onRetryMetadata} />
 
                     {/* Tabs */}
                     <div className="flex items-center px-2 mt-2">

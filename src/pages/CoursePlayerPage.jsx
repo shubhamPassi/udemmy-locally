@@ -82,6 +82,8 @@ function CoursePlayerPage() {
     const [contentLoading,setContentLoading]=useState(true),[contentError,setContentError]=useState('')
     const [metadataVideos,setMetadataVideos]=useState([]),[metadataStatus,setMetadataStatus]=useState({total:0,done:0,failed:0})
     const loadEpoch=useRef(0),metadataDurations=useRef(new Map())
+    const activeVideoRef=useRef(null)
+    activeVideoRef.current=currentVideo
     const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 1024)
     const [sidebarWidth, setSidebarWidth] = useState(() => {
         const saved = localStorage.getItem('sidebarPanelWidth')
@@ -230,7 +232,7 @@ function CoursePlayerPage() {
             setModules(tree=>applyVideoDurations(tree,updates))
             setCurrentVideo(previous=>previous&&updates.has(previous.id)&&previous.duration!==updates.get(previous.id)?{...previous,duration:updates.get(previous.id)}:previous)
         }
-        scanVideoMetadata(metadataVideos,controller.signal,(id,duration)=>{
+        scanVideoMetadata(metadataVideos.filter(video=>video.id!==activeVideoRef.current?.id && !metadataDurations.current.has(video.id)),controller.signal,(id,duration)=>{
             metadataDurations.current.set(id,duration)
             pending.set(id,duration)
             if(!timer)timer=setTimeout(flush,100)
@@ -432,6 +434,7 @@ function CoursePlayerPage() {
                     contentLoading={contentLoading}
                     contentError={contentError}
                     metadataStatus={metadataStatus}
+                    onRetryMetadata={()=>setMetadataVideos(getAllVideosFlat(modules).filter(video=>!(video.duration>0)))}
                     onRetryContent={handlePlaylistRefresh}
                     course={course}
                     modules={modules}
