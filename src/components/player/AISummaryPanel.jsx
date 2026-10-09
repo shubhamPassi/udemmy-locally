@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { FileText, Sparkles, Loader2, AlertCircle, Download, Copy, RefreshCw, Upload, Captions, X, Globe } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { getVideo, updateVideo } from '../../utils/db'
-import { SERVER_URL } from '../../utils/api'
+import { SERVER_URL, isServerAvailable, get } from '../../utils/api'
 import { processVideoForSummary, isAIAvailable, regenerateSummaryOnly } from '../../utils/aiSummarization'
 import { verifyPermission } from '../../utils/fileSystem'
 import { useSettings } from '../../contexts/SettingsContext'
@@ -59,7 +59,6 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
         if (!video?.id) return
         const fetchChunks = async () => {
             try {
-                const { isServerAvailable, get } = await import('../../utils/api')
                 const serverAvailable = await isServerAvailable()
                 if (serverAvailable) {
                     const lang = settings.captionLanguage || 'source'
@@ -76,7 +75,6 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
 
     async function loadExistingData(forceLang = null) {
         try {
-            const { isServerAvailable, get } = await import('../../utils/api')
             const serverAvailable = await isServerAvailable()
             
             if (serverAvailable) {

@@ -1,3 +1,4 @@
+import { getVideosByCourse, getModulesByCourse, getCourse, addVideo, deleteVideo, updateVideo, addModule, deleteModule, updateCourse } from './db.js'
 import * as api from './api.js'
 import { pickBrowserFolder, scanBrowserFolder, browserVideoUrl } from './browserFiles.js'
 
@@ -167,7 +168,6 @@ function flattenScannedModules(modules, parentTitle = null, parentPath = '') {
  * Compare scanned filesystem data with database state (v4)
  */
 export async function syncCoursePreview(courseId, scannedData) {
-    const { getVideosByCourse, getModulesByCourse, getCourse } = await import('./db')
     const existingVideos = await getVideosByCourse(courseId)
     const existingModules = await getModulesByCourse(courseId)
     const course = await getCourse(courseId)
@@ -279,7 +279,6 @@ export async function syncCoursePreview(courseId, scannedData) {
  * Apply sync changes to the database (v4)
  */
 export async function applySyncChanges(courseId, preview) {
-    const { addVideo, deleteVideo, updateVideo, addModule, getModulesByCourse, deleteModule, updateCourse } = await import('./db')
     const { added, removed, updated, moved, removedModules, flatScannedModules, scannedData } = preview
 
     // 0. Update course metadata. Sync intentionally preserves user-selected thumbnails.

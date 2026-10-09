@@ -9,12 +9,12 @@ import { applyVideoDurations } from '../utils/moduleMetadata'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ChevronLeft, Menu } from 'lucide-react'
-import { getCourse, getCourseContent, getVideosByCourse, getInstructorAvatarAsync, buildModuleTree } from '../utils/db'
+import { getCourse, getCourseContent, getVideo, getVideosByCourse, getInstructorAvatarAsync, buildModuleTree } from '../utils/db'
 import { useSettings } from '../contexts/SettingsContext'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import VideoPlayer from '../components/player/CourseVideoPlayer'
 import { createPlaybackClock } from '../utils/playbackClock'
-import { IS_BROWSER_MODE } from '../utils/api'
+import { IS_BROWSER_MODE, fetchYoutubeTranscript, put } from '../utils/api'
 import { resumeTime } from '../utils/playbackBookmarks'
 import PlaylistSidebar from '../components/player/PlaylistSidebar'
 import { playlistDisplay } from '../utils/playlistDisplay'
@@ -301,7 +301,6 @@ function CoursePlayerPage() {
     async function refreshCurrentVideoOnly() {
         if (!currentVideo) return
         try {
-            const { getVideo } = await import('../utils/db')
             const updatedVideo = await getVideo(currentVideo.id)
             if (updatedVideo) {
                 setCurrentVideo(prev => ({ ...prev, ...updatedVideo }))
@@ -320,8 +319,7 @@ function CoursePlayerPage() {
 
         if (isYouTube && !currentVideo.hasTranscript) {
             const videoIdOrUrl = currentVideo.youtubeId || currentVideo.url
-            import('../utils/api').then(({ fetchYoutubeTranscript, put }) => {
-                fetchYoutubeTranscript(videoIdOrUrl)
+            fetchYoutubeTranscript(videoIdOrUrl)
                     .then(async (data) => {
                         if (data.chunks && data.chunks.length > 0) {
                             await put(`/api/transcripts/${currentVideo.id}`, { chunks: data.chunks })
@@ -329,7 +327,6 @@ function CoursePlayerPage() {
                         }
                     })
                     .catch(err => console.log('Notice: Could not auto-fetch YouTube transcript:', err.message))
-            })
         }
     }, [currentVideo?.id, currentVideo?.hasTranscript])
 

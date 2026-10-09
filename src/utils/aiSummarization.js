@@ -1,3 +1,4 @@
+import { isServerAvailable, put } from './api'
 /**
  * AI Summarization Utilities
  * 
@@ -519,7 +520,6 @@ export async function processVideoForSummary(videoId, fileSource, onProgress, ap
         const captionChunks = transcription.chunks
 
         // Save transcript and caption chunks
-        const { isServerAvailable, put } = await import('./api')
         const serverAvailable = await isServerAvailable()
         
         if (serverAvailable) {
@@ -578,7 +578,6 @@ export async function regenerateSummaryOnly(videoId, existingTranscript, onProgr
         const summary = await generateAISummary(existingTranscript, apiKey, model, onProgress)
 
         // Save updated summary
-        const { isServerAvailable, put } = await import('./api')
         if (await isServerAvailable()) {
             await put(`/api/summaries/${videoId}`, { content: summary })
         } else {

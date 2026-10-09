@@ -1,3 +1,4 @@
+import * as api from '../utils/api.js'
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 
 const defaultSettings = {
@@ -44,15 +45,19 @@ const defaultSettings = {
 const SettingsContext = createContext(null)
 
 function scheduleAfterFirstPaint(callback) {
-    const run = () => {
-        if ('requestIdleCallback' in window) {
-            window.requestIdleCallback(callback, { timeout: 2500 })
-        } else {
-            window.setTimeout(callback, 1000)
-        }
+    let idle, fallback, cancelled = false
+    const timer = window.setTimeout(() => {
+        if (cancelled) return
+        const run = () => { if (!cancelled) callback() }
+        if ('requestIdleCallback' in window) idle = window.requestIdleCallback(run, { timeout: 2500 })
+        else fallback = window.setTimeout(run, 1000)
+    }, 250)
+    return () => {
+        cancelled = true
+        window.clearTimeout(timer)
+        window.clearTimeout(fallback)
+        if (idle !== undefined) window.cancelIdleCallback?.(idle)
     }
-
-    return window.setTimeout(run, 250)
 }
 
 export function SettingsProvider({ children }) {
@@ -136,10 +141,8 @@ export function SettingsProvider({ children }) {
             if (!isInitializedRef.current) return
 
             // Sync with backend
-            import('../utils/api.js').then(api => {
-                api.put('/api/settings', settings).catch(err => {
-                    console.warn('Settings sync to server delayed:', err.message)
-                })
+            api.put('/api/settings', settings).catch(err => {
+                console.warn('Settings sync to server delayed:', err.message)
             })
         } catch (e) {
             console.error('Failed to save settings:', e)
@@ -148,9 +151,8 @@ export function SettingsProvider({ children }) {
 
     // Initial load from server
     useEffect(() => {
-        const timer = scheduleAfterFirstPaint(() => {
-            import('../utils/api.js').then(api => {
-                api.get('/api/settings').then(serverSettings => {
+        const cancelLoad = scheduleAfterFirstPaint(() => {
+            api.get('/api/settings').then(serverSettings => {
                     if (serverSettings && Object.keys(serverSettings).length > 0) {
                         setSettings(prev => ({ ...prev, ...serverSettings }))
                     }
@@ -159,10 +161,9 @@ export function SettingsProvider({ children }) {
                 }).finally(() => {
                     isInitializedRef.current = true
                 })
-            })
         })
 
-        return () => window.clearTimeout(timer)
+        return cancelLoad
     }, [])
 
     // Track dark mode state to re-apply accent colors when theme changes
