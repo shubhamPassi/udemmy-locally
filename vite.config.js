@@ -28,13 +28,13 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Chunk splitting for better caching
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['lucide-react'],
-          'markdown-vendor': ['react-markdown'],
-          'charts-vendor': ['recharts'],
-          'video-vendor': ['react-player', 'hls.js', 'mpegts.js'],
-          'ai-vendor': ['@xenova/transformers']
+        manualChunks(id) {
+          if (id.includes('vite/preload-helper')) return 'preload-runtime'
+          if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) return 'react-vendor'
+          if (id.includes('/node_modules/lucide-react/')) return 'ui-vendor'
+          if (id.includes('/node_modules/react-markdown/')) return 'markdown-vendor'
+          if (id.includes('/node_modules/recharts/')) return 'charts-vendor'
+          if (/node_modules\/(react-player|hls.js|mpegts.js)\//.test(id)) return 'video-vendor'
         }
       }
     },
