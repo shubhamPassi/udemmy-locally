@@ -1,4 +1,5 @@
 import * as api from './api.js'
+import { sharedRequest } from './sharedRequest.js'
 import { canonicalInstructor, normalizeCourseInstructors, instructorKey } from './instructorNames.js'
 import { restoreLocalModuleTitle } from './localCourseTitles.js'
 import { withPlaybackBookmark, isProgressResetting, writeCompletionBookmark } from './playbackBookmarks.js'
@@ -32,9 +33,7 @@ export async function getCourseContent(courseId) {
     return { ...content, modules: (content.modules || []).map(restoreLocalModuleTitle), videos: (content.videos || []).map(withPlaybackBookmark) }
 }
 
-export async function getAllCourses() {
-    return normalizeCourseInstructors(await api.get(`/api/courses`))
-}
+export const getAllCourses = sharedRequest(async () => normalizeCourseInstructors(await api.get('/api/courses')))
 
 export async function updateCourse(courseId, updates) {
     if(updates.instructor!==undefined)updates={...updates,instructor:canonicalInstructor(updates.instructor,await getAllCourses())}
@@ -186,7 +185,7 @@ export async function getInstructorAvatarAsync(instructorName) {
         try {
             const instructor = await api.get(`/api/instructors/instructor_${normalizedName}`)
             const avatar = instructor?.avatarData || null
-            if (avatar) avatarCache.set(normalizedName, avatar)
+            avatarCache.set(normalizedName, avatar)
             return avatar
         } catch {
             return null
