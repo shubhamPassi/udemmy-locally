@@ -24,7 +24,7 @@ export async function scanBrowserFolder(handle, rootPath = handle.name) {
     return { title: handle.name, folderPath: rootPath, folderHandle: handle, modules, totalVideos, totalDuration: 0 }
 }
 export async function browserVideoUrl(handle) {
-    if (!handle) throw new Error('Please re-import or sync this course folder to reconnect its local files.')
+    if (!handle || typeof handle.queryPermission!=='function' || typeof handle.getFile!=='function') throw new Error('Reconnect this course folder to restore access to its local videos. Your progress is still saved.')
     const options = { mode: 'read' }
     if (await handle.queryPermission(options) !== 'granted' && await handle.requestPermission(options) !== 'granted') throw new Error('Allow access to this course folder, then retry playback.')
     return URL.createObjectURL(await handle.getFile())

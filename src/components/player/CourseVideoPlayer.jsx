@@ -11,7 +11,7 @@ const CourseVideoPlayer = forwardRef(function CourseVideoPlayer(props, ref) {
     const embedded = video?.youtubeId || video?.driveFileId || /youtu(?:be\.com|\.be)|drive\.google\.com/.test(video?.url || '')
     if (embedded) return <div ref={host} className="relative w-full h-full"><ResumableEmbedPlayer key={video.id} ref={ref} {...props} settings={settings} />{!video.youtubeId&&<SubtitleTools videoId={video.id} host={host}/>}</div>
     return <div ref={host} className="relative w-full h-full"><Suspense fallback={<div className="w-full h-full flex items-center justify-center text-sm text-neutral-400">Loading player…</div>}>
-        <LocalVideoPlayer ref={ref} {...props} />
+        <LocalVideoPlayer key={`${video.id}:${video.fileAccessUpdatedAt||''}`} ref={ref} {...props} />
     </Suspense><SubtitleTools videoId={video.id} host={host}/></div>
 })
 export default CourseVideoPlayer
