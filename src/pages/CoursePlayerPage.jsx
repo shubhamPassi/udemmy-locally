@@ -1,3 +1,4 @@
+import { applyVideoDurations } from '../utils/moduleMetadata'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ChevronLeft, Menu } from 'lucide-react'
@@ -220,13 +221,21 @@ function CoursePlayerPage() {
     useEffect(()=>{
         if(!metadataVideos.length)return
         const controller=new AbortController()
+        const pending=new Map()
+        let timer
+        function flush(){
+            clearTimeout(timer);timer=null
+            if(controller.signal.aborted || !pending.size)return
+            const updates=new Map(pending);pending.clear()
+            setModules(tree=>applyVideoDurations(tree,updates))
+            setCurrentVideo(previous=>previous&&updates.has(previous.id)&&previous.duration!==updates.get(previous.id)?{...previous,duration:updates.get(previous.id)}:previous)
+        }
         scanVideoMetadata(metadataVideos,controller.signal,(id,duration)=>{
             metadataDurations.current.set(id,duration)
-            function merge(tree){return tree.map(module=>({...module,videos:(module.videos||[]).map(video=>video.id===id?{...video,duration}:video),subModules:merge(module.subModules||[])}))}
-            setModules(merge)
-            setCurrentVideo(previous=>previous?.id===id?{...previous,duration}:previous)
-        },setMetadataStatus)
-        return()=>controller.abort()
+            pending.set(id,duration)
+            if(!timer)timer=setTimeout(flush,100)
+        },setMetadataStatus).then(flush)
+        return()=>{controller.abort();clearTimeout(timer)}
     },[metadataVideos])
 
     const handleVideoSelect = useCallback((video) => {
