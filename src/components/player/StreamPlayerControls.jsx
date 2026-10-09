@@ -14,10 +14,13 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
             interacting.current = false
             reveal()
         }
+        const container=containerRef.current
+        container?.addEventListener('tutin-subtitle-menu-change',reveal)
         window.addEventListener('pointerup', release)
         window.addEventListener('pointercancel', release)
         return () => {
             clearTimeout(hideTimer.current)
+            container?.removeEventListener('tutin-subtitle-menu-change',reveal)
             window.removeEventListener('pointerup', release)
             window.removeEventListener('pointercancel', release)
         }
@@ -36,7 +39,7 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
     function reveal() {
         setVisible(true)
         clearTimeout(hideTimer.current)
-        if (!interacting.current) hideTimer.current = setTimeout(() => setVisible(false), 2000)
+        if (!interacting.current) hideTimer.current = setTimeout(() => {if(!containerRef.current?.querySelector('[data-subtitle-menu-open="true"]'))setVisible(false)}, 2000)
     }
     function toggle() {
         const media = mediaRef.current
@@ -51,8 +54,8 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
         else mediaRef.current?.webkitEnterFullscreen?.()
     }
     const shown = visible
-    const button = 'h-10 w-8 sm:w-10 flex shrink-0 items-center justify-center rounded-full text-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400'
-    return <div className={`absolute inset-0 flex flex-col justify-end ${shown ? '' : 'cursor-none'}`} onMouseMove={reveal} onTouchStart={reveal} onKeyDownCapture={reveal} onMouseLeave={() => { if (!interacting.current) setVisible(false) }}>
+    const button = 'h-10 w-6 sm:w-10 flex shrink-0 items-center justify-center rounded-full text-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400'
+    return <div data-controls-visible={shown ? 'true' : 'false'} className={`absolute inset-0 flex flex-col justify-end ${shown ? '' : 'cursor-none'}`} onMouseMove={reveal} onTouchStart={reveal} onKeyDownCapture={reveal} onMouseLeave={() => { if (!interacting.current && !containerRef.current?.querySelector('[data-subtitle-menu-open="true"]')) setVisible(false) }}>
         <button className="absolute inset-0 w-full h-full" onClick={toggle} aria-label={state.paused ? 'Play video' : 'Pause video'} />
         {showLoadingIndicator && state.buffering && <div role="status" aria-label="Loading video" className="absolute inset-0 pointer-events-none flex items-center justify-center"><Loader2 className="w-9 h-9 text-white animate-spin" /></div>}
         {state.paused && shown && <button onClick={toggle} aria-label="Play" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-black/65 border border-white/20 text-white flex items-center justify-center hover:bg-blue-600"><Play className="w-7 h-7 ml-1" fill="currentColor" /></button>}
@@ -70,6 +73,7 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
                 <div className="flex items-center gap-1">
                     <button className={`${button} hidden sm:flex`} onClick={() => { mediaRef.current.muted = !mediaRef.current.muted }} aria-label={state.muted ? 'Unmute' : 'Mute'} title="Mute (M)">{state.muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}</button>
                     <input type="range" aria-label="Volume" min="0" max="1" step="0.05" value={state.muted ? 0 : state.volume} onChange={event => { mediaRef.current.volume = Number(event.target.value); mediaRef.current.muted = false }} className="hidden lg:block w-16 accent-blue-500" />
+                    <span data-subtitle-controls className="flex shrink-0 items-center" />
                     <select aria-label="Playback speed" value={state.rate} onChange={event => { mediaRef.current.playbackRate = Number(event.target.value); reveal() }} className="text-xs text-white bg-black/70 rounded-lg py-2 px-1 sm:px-2 cursor-pointer">
                         {[0.25,0.5,0.75,1,1.25,1.5,1.75,2].map(rate => <option key={rate} value={rate}>{rate}×</option>)}
                     </select>
