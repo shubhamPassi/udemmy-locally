@@ -4,6 +4,9 @@ import {
     ChevronDown, ChevronRight, Image, Link2, Loader2
 } from 'lucide-react'
 import { formatDuration } from '../../utils/db'
+import { courseDuration } from '../../utils/courseDuration'
+import { scanVideoMetadata, loadVideoMetadata } from '../../utils/videoMetadata'
+import { importVideos, applyImportDuration } from '../../utils/importDurations'
 import * as api from '../../utils/api'
 import { useNotification } from '../../contexts/NotificationContext'
 
@@ -56,6 +59,7 @@ function ImportPreviewModal({
     const [thumbnailUrl, setThumbnailUrl] = useState('')
     const [isDownloadingThumbnail, setIsDownloadingThumbnail] = useState(false)
     const [expandedModules, setExpandedModules] = useState({})
+    const [durationStatus,setDurationStatus]=useState({total:0,done:0,failed:0})
     const fileInputRef = useRef(null)
     const { showNotification } = useNotification()
 
@@ -76,6 +80,14 @@ function ImportPreviewModal({
             )
         }
     }, [courseStructure])
+
+    useEffect(() => {
+        if(!courseStructure)return
+        const controller=new AbortController()
+        const videos=importVideos(courseStructure.modules||[]).map(video=>({...video,id:video.filePath||video.id||video.url}))
+        scanVideoMetadata(videos,controller.signal,(key,duration)=>setModules(previous=>applyImportDuration(previous,key,duration)),setDurationStatus,(video,signal)=>loadVideoMetadata(video,signal,false))
+        return()=>controller.abort()
+    },[courseStructure])
 
     // Check for duplicate course name
     const isDuplicate = existingCourseNames.some(
@@ -150,6 +162,7 @@ function ImportPreviewModal({
             title: courseName,
             instructor: instructor,
             thumbnailData: thumbnail,
+            totalDuration: sumAllDuration(modules),
             modules: modules.map(m => ({
                 ...m,
                 title: m.title
@@ -405,12 +418,13 @@ function ImportPreviewModal({
                         </div>
                         <div className="flex items-center gap-2">
                             <Clock className="w-5 h-5 text-primary" />
-                            <span className="font-medium">{formatDuration(totalDuration)}</span>
+                            <span className="font-medium">{totalDuration>0?courseDuration(totalDuration):durationStatus.done<durationStatus.total?'Calculating…':'Unavailable'}</span>
                             <span className="text-light-text-secondary dark:text-dark-text-secondary">total</span>
                         </div>
                     </div>
 
                     {/* Module List */}
+                    {durationStatus.total>0 && <p role="status" className="text-xs text-neutral-500 flex items-center gap-2">{durationStatus.done<durationStatus.total && <Loader2 className="h-4 w-4 animate-spin" />}{durationStatus.done<durationStatus.total?`Calculating durations: ${durationStatus.done}/${durationStatus.total} videos. You can import now.`:durationStatus.failed?`${durationStatus.failed} durations unavailable; they will be retried when you open the course.`:'All video durations calculated.'}</p>}
                     <div>
                         <label className="block text-sm font-medium mb-2">Detected Structure</label>
                         <div className="border border-light-border dark:border-dark-border rounded-lg overflow-hidden">

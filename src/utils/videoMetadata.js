@@ -1,7 +1,7 @@
 import { getVideoUrl, releaseVideoUrl } from './fileSystem.js'
 import { IS_BROWSER_MODE } from './api.js'
 import { updateVideo } from './db.js'
-export async function loadVideoMetadata(video, signal) {
+export async function loadVideoMetadata(video, signal, persist = true) {
     if(video.duration>0)return video.duration
     if(video.youtubeId || /youtu(?:be\.com|\.be)/.test(video.url||''))throw new Error('Duration becomes available when the YouTube lesson opens')
     let source, revoke=false
@@ -26,7 +26,7 @@ export async function loadVideoMetadata(video, signal) {
         media.preload='metadata';media.onloadedmetadata=()=>finish(Number.isFinite(media.duration)&&media.duration>0?null:new Error('Duration unavailable'))
         media.onerror=()=>finish(new Error('Metadata unavailable'));media.src=source
     })
-    if(!signal.aborted)await updateVideo(video.id,{duration})
+    if(!signal.aborted && persist && video.id)await updateVideo(video.id,{duration})
     return duration
 }
 // Bound concurrency so a large playlist cannot compete with the active video for every connection.
