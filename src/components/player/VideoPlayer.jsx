@@ -19,7 +19,7 @@ import useStudyTime from '../../hooks/useStudyTime'
 import StreamPlayerControls from './StreamPlayerControls'
 
 
-const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext, onPrevious, courseId, onTimeUpdate, autoPlay, onAspectRatioChange }, ref) {
+const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext, onPrevious, courseId, onTimeUpdate, autoPlay, onAspectRatioChange, onLocalAccessError }, ref) {
     const { settings, updateSettings } = useSettings()
     const videoRef = useRef(null)
     useStudyTime(()=>{
@@ -337,6 +337,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             setResumePosition(resumeTime(video, settings.resumePlayback))
         } catch (err) {
             console.error('Failed to load video:', err)
+            if(err.code==='LOCAL_FILE_ACCESS')onLocalAccessError?.()
             setError('Failed to load video: ' + err.message)
         } finally {
             setIsLoading(false)

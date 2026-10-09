@@ -1,8 +1,3 @@
-import { pickBrowserFolder, scanBrowserFolder } from '../utils/browserFiles'
-import { importVideos } from '../utils/importDurations'
-import { createReconnectMatcher } from '../utils/reconnectFiles'
-import { batchWork } from '../utils/batchWork'
-import { updateVideo, updateCourse } from '../utils/db'
 import usePlaybackMeasurement from '../hooks/usePlaybackMeasurement'
 import { subscribeLibraryChanges } from '../utils/libraryChanges'
 import { applyVideoDurations } from '../utils/moduleMetadata'
@@ -86,25 +81,6 @@ function CoursePlayerPage() {
     const [autoPlay, setAutoPlay] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
-    const [reconnecting,setReconnecting]=useState(false),[reconnectMessage,setReconnectMessage]=useState('')
-    async function reconnectFolder(){
-        if(reconnecting)return
-        setReconnecting(true);setReconnectMessage('')
-        try{
-            const handle=await pickBrowserFolder(),scanned=importVideos((await scanBrowserFolder(handle)).modules)
-            const savedContent=await getCourseContent(courseId)
-            const videos=savedContent.videos||[]
-            if(!scanned.length)throw Error(`No videos found in “${handle.name}”. Choose the course folder containing your video files.`)
-            if(!videos.length)throw Error('The saved course lessons could not be loaded. Reload the course, then reconnect its folder.')
-            const matchFile=createReconnectMatcher(scanned,{originalRoot:savedContent.course?.folderPath||course?.folderPath,selectedRoot:handle.name})
-            let restored=0
-            await batchWork(videos,async video=>{const match=matchFile(video);if(match){await updateVideo(video.id,{fileHandle:match.fileHandle,filePath:match.filePath,fileName:match.fileName,fileAccessUpdatedAt:Date.now()});restored++}},8)
-            if(!restored)throw Error(`Found ${scanned.length} videos in “${handle.name}”, but none match “${course?.title||'this course'}”. Choose its original folder.`)
-            await updateCourse(courseId,{folderHandle:handle,folderPath:handle.name})
-            setReconnectMessage(`${restored}/${videos.length} videos reconnected.${restored<videos.length?' Some missing or duplicate-named files could not be matched.':''}`)
-            await refreshModulesOnly()
-        }catch(err){if(err.name!=='AbortError')setReconnectMessage(err.message)}finally{setReconnecting(false)}
-    }
     const [contentLoading,setContentLoading]=useState(true),[contentError,setContentError]=useState('')
     const [metadataVideos,setMetadataVideos]=useState([]),[metadataStatus,setMetadataStatus]=useState({total:0,done:0,failed:0})
     const loadEpoch=useRef(0),metadataDurations=useRef(new Map())
@@ -423,7 +399,6 @@ function CoursePlayerPage() {
                                     <h2 className="text-lg sm:text-2xl font-bold mb-2">{currentVideo.title}</h2>
                                 </div>
 
-                                {IS_BROWSER_MODE && currentVideo.filePath && !currentVideo.driveFileId && (window.showDirectoryPicker ? <div><button disabled={reconnecting} onClick={reconnectFolder} className="rounded-lg border border-gray-200 dark:border-white/10 px-3 py-2 text-sm text-blue-500 disabled:opacity-50">{reconnecting?'Reconnecting…':'Reconnect local folder'}</button>{reconnectMessage&&<p role="status" className="mt-2 text-xs text-neutral-500">{reconnectMessage}</p>}</div> : <p className="text-sm text-neutral-500">Local videos can be reconnected on desktop Chrome or Edge using the original folder. On this device, use a Drive or YouTube course.</p>)}
                                 <div className="pt-6 border-t border-light-border dark:border-dark-border">
                                     <div
                                         className="inline-flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"

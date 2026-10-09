@@ -22,6 +22,9 @@ export function generateId(prefix = '') {
 // ============= COURSE OPERATIONS =============
 
 export async function addCourse(courseData) {
+    if(api.IS_BROWSER_MODE&&typeof courseData.folderHandle?.values==='function'){
+        try{await api.post('/api/data/local-folders',{handle:courseData.folderHandle})}catch(error){console.warn('Could not remember local folder:',error.message)}
+    }
     if(courseData.thumbnailData)courseData={...courseData,thumbnailData:await compressThumbnail(courseData.thumbnailData)}
     if(courseData.instructor)courseData={...courseData,instructor:canonicalInstructor(courseData.instructor,await getAllCourses())}
     return api.post(`/api/courses`, { id: generateId('course_'), ...courseData })

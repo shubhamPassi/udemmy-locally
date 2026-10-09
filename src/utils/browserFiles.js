@@ -24,8 +24,12 @@ export async function scanBrowserFolder(handle, rootPath = handle.name) {
     return { title: handle.name, folderPath: rootPath, folderHandle: handle, modules, totalVideos, totalDuration: 0 }
 }
 export async function browserVideoUrl(handle) {
-    if (!handle || typeof handle.queryPermission!=='function' || typeof handle.getFile!=='function') throw new Error('Reconnect this course folder to restore access to its local videos. Your progress is still saved.')
+    const unavailable=message=>Object.assign(new Error(message),{code:'LOCAL_FILE_ACCESS'})
+    if (!handle || typeof handle.queryPermission!=='function' || typeof handle.getFile!=='function') throw unavailable('Local folder access needs to be restored. Your progress is still saved.')
     const options = { mode: 'read' }
-    if (await handle.queryPermission(options) !== 'granted' && await handle.requestPermission(options) !== 'granted') throw new Error('Allow access to this course folder, then retry playback.')
-    return URL.createObjectURL(await handle.getFile())
+    try{
+        if (await handle.queryPermission(options) !== 'granted' && await handle.requestPermission(options) !== 'granted') throw unavailable('Allow access to this course folder, then retry playback.')
+    }catch(error){throw error.code==='LOCAL_FILE_ACCESS'?error:unavailable(error.message||'Local file access needs permission.')}
+    try{return URL.createObjectURL(await handle.getFile())}
+    catch(error){throw unavailable(error.message||'The local video file is unavailable.')}
 }

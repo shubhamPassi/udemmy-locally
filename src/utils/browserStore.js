@@ -112,6 +112,13 @@ export async function request(method, path, body = {}) {
         await save('settings', { id: 'settings', value: body }); return body
     }
     if (table === 'data') {
+        if(id==='local-folders'){
+            const record=await operation('settings','get','local-folders')
+            if(method==='GET')return record?.folders||[]
+            const folders=[{name:body.handle.name,handle:body.handle},...(record?.folders||[]).filter(folder=>folder.name!==body.handle.name)].slice(0,20)
+            await save('settings',{id:'local-folders',folders})
+            return {success:true}
+        }
         if (id === 'reset-progress') {
             recoveryEpoch++
             clearTimeout(recoveryTimer)
