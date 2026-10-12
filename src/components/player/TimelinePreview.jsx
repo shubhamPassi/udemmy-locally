@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createTimelinePreview, warmTimelinePreviews } from '../../utils/timelinePreview'
-import { formatDuration } from '../../utils/db'
+import { createTimelinePreview, warmTimelinePreviews, previewBucket, formatPreviewTime } from '../../utils/timelinePreview'
 
 function previewVideo(source, crossOrigin) {
     const video = document.createElement('video')
@@ -35,6 +34,7 @@ export default function TimelinePreview({ mediaRef, position, duration }) {
     const [frame, setFrame] = useState(null)
     const [, refresh] = useState(0)
     const source = mediaRef.current?.currentSrc || mediaRef.current?.src || ''
+    const sampleTime = position ? previewBucket(position.time, duration) : null
     useEffect(() => {
         if (!source || !duration) return
         const media = mediaRef.current
@@ -59,26 +59,29 @@ export default function TimelinePreview({ mediaRef, position, duration }) {
     useEffect(() => {
         setFrame(null)
         if (!source || !position) return
-        const prepared = background.current?.nearest(position.time)
-        if (prepared && Math.abs(prepared.time - position.time) < 0.001) {
-            setFrame({ time: position.time, image: prepared.image })
+        const prepared = background.current?.get(sampleTime)
+        if (prepared) {
+            setFrame(prepared)
             return
         }
         if (!decoder.current) {
             const video = previewVideo(source, mediaRef.current?.crossOrigin)
-            const controller = createTimelinePreview(video, frameCapture(), (time, image) => setFrame({ time, image }))
+            const controller = createTimelinePreview(video, frameCapture(), (time, image) => {
+                background.current?.remember(time, image)
+                setFrame({ time, image })
+            })
             decoder.current = controller
         }
         // Wait briefly for the pointer to settle rather than decoding every move.
-        const timer = setTimeout(() => decoder.current?.request(position.time), 120)
+        const timer = setTimeout(() => decoder.current?.request(sampleTime), 120)
         return () => clearTimeout(timer)
-    }, [source, position?.time])
+    }, [source, sampleTime])
     useEffect(() => () => { decoder.current?.dispose(); decoder.current = null }, [source])
     if (!position) return null
-    // A prepared frame appears immediately; an exact hover seek refines it.
-    const image = (frame?.time === position.time ? frame.image : null) || background.current?.nearest(position.time)?.image
+    // Every position in the same five-second interval reuses one cached frame.
+    const image = (frame?.time === sampleTime ? frame.image : null) || background.current?.get(sampleTime)?.image
     return <div className="absolute bottom-full mb-3 pointer-events-none z-30 flex flex-col items-center" style={{ left: Math.max(0, Math.min(position.width - Math.min(192, position.width), position.x - 96)), width: Math.min(192, position.width) }}>
         {image && <img src={image} alt="Frame at preview position" className="w-full aspect-video object-contain bg-black rounded-lg border border-white/70 shadow-xl" />}
-        <span className="mt-1 rounded-full bg-black/85 px-3 py-1 text-xs font-semibold text-white tabular-nums">{formatDuration(position.time)}{position.time % 1 >= 0.05 ? `.${Math.floor((position.time % 1) * 10)}` : ''}</span>
+        <span className="mt-1 rounded-full bg-black/85 px-3 py-1 text-xs font-semibold text-white tabular-nums">{formatPreviewTime(position.time)}</span>
     </div>
 }

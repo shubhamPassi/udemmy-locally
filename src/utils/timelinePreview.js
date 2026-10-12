@@ -64,13 +64,21 @@ export function timelinePosition(clientX, rect, duration) {
 
 // Cover the entire timeline first, then fill in finer intervals. Concurrency is
 // bounded because hundreds of simultaneous media seeks would starve playback.
-export function previewSampleTimes(duration, maxFrames = 720) {
+export function previewBucket(time, duration = Infinity) {
+    return Math.floor(Math.max(0, Math.min(time || 0, Math.max(0, duration - 0.001))) / 5) * 5
+}
+
+export function formatPreviewTime(time) {
+    const seconds = Number.isFinite(time) ? Math.max(0, Math.floor(time)) : 0
+    return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60].map(value => String(value).padStart(2, '0')).join(':')
+}
+
+export function previewSampleTimes(duration) {
     if (!(duration > 0)) return []
-    const step = Math.max(5, duration / maxFrames)
     const times = new Set()
-    const add = time => times.add(Math.round(Math.min(time, Math.max(0, duration - 0.001)) * 1000) / 1000)
+    const add = time => times.add(previewBucket(time, duration))
     for (let index = 0; index <= 24; index++) add(duration * index / 24)
-    for (let time = 0; time < duration; time += step) add(time)
+    for (let time = 0; time < duration; time += 5) add(time)
     return [...times]
 }
 
@@ -92,6 +100,7 @@ export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate,
         while (!disposed && next < times.length && failures < 3) {
             if (!canRun()) { await pause(); continue }
             const time = times[next++]
+            if (frames.has(time)) continue
             const frame = await new Promise(resolve => { finish = resolve; decoder.request(time) })
             finish = null
             if (disposed) break
@@ -107,13 +116,12 @@ export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate,
     const done = Promise.all(Array.from({ length: Math.max(1, Math.min(2, concurrency)) }, run))
     return {
         done,
-        nearest(time) {
-            let nearest = null, distance = Infinity
-            for (const [timestamp, image] of frames) {
-                const difference = Math.abs(timestamp - time)
-                if (difference < distance) { distance = difference; nearest = { time: timestamp, image } }
-            }
-            return nearest
+        get(time) {
+            const timestamp = previewBucket(time, duration), image = frames.get(timestamp)
+            return image ? { time: timestamp, image } : null
+        },
+        remember(time, image) {
+            if (!disposed && image) frames.set(previewBucket(time, duration), image)
         },
         dispose() {
             disposed = true
