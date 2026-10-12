@@ -120,9 +120,6 @@ export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate,
             const timestamp = previewBucket(time, duration), image = frames.get(timestamp)
             return image ? { time: timestamp, image } : null
         },
-        remember(time, image) {
-            if (!disposed && image) frames.set(previewBucket(time, duration), image)
-        },
         dispose() {
             disposed = true
             for (const worker of workers) { worker.cancel(); worker.decoder.dispose() }

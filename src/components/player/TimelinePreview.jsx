@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { createTimelinePreview, warmTimelinePreviews, previewBucket, formatPreviewTime } from '../../utils/timelinePreview'
+import { useEffect, useMemo, useRef } from 'react'
+import { warmTimelinePreviews, previewBucket, formatPreviewTime } from '../../utils/timelinePreview'
 
 function previewVideo(source, crossOrigin) {
     const video = document.createElement('video')
@@ -27,12 +27,7 @@ function frameCapture() {
 }
 
 export default function TimelinePreview({ mediaRef, position, duration }) {
-    const decoder = useRef(null)
     const background = useRef(null)
-    const hovered = useRef(position)
-    hovered.current = position
-    const [frame, setFrame] = useState(null)
-    const [, refresh] = useState(0)
     const source = mediaRef.current?.currentSrc || mediaRef.current?.src || ''
     const sampleTime = position ? previewBucket(position.time, duration) : null
     useEffect(() => {
@@ -48,38 +43,22 @@ export default function TimelinePreview({ mediaRef, position, duration }) {
                 // Yield when playback buffers or the page is in the background.
                 canRun: () => !document.hidden && media.readyState >= 3,
                 concurrency: navigator.connection?.saveData ? 1 : 2,
-                onUpdate: () => { if (hovered.current) refresh(value => value + 1) },
             })
-            background.current = pool
+            background.current = { source, duration, cache: pool }
         }
         media.addEventListener('canplay', start)
         start()
         return () => { disposed = true; media.removeEventListener('canplay', start); pool?.dispose(); background.current = null }
     }, [source, duration])
-    useEffect(() => {
-        setFrame(null)
-        if (!source || !position) return
-        const prepared = background.current?.get(sampleTime)
-        if (prepared) {
-            setFrame(prepared)
-            return
-        }
-        if (!decoder.current) {
-            const video = previewVideo(source, mediaRef.current?.crossOrigin)
-            const controller = createTimelinePreview(video, frameCapture(), (time, image) => {
-                background.current?.remember(time, image)
-                setFrame({ time, image })
-            })
-            decoder.current = controller
-        }
-        // Wait briefly for the pointer to settle rather than decoding every move.
-        const timer = setTimeout(() => decoder.current?.request(sampleTime), 120)
-        return () => clearTimeout(timer)
-    }, [source, sampleTime])
-    useEffect(() => () => { decoder.current?.dispose(); decoder.current = null }, [source])
+    // Hover only reads the cache. Keep the same snapshot within each interval,
+    // even if background preparation finishes while the pointer stays there.
+    const frame = useMemo(() => {
+        const prepared = background.current
+        return sampleTime === null || prepared?.source !== source || prepared?.duration !== duration ? null : prepared.cache.get(sampleTime)
+    }, [source, sampleTime, duration])
     if (!position) return null
     // Every position in the same five-second interval reuses one cached frame.
-    const image = (frame?.time === sampleTime ? frame.image : null) || background.current?.get(sampleTime)?.image
+    const image = frame?.image
     return <div className="absolute bottom-full mb-3 pointer-events-none z-30 flex flex-col items-center" style={{ left: Math.max(0, Math.min(position.width - Math.min(192, position.width), position.x - 96)), width: Math.min(192, position.width) }}>
         {image && <img src={image} alt="Frame at preview position" className="w-full aspect-video object-contain bg-black rounded-lg border border-white/70 shadow-xl" />}
         <span className="mt-1 rounded-full bg-black/85 px-3 py-1 text-xs font-semibold text-white tabular-nums">{formatPreviewTime(position.time)}</span>
