@@ -38,7 +38,8 @@ export function createTimelinePreview(video, capture, publish) {
                         await wait('seeked', () => { video.currentTime = seekTime })
                     }
                     if (disposed) break
-                    image = capture(video)
+                    image = await capture(video)
+                    if (disposed) break
                     cache.set(request.time, image)
                     if (cache.size > 32) cache.delete(cache.keys().next().value)
                 }
@@ -70,8 +71,10 @@ export function timelinePosition(clientX, rect, duration) {
 
 // Cover the entire timeline first, then fill in finer intervals. Concurrency is
 // bounded because hundreds of simultaneous media seeks would starve playback.
+export const PREVIEW_INTERVAL_SECONDS = 10
+
 export function previewBucket(time, duration = Infinity) {
-    return Math.floor(Math.max(0, Math.min(time || 0, Math.max(0, duration - 0.001))) / 5) * 5
+    return Math.floor(Math.max(0, Math.min(time || 0, Math.max(0, duration - 0.001))) / PREVIEW_INTERVAL_SECONDS) * PREVIEW_INTERVAL_SECONDS
 }
 
 export function formatPreviewTime(time) {
@@ -84,7 +87,7 @@ export function previewSampleTimes(duration) {
     const times = new Set()
     const add = time => times.add(previewBucket(time, duration))
     for (let index = 0; index <= 24; index++) add(duration * index / 24)
-    for (let time = 0; time < duration; time += 5) add(time)
+    for (let time = 0; time < duration; time += PREVIEW_INTERVAL_SECONDS) add(time)
     return [...times]
 }
 

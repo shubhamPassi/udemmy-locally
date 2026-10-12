@@ -74,20 +74,20 @@ test('background workers prepare the full timeline and cached hover reads requir
     assert.equal(videos.length, 2)
     assert.equal(videos.flatMap(video => video.seeks).length, previewSampleTimes(100).length - 1)
     const seeks = videos.flatMap(video => video.seeks).length
-    assert.deepEqual(pool.get(15), { time: 15, image: 'frame:15' })
-    assert.deepEqual(pool.get(19.9), pool.get(15))
+    assert.deepEqual(pool.get(10), { time: 10, image: 'frame:10' })
+    assert.deepEqual(pool.get(19.9), pool.get(10))
     assert.equal(videos.flatMap(video => video.seeks).length, seeks)
-    assert.equal(pool.get(99).time, 95)
+    assert.equal(pool.get(99).time, 90)
     pool.dispose()
     assert.equal(pool.get(15), null)
 })
 
-test('even long videos retain every five-second preview and distribute early samples across the timeline', () => {
+test('even long videos retain every ten-second preview and distribute early samples across the timeline', () => {
     const times = previewSampleTimes(36000)
-    assert.equal(times.length, 7200)
+    assert.equal(times.length, 3600)
     assert.equal(times[1], 1500)
-    assert.equal(times[24], 35995)
-    assert.deepEqual([...times].sort((a,b) => a-b), Array.from({ length: 7200 }, (_, index) => index * 5))
+    assert.equal(times[24], 35990)
+    assert.deepEqual([...times].sort((a,b) => a-b), Array.from({ length: 3600 }, (_, index) => index * 10))
     assert.equal(new Set(times).size, times.length)
 })
 
@@ -113,8 +113,9 @@ test('persistent frame failures stop background requests instead of scanning eve
 test('hover intervals share frames while timestamps show hours, minutes and whole seconds', () => {
     assert.equal(previewBucket(10.5, 100), 10)
     assert.equal(previewBucket(14.9, 100), 10)
-    assert.equal(previewBucket(15, 100), 15)
-    assert.equal(previewBucket(100, 100), 95)
+    assert.equal(previewBucket(19.9, 100), 10)
+    assert.equal(previewBucket(20, 100), 20)
+    assert.equal(previewBucket(100, 100), 90)
     assert.equal(formatPreviewTime(10.9), '00:00:10')
     assert.equal(formatPreviewTime(910.7), '00:15:10')
     assert.equal(formatPreviewTime(3661.9), '01:01:01')
@@ -153,7 +154,21 @@ test('background publishes the prepared interval so an already-hovered empty cac
     const pool = warmTimelinePreviews({ duration: 20, createVideo: () => new Decoder(), capture: media => `frame:${media.currentTime}`, onUpdate: time => published.push(time), delay: 0 })
     assert.equal(pool.get(10), null)
     await pool.done
-    assert.deepEqual([...published].sort((a,b) => a-b), [0, 5, 10, 15])
+    assert.deepEqual([...published].sort((a,b) => a-b), [0, 10])
     assert.equal(pool.get(10).image, 'frame:10')
     pool.dispose()
+})
+
+test('a thumbnail is not advertised as cached until its background image decoding completes', async () => {
+    let release
+    const decoded = new Promise(resolve => { release = resolve }), frames = []
+    const video = new Decoder()
+    const decoder = createTimelinePreview(video, async () => { await decoded; return 'decoded-thumbnail' }, (...frame) => frames.push(frame))
+    decoder.request(10)
+    await settle()
+    assert.equal(frames.length, 0)
+    release()
+    await settle()
+    assert.deepEqual(frames, [[10, 'decoded-thumbnail']])
+    decoder.dispose()
 })
