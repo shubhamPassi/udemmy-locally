@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTimelinePreview, timelinePosition, previewSampleTimes, warmTimelinePreviews, previewBucket, formatPreviewTime } from '../src/utils/timelinePreview.js'
+import { createTimelinePreview, timelinePosition, previewSampleTimes, warmTimelinePreviews, previewBucket, formatPreviewTime, canPrepareTimeline } from '../src/utils/timelinePreview.js'
 
 class Decoder extends EventTarget {
     readyState = 2
@@ -118,4 +118,42 @@ test('hover intervals share frames while timestamps show hours, minutes and whol
     assert.equal(formatPreviewTime(10.9), '00:00:10')
     assert.equal(formatPreviewTime(910.7), '00:15:10')
     assert.equal(formatPreviewTime(3661.9), '01:01:01')
+})
+
+test('paused metadata-only lessons can warm previews without waiting for Play or canplay', () => {
+    const media = { readyState: 1, paused: true, seeking: false }
+    assert.equal(canPrepareTimeline(media), true)
+    assert.equal(canPrepareTimeline({ ...media, paused: false }), false)
+    assert.equal(canPrepareTimeline({ ...media, readyState: 3, paused: false }), true)
+    assert.equal(canPrepareTimeline(media, true), false)
+    assert.equal(canPrepareTimeline({ ...media, seeking: true }), false)
+})
+
+test('metadata-only decoders actively request the first frame rather than waiting for loadeddata', async () => {
+    class MetadataDecoder extends Decoder {
+        readyState = 0
+        load() { if (this.readyState === 0) { this.readyState = 1; queueMicrotask(() => this.dispatchEvent(new Event('loadedmetadata'))) } }
+        get currentTime() { return super.currentTime }
+        set currentTime(time) { this.readyState = 2; super.currentTime = time }
+    }
+    const video = new MetadataDecoder(), frames = []
+    const decoder = createTimelinePreview(video, media => {
+        assert.equal(media.readyState, 2)
+        return 'decoded-first-frame'
+    }, (...frame) => frames.push(frame))
+    decoder.request(0)
+    await settle()
+    assert.deepEqual(video.seeks, [0.001])
+    assert.deepEqual(frames, [[0, 'decoded-first-frame']])
+    decoder.dispose()
+})
+
+test('background publishes the prepared interval so an already-hovered empty cache can refresh', async () => {
+    const published = []
+    const pool = warmTimelinePreviews({ duration: 20, createVideo: () => new Decoder(), capture: media => `frame:${media.currentTime}`, onUpdate: time => published.push(time), delay: 0 })
+    assert.equal(pool.get(10), null)
+    await pool.done
+    assert.deepEqual([...published].sort((a,b) => a-b), [0, 5, 10, 15])
+    assert.equal(pool.get(10).image, 'frame:10')
+    pool.dispose()
 })

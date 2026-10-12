@@ -12,7 +12,7 @@ export function createTimelinePreview(video, capture, publish) {
                 error ? reject(error) : resolve()
             }
             const done = () => finish(), fail = () => finish(new Error('Preview unavailable'))
-            const timer = setTimeout(fail, 8000)
+            const timer = setTimeout(fail, event === 'loadedmetadata' ? 20000 : 15000)
             cancelWait = fail
             video.addEventListener(event, done, { once: true })
             video.addEventListener('error', fail, { once: true })
@@ -30,8 +30,13 @@ export function createTimelinePreview(video, capture, publish) {
                 if (!image) {
                     if (video.readyState < 1) await wait('loadedmetadata', () => video.load())
                     const target = Math.min(request.time, Math.max(0, video.duration - 0.001))
-                    if (Math.abs(video.currentTime - target) > 0.001) await wait('seeked', () => { video.currentTime = target })
-                    else if (video.readyState < 2) await wait('loadeddata')
+                    if (Math.abs(video.currentTime - target) > 0.001 || video.readyState < 2) {
+                        // Metadata-only media may never emit loadeddata at time
+                        // zero. An explicit seek requests and decodes that frame.
+                        const seekTime = video.readyState < 2 && Math.abs(video.currentTime - target) <= 0.001
+                            ? Math.min(target + 0.001, Math.max(0, video.duration - 0.001)) : target
+                        await wait('seeked', () => { video.currentTime = seekTime })
+                    }
                     if (disposed) break
                     image = capture(video)
                     cache.set(request.time, image)
@@ -53,6 +58,7 @@ export function createTimelinePreview(video, capture, publish) {
             cache.clear()
             video.removeAttribute('src')
             video.load()
+            video.remove?.()
         },
     }
 }
@@ -82,6 +88,10 @@ export function previewSampleTimes(duration) {
     return [...times]
 }
 
+export function canPrepareTimeline(media, hidden = false) {
+    return !hidden && !!media && !media.error && !media.seeking && media.readyState >= 1 && (media.paused || media.readyState >= 3)
+}
+
 export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate, canRun = () => true, concurrency = 2, delay = 80 }) {
     const times = previewSampleTimes(duration), frames = new Map(), workers = []
     let next = 0, disposed = false
@@ -107,7 +117,7 @@ export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate,
             if (frame.image) {
                 failures = 0
                 frames.set(frame.time, frame.image)
-                onUpdate?.()
+                onUpdate?.(frame.time)
             } else failures++
             await pause()
         }
