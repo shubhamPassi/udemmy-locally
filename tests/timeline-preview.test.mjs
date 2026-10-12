@@ -48,7 +48,8 @@ test('source cleanup ignores pending frames and capture failures allow timestamp
     const preview = createTimelinePreview(video, () => { throw new Error('Cross-origin capture denied') }, (...frame) => frames.push(frame))
     preview.request(10.5)
     await settle()
-    assert.deepEqual(frames, [[10.5, null]])
+    assert.deepEqual(frames.map(frame=>frame.slice(0,2)), [[10.5, null]])
+    assert.match(frames[0][2].message,/Cross-origin/)
     preview.request(20)
     preview.dispose()
     await settle()
@@ -105,7 +106,7 @@ test('persistent frame failures stop background requests instead of scanning eve
     const videos = []
     const pool = warmTimelinePreviews({ duration: 100, createVideo: () => { const video = new Decoder(); videos.push(video); return video }, capture: () => { throw new Error('blocked') }, delay: 0 })
     await pool.done
-    assert.ok(videos.flatMap(video => video.seeks).length <= 6)
+    assert.ok(videos.flatMap(video => video.seeks).length <= 12)
     assert.equal(pool.get(15), null)
     pool.dispose()
 })
@@ -171,4 +172,11 @@ test('a thumbnail is not advertised as cached until its background image decodin
     await settle()
     assert.deepEqual(frames, [[10, 'decoded-thumbnail']])
     decoder.dispose()
+})
+test('preparation selectively retries a transient failed interval without decoding successful frames again',async()=>{
+    const attempts=new Map()
+    const pool=warmTimelinePreviews({duration:30,createVideo:()=>new Decoder(),capture:media=>{const time=media.currentTime;attempts.set(time,(attempts.get(time)||0)+1);if(time===10&&attempts.get(time)===1)throw Error('Temporary fetch failure');return `frame:${time}`},delay:0})
+    await pool.done
+    assert.equal(pool.get(10).image,'frame:10');assert.equal(attempts.get(10),2);assert.equal(attempts.get(20),1)
+    pool.dispose()
 })

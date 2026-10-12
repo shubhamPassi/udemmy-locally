@@ -1,13 +1,13 @@
 import { useDurationVisibility, toggleDurationVisibility } from '../../utils/durationVisibility'
 import { Link, useLocation } from 'react-router-dom'
 import { Sun, Moon, Settings, Menu, Search, X, FolderOpen, Youtube, HardDrive, ChevronDown, Plus, Link2, Eye, EyeOff } from 'lucide-react'
-import { useTheme } from '../../contexts/ThemeContext'
-import { useSidebar } from '../../contexts/SidebarContext'
-import { useSearch } from '../../contexts/SearchContext'
+import {useTheme} from '../../contexts/contextHooks.js'
+import {useSidebar} from '../../contexts/contextHooks.js'
+import {useSearch} from '../../contexts/contextHooks.js'
 import { lazy, Suspense, useState } from 'react'
-import { useSettings } from '../../contexts/SettingsContext'
-import { useNotification } from '../../contexts/NotificationContext'
-import { useImport } from '../../contexts/ImportContext'
+import {useSettings} from '../../contexts/contextHooks.js'
+import {useNotification} from '../../contexts/contextHooks.js'
+import {useImport} from '../../contexts/contextHooks.js'
 import { pickFolder, scanCourseSelection } from '../../utils/fileSystem'
 
 const SettingsModal = lazy(() => import('../settings/SettingsModal'))
@@ -19,7 +19,10 @@ function Header() {
     const hideUpcomingDurations=useDurationVisibility()
     const { settings } = useSettings()
     const { dispatchImport, dispatchYouTube, dispatchGoogleDrive, dispatchExternalLink } = useImport()
-    const { theme, toggleTheme, isDark } = useTheme()
+    const {
+  toggleTheme,
+  isDark
+} = useTheme()
     const { toggleSidebar } = useSidebar()
     const { searchQuery, setSearchQuery } = useSearch()
     const location = useLocation()

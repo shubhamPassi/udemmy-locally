@@ -1,3 +1,4 @@
+import useEventCallback from '../../hooks/useEventCallback.js'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
     ChevronDown, ChevronUp, Plus, Pencil, Trash2,
@@ -7,7 +8,8 @@ import {
 import {
     addNote, getNotesByVideo, updateNote, deleteNote, formatDuration
 } from '../../utils/db'
-import { useNotification } from '../../contexts/NotificationContext'
+import {useNotification} from '../../contexts/contextHooks.js'
+import { sanitizeNoteHtml } from '../../utils/noteSafety.js'
 
 const MAX_IMAGE_WIDTH = 800
 const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024 // 2MB
@@ -101,21 +103,25 @@ function RichTextToolbar({ onImageInsert }) {
     )
 }
 
-function NoteEditor({ content, onChange, onImageInsert, placeholder = 'Write your note...' }) {
+function NoteEditor({
+  content,
+  onChange,
+  placeholder = 'Write your note...'
+}) {
     const editorRef = useRef(null)
     const isInitializedRef = useRef(false)
 
     // Set initial content once
     useEffect(() => {
         if (editorRef.current && !isInitializedRef.current) {
-            editorRef.current.innerHTML = content || ''
+            editorRef.current.innerHTML = sanitizeNoteHtml(content)
             isInitializedRef.current = true
         }
-    }, [])
+    }, [content])
 
     const handleInput = useCallback(() => {
         if (editorRef.current) {
-            onChange(editorRef.current.innerHTML)
+            onChange(sanitizeNoteHtml(editorRef.current.innerHTML))
         }
     }, [onChange])
 
@@ -144,6 +150,8 @@ function NoteEditor({ content, onChange, onImageInsert, placeholder = 'Write you
                 return
             }
         }
+        const html = e.clipboardData.getData('text/html')
+        if (html) { e.preventDefault(); execCommand('insertHTML', sanitizeNoteHtml(html)); handleInput() }
     }
 
     function handleDragOver(e) {
@@ -195,6 +203,8 @@ function NotesPanel({
     isCollapsed: initialCollapsed = false,
     hideHeader = false
 }) {
+const loadNotesEvent=useEventCallback(loadNotes)
+
     const [notes, setNotes] = useState([])
     const [isCollapsed, setIsCollapsed] = useState(initialCollapsed)
     const [isLoading, setIsLoading] = useState(true)
@@ -206,7 +216,7 @@ function NotesPanel({
 
     useEffect(() => {
         if (video?.id) {
-            loadNotes()
+            loadNotesEvent()
         } else {
             setNotes([])
             setIsLoading(false)
@@ -218,13 +228,14 @@ function NotesPanel({
         setNoteContent('')
         setNoteTimestamp(null)
         setEditorKey(prev => prev + 1)
-    }, [video?.id])
+    }, [video?.id, loadNotesEvent])
 
     async function loadNotes() {
         try {
             setIsLoading(true)
             const videoNotes = await getNotesByVideo(video.id)
             setNotes(videoNotes)
+            window.dispatchEvent(new CustomEvent('tutin-notes-changed',{detail:{videoId:video.id}}))
         } catch (err) {
             console.error('Failed to load notes:', err)
         } finally {
@@ -320,7 +331,7 @@ function NotesPanel({
     function copyNote(content) {
         // Strip HTML for clipboard
         const temp = document.createElement('div')
-        temp.innerHTML = content
+        temp.innerHTML = sanitizeNoteHtml(content)
         navigator.clipboard.writeText(temp.textContent || temp.innerText || '')
     }
 
@@ -329,7 +340,7 @@ function NotesPanel({
             const time = formatDuration(note.timestamp)
             // Convert HTML to plain text for export
             const temp = document.createElement('div')
-            temp.innerHTML = note.content
+            temp.innerHTML = sanitizeNoteHtml(note.content)
             const text = temp.textContent || temp.innerText || ''
             // Include image count if any
             const imgCount = (note.images || []).length
@@ -518,7 +529,7 @@ function NotesPanel({
                                     ) : (
                                         <div
                                             className="note-content mt-2 text-sm"
-                                            dangerouslySetInnerHTML={{ __html: note.content }}
+                                            dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(note.content) }}
                                         />
                                     )}
                                 </div>

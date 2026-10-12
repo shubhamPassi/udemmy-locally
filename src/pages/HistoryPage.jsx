@@ -7,7 +7,7 @@ import { formatDuration } from '../utils/db'
 
 function HistoryPage() {
     const [watchedVideos, setWatchedVideos] = useState([])
-    const [courses, setCourses] = useState([])
+    const [, setCourses] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
 

@@ -57,8 +57,9 @@ export default function StatisticsPage() {
         function onVisible() { if (!document.hidden) load() }
         const timer = setInterval(updateSessions, 15000)
         window.addEventListener('storage', onStorage)
+        window.addEventListener('tutin-progress-hydrated', updateSessions)
         document.addEventListener('visibilitychange', onVisible)
-        return () => { clearInterval(timer); window.removeEventListener('storage', onStorage); document.removeEventListener('visibilitychange', onVisible) }
+        return () => { clearInterval(timer); window.removeEventListener('storage', onStorage);window.removeEventListener('tutin-progress-hydrated',updateSessions); document.removeEventListener('visibilitychange', onVisible) }
     }, [])
     const stats = useMemo(() => learningStats(courses, videos), [courses, videos])
     const activity = useMemo(() => studyActivity(sessions, courses, endDate, periodDays), [sessions, courses, endDate, periodDays])

@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-import { GripVertical, Folder, Video, ChevronDown, ChevronRight } from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { GripVertical, Folder, Video } from 'lucide-react';
 import { formatDuration } from '../../utils/db'
 
 function BulkEditPlaylist({ modules: initialModules, onSave, onCancel }) {

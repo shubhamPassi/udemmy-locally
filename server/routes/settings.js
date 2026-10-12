@@ -1,7 +1,7 @@
 import express from 'express'
 import fs from 'fs'
 import path from 'path'
-import { getAll, getOne, run, transaction, getDataDir, getDb, saveDatabase } from '../database.js'
+import { getAll, run, transaction, getDataDir, getDb, saveDatabase } from '../database.js';
 
 const router = express.Router()
 
@@ -14,7 +14,7 @@ router.get('/', (req, res) => {
         for (const row of rows) {
             try {
                 settings[row.key] = JSON.parse(row.value)
-            } catch (e) {
+            } catch {
                 // Handle raw strings if they were saved incorrectly
                 settings[row.key] = row.value
             }

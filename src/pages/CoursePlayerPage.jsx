@@ -1,11 +1,12 @@
+import useEventCallback from '../hooks/useEventCallback.js'
 import usePlaybackMeasurement from '../hooks/usePlaybackMeasurement'
 import { subscribeLibraryChanges } from '../utils/libraryChanges'
 import { applyVideoDurations } from '../utils/moduleMetadata'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Menu } from 'lucide-react'
+import { useParams, useNavigate } from 'react-router-dom';
+
 import { getCourse, getCourseContent, getVideo, getVideosByCourse, getInstructorAvatarAsync, buildModuleTree } from '../utils/db'
-import { useSettings } from '../contexts/SettingsContext'
+import {useSettings} from '../contexts/contextHooks.js'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import VideoPlayer from '../components/player/CourseVideoPlayer'
 import { createPlaybackClock } from '../utils/playbackClock'
@@ -72,6 +73,10 @@ async function fetchCourseContent(courseId) {
 }
 
 function CoursePlayerPage() {
+const loadCourseDataEvent=useEventCallback(loadCourseData)
+const refreshCourseProgressOnlyEvent=useEventCallback(refreshCourseProgressOnly)
+const refreshCurrentVideoOnlyEvent=useEventCallback(refreshCurrentVideoOnly)
+
     const { courseId } = useParams()
     const navigate = useNavigate()
     const { settings } = useSettings()
@@ -91,9 +96,10 @@ function CoursePlayerPage() {
         const saved = localStorage.getItem('sidebarPanelWidth')
         return saved ? Math.max(280, Math.min(600, parseInt(saved, 10))) : 360
     })
-    const playbackClock = useMemo(() => createPlaybackClock(), [courseId])
+    const playbackClock = useMemo(() => ({courseId,clock:createPlaybackClock()}), [courseId]).clock
     const handlePlaybackTime = playbackClock.update
     useEffect(() => {
+        const currentVideo=activeVideoRef.current
         if (currentVideo) playbackClock.update(resumeTime(currentVideo, settings.resumePlayback))
     }, [playbackClock, currentVideo?.id, settings.resumePlayback])
     const playlistRefreshRef = useRef(null)
@@ -153,9 +159,10 @@ function CoursePlayerPage() {
 
     // Load course data (reload when progress calculation mode changes)
     useEffect(() => {
-        loadCourseData()
-        return () => { loadEpoch.current++ }
-    }, [courseId])
+        const epochRef=loadEpoch
+        loadCourseDataEvent()
+        return () => { epochRef.current++ }
+    }, [courseId, loadCourseDataEvent])
 
     // Refresh only course progress when calculation mode changes (don't interrupt video)
     const prevProgressModeRef = useRef(settings.progressCalculationMode)
@@ -164,9 +171,9 @@ function CoursePlayerPage() {
         if (prevProgressModeRef.current !== settings.progressCalculationMode) {
             prevProgressModeRef.current = settings.progressCalculationMode
             // Recalculation is already awaited by SettingsModal before this state changes
-            refreshCourseProgressOnly()
+            refreshCourseProgressOnlyEvent()
         }
-    }, [settings.progressCalculationMode])
+    }, [settings.progressCalculationMode, refreshCourseProgressOnlyEvent])
 
     // Lightweight refresh - only updates course progress without affecting video
     async function refreshCourseProgressOnly() {
@@ -292,6 +299,7 @@ function CoursePlayerPage() {
 
     // Auto-fetch YouTube transcripts
     useEffect(() => {
+        const currentVideo=activeVideoRef.current
         if (IS_BROWSER_MODE) return
         if (!currentVideo) return
         const isYouTube = currentVideo.youtubeId ||
@@ -303,14 +311,14 @@ function CoursePlayerPage() {
                     .then(async (data) => {
                         if (data.chunks && data.chunks.length > 0) {
                             await put(`/api/transcripts/${currentVideo.id}`, { chunks: data.chunks })
-                            refreshCurrentVideoOnly()
+                            refreshCurrentVideoOnlyEvent()
                         }
                     })
                     .catch(err => console.log('Notice: Could not auto-fetch YouTube transcript:', err.message))
         }
-    }, [currentVideo?.id, currentVideo?.hasTranscript])
+    }, [currentVideo?.id, currentVideo?.hasTranscript, refreshCurrentVideoOnlyEvent])
 
-    function handleVideoComplete(videoId) {
+    function handleVideoComplete(_videoId) {
         // Lightweight refresh - only updates sidebar, doesn't reload video player
         refreshModulesOnly()
     }

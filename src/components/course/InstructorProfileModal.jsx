@@ -1,11 +1,14 @@
+import useEventCallback from '../../hooks/useEventCallback.js'
 import { useDurationVisibility } from '../../utils/durationVisibility'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { X, Camera, BookOpen, Clock, Trash2 } from 'lucide-react'
 import { getCoursesByInstructor, getInstructorAvatarAsync, setInstructorAvatar, removeInstructorAvatar, formatDuration } from '../../utils/db'
-import { useNotification } from '../../contexts/NotificationContext'
+import {useNotification} from '../../contexts/contextHooks.js'
 
 function InstructorProfileModal({ instructor, onClose, onAvatarChange }) {
+const loadDataEvent=useEventCallback(loadData)
+
     const hideDurations=useDurationVisibility()
     const [courses, setCourses] = useState([])
     const [isLoading, setIsLoading] = useState(true)
@@ -16,9 +19,9 @@ function InstructorProfileModal({ instructor, onClose, onAvatarChange }) {
     // Load instructor courses and avatar on mount
     useEffect(() => {
         if (instructor) {
-            loadData()
+            loadDataEvent()
         }
-    }, [instructor])
+    }, [instructor, loadDataEvent])
 
     async function loadData() {
         setIsLoading(true)
@@ -89,7 +92,7 @@ function InstructorProfileModal({ instructor, onClose, onAvatarChange }) {
     // Calculate totals
     const totalCourses = courses.length
     const totalDuration = courses.reduce((sum, c) => sum + (c.totalDuration || 0), 0)
-    const totalVideos = courses.reduce((sum, c) => sum + (c.totalVideos || 0), 0)
+    courses.reduce((sum, c) => sum + (c.totalVideos || 0), 0);
 
     if (!instructor) return null
 

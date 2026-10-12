@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, Headphones, Loader2, AlertCircle, CheckCircle2, Play } from 'lucide-react'
-import { useSettings } from '../../contexts/SettingsContext'
-import { TRANSLATION_LANGUAGES } from './TranslateModal'
+import {useSettings} from '../../contexts/contextHooks.js'
+import { TRANSLATION_LANGUAGES } from '../../utils/translationLanguages.js'
 import { SERVER_URL } from '../../utils/api'
 
 export default function DubModal({ isOpen, onClose, video, onSuccess }) {
-    const { settings } = useSettings()
+    useSettings()
     const [targetLang, setTargetLang] = useState('ar')
     const [isDubbing, setIsDubbing] = useState(false)
     const [status, setStatus] = useState(null)
@@ -94,7 +94,7 @@ export default function DubModal({ isOpen, onClose, video, onSuccess }) {
                 throw new Error(errData.error || `Server error: ${res.status}`)
             }
 
-            const { jobId } = await res.json()
+            await res.json()
 
             // Poll for status every 3 seconds
             pollRef.current = setInterval(async () => {

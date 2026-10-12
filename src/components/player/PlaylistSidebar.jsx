@@ -4,12 +4,9 @@ import { useDurationVisibility } from '../../utils/durationVisibility'
 import { contentDuration } from '../../utils/courseDuration'
 import { courseCoverage, subscribeCoverage, coverageVersion, readCoverage, watchedSeconds } from '../../utils/watchCoverage'
 import { lazy, Suspense, useState, useMemo, useRef, useEffect, useCallback, useSyncExternalStore } from 'react'
-import {
-    ChevronDown, ChevronRight, ChevronLeft, Check,
-    Pencil, GripVertical, Folder, FolderOpen, Plus
-} from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronLeft, Check, Pencil, FolderOpen, Plus } from 'lucide-react';
 import { markVideoComplete, updateModule, updateVideo } from '../../utils/db'
-import { useNotification } from '../../contexts/NotificationContext'
+import {useNotification} from '../../contexts/contextHooks.js'
 import { playlistDisplay } from '../../utils/playlistDisplay'
 
 const YouTubeImportModal = lazy(() => import('../course/YouTubeImportModal'))
@@ -132,7 +129,7 @@ function PlaylistSidebar({
     useEffect(() => {
         localStorage.setItem('sidebarPanelWidth', panelWidth.toString())
         onWidthChange?.(panelWidth)
-    }, [panelWidth])
+    }, [panelWidth,onWidthChange])
 
     const handleResizeStart = useCallback((e) => {
         e.preventDefault()
@@ -236,8 +233,6 @@ function PlaylistSidebar({
         const hasContent = (module.videos?.length > 0) || hasSubModules
 
         // Calculate completion for this module's own videos
-        const ownCompleted = (module.videos || []).filter(v => v.isCompleted).length
-        const ownTotal = (module.videos || []).length
 
         // Calculate completion including sub-modules
         const allModuleVideos = collectAllVideos([module])

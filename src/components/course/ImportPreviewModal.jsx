@@ -11,7 +11,7 @@ import { courseDuration } from '../../utils/courseDuration'
 import { scanVideoMetadata, loadVideoMetadata } from '../../utils/videoMetadata'
 import { importVideos, applyImportDuration } from '../../utils/importDurations'
 import * as api from '../../utils/api'
-import { useNotification } from '../../contexts/NotificationContext'
+import {useNotification} from '../../contexts/contextHooks.js'
 
 /**
  * Count total videos recursively including sub-modules

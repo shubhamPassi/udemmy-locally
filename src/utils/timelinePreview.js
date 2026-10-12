@@ -44,8 +44,8 @@ export function createTimelinePreview(video, capture, publish) {
                     if (cache.size > 32) cache.delete(cache.keys().next().value)
                 }
                 if (!latest && !disposed) publish(request.time, image)
-            } catch {
-                if (!latest && !disposed) publish(request.time, null)
+            } catch (error) {
+                if (!latest && !disposed) publish(request.time, null, error)
             }
         }
         running = false
@@ -95,8 +95,8 @@ export function canPrepareTimeline(media, hidden = false) {
     return !hidden && !!media && !media.error && !media.seeking && media.readyState >= 1 && (media.paused || media.readyState >= 3)
 }
 
-export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate, canRun = () => true, concurrency = 2, delay = 80 }) {
-    const times = previewSampleTimes(duration), frames = new Map(), workers = []
+export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate, initialFrames = [], canRun = () => true, concurrency = 2, delay = 80 }) {
+    const frames = new Map(initialFrames), times = previewSampleTimes(duration).filter(time=>!frames.has(time)).map(time=>({time,attempt:0})), workers = []
     let next = 0, disposed = false
     const pending = new Set()
     const pause = () => new Promise(resolve => {
@@ -105,14 +105,15 @@ export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate,
         pending.add(cancel)
     })
     async function run() {
+        if(next>=times.length || disposed)return
         const video = createVideo()
         let finish, failures = 0
-        const decoder = createTimelinePreview(video, capture, (time, image) => finish?.({ time, image }))
+        const decoder = createTimelinePreview(video, capture, (time, image, error) => finish?.({ time, image, error }))
         const cancel = () => finish?.({ image: null })
         workers.push({ decoder, cancel })
-        while (!disposed && next < times.length && failures < 3) {
+        while (!disposed && next < times.length && failures < 6) {
             if (!canRun()) { await pause(); continue }
-            const time = times[next++]
+            const request = times[next++], time=request.time
             if (frames.has(time)) continue
             const frame = await new Promise(resolve => { finish = resolve; decoder.request(time) })
             finish = null
@@ -121,7 +122,11 @@ export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate,
                 failures = 0
                 frames.set(frame.time, frame.image)
                 onUpdate?.(frame.time)
-            } else failures++
+            } else {
+                failures++
+                if(frame.error?.name==='SecurityError'||video.error?.code===4)break
+                if(request.attempt<1)times.push({time,attempt:request.attempt+1})
+            }
             await pause()
         }
         decoder.dispose()

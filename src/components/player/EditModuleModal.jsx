@@ -124,11 +124,10 @@ function EditModuleModal({ module, isOpen, onClose, onSave }) {
         }
     }
 
-    const hasChanges = moduleName !== module.title ||
-        videos.some((v, i) => {
-            const original = module.videos?.[i]
-            return original && (original.title !== v.title || original.order !== v.order)
-        })
+    moduleName !== module.title || videos.some((v, i) => {
+  const original = module.videos?.[i];
+  return original && (original.title !== v.title || original.order !== v.order);
+});
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

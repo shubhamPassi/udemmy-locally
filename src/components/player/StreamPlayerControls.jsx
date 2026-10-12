@@ -2,16 +2,21 @@ import { useEffect, useRef, useState } from 'react'
 import { Play, Pause, Volume2, VolumeX, Maximize, RotateCcw, RotateCw, Loader2 } from 'lucide-react'
 import { formatDuration } from '../../utils/db'
 import TimelinePreview from './TimelinePreview'
+import PlayerLearningTools from './PlayerLearningTools.jsx'
+import useEventCallback from '../../hooks/useEventCallback.js'
 import { timelinePosition } from '../../utils/timelinePreview'
 
-export default function StreamPlayerControls({ mediaRef, containerRef, showLoadingIndicator = true }) {
+export default function StreamPlayerControls({ mediaRef, containerRef, video, showLoadingIndicator = true }) {
     const [state, setState] = useState({ time: 0, duration: 0, paused: true, muted: false, volume: 1, rate: 1, buffering: true })
     const [visible, setVisible] = useState(true)
     const [preview, setPreview] = useState(null)
+    const [markers,setMarkers]=useState([])
     const hideTimer = useRef(null)
     const interacting = useRef(false)
     const controlsBar=useRef(null),hoveringControls=useRef(false)
+    const stableReveal=useEventCallback(reveal)
     useEffect(() => {
+        const reveal=stableReveal
         reveal()
         const release = () => {
             if (!interacting.current) return
@@ -34,17 +39,19 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
         container?.addEventListener('pointerover',pointerOver)
         container?.addEventListener('pointerout',pointerOut)
         container?.addEventListener('tutin-subtitle-menu-change',reveal)
+        container?.addEventListener('tutin-player-menu-change',reveal)
         window.addEventListener('pointerup', release)
         window.addEventListener('pointercancel', release)
         return () => {
             clearTimeout(hideTimer.current)
             container?.removeEventListener('tutin-subtitle-menu-change',reveal)
+            container?.removeEventListener('tutin-player-menu-change',reveal)
             container?.removeEventListener('pointerover',pointerOver)
             container?.removeEventListener('pointerout',pointerOut)
             window.removeEventListener('pointerup', release)
             window.removeEventListener('pointercancel', release)
         }
-    }, [])
+    }, [containerRef,stableReveal])
     useEffect(() => {
         const media = mediaRef.current
         if (!media) return
@@ -59,8 +66,9 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
     function reveal() {
         setVisible(true)
         clearTimeout(hideTimer.current)
-        if (!interacting.current&&!hoveringControls.current) hideTimer.current = setTimeout(() => {if(!hoveringControls.current&&!containerRef.current?.querySelector('[data-subtitle-menu-open="true"]'))setVisible(false)}, 2000)
+        if (!interacting.current&&!hoveringControls.current) hideTimer.current = setTimeout(() => {if(!hoveringControls.current&&!keyboardFocus()&&!containerRef.current?.querySelector('[data-subtitle-menu-open="true"], [data-player-menu-open="true"]'))setVisible(false)}, 2000)
     }
+    function keyboardFocus(){try{return !!controlsBar.current?.querySelector(':focus-visible')}catch{return false}}
     function toggle() {
         const media = mediaRef.current
         if (!media) return
@@ -75,13 +83,14 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
     }
     const shown = visible
     const button = 'h-10 w-6 sm:w-10 flex shrink-0 items-center justify-center rounded-full text-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400'
-    return <div data-controls-visible={shown ? 'true' : 'false'} className={`absolute inset-0 flex flex-col justify-end ${shown ? '' : 'cursor-none'}`} onMouseMove={reveal} onTouchStart={reveal} onKeyDownCapture={reveal} onMouseLeave={() => { if (!interacting.current && !hoveringControls.current && !containerRef.current?.querySelector('[data-subtitle-menu-open="true"]')) setVisible(false) }}>
+    return <div data-controls-visible={shown ? 'true' : 'false'} className={`absolute inset-0 flex flex-col justify-end ${shown ? '' : 'cursor-none'}`} onMouseMove={reveal} onTouchStart={reveal} onKeyDownCapture={reveal} onMouseLeave={() => { if (!interacting.current && !hoveringControls.current && !containerRef.current?.querySelector('[data-subtitle-menu-open="true"], [data-player-menu-open="true"]')) setVisible(false) }}>
         <button className="absolute inset-0 w-full h-full" onClick={toggle} aria-label={state.paused ? 'Play video' : 'Pause video'} />
         {showLoadingIndicator && state.buffering && <div role="status" aria-label="Loading video" className="absolute inset-0 pointer-events-none flex items-center justify-center"><Loader2 className="w-9 h-9 text-white animate-spin" /></div>}
         {state.paused && shown && <button onClick={toggle} aria-label="Play" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-black/65 border border-white/20 text-white flex items-center justify-center hover:bg-blue-600"><Play className="w-7 h-7 ml-1" fill="currentColor" /></button>}
         <div ref={controlsBar} className={`relative px-3 sm:px-5 pt-8 pb-2 bg-gradient-to-t from-black/95 via-black/70 to-transparent transition-opacity duration-150 ${shown ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onFocusCapture={reveal} onPointerDown={() => { interacting.current = true; clearTimeout(hideTimer.current) }}>
             <div className="relative" onPointerLeave={() => setPreview(null)}>
-            <TimelinePreview mediaRef={mediaRef} position={shown ? preview : null} duration={state.duration} />
+            <TimelinePreview mediaRef={mediaRef} position={shown ? preview : null} duration={state.duration} video={video} />
+            {state.duration>0&&markers.filter(marker=>marker.time<state.duration).map((marker,index)=><button key={`${marker.time}-${index}`} aria-label={`Jump to ${marker.title}`} title={marker.title} onClick={()=>{mediaRef.current.currentTime=marker.time;reveal()}} className="absolute bottom-1 z-10 h-4 w-2 -translate-x-1/2 rounded-sm bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" style={{left:`${marker.time/state.duration*100}%`}}/>)}
             <input type="range" aria-label="Video position" min="0" max={state.duration || 1} step="0.1" value={Math.min(state.time, state.duration || 1)} disabled={!state.duration}
                 onPointerMove={event => { if (state.duration) { const rect = event.currentTarget.getBoundingClientRect(); setPreview({ ...timelinePosition(event.clientX, rect, state.duration), width: rect.width }); reveal() } }}
                 onPointerCancel={() => setPreview(null)}
@@ -100,6 +109,7 @@ export default function StreamPlayerControls({ mediaRef, containerRef, showLoadi
                     <button className={`${button} hidden sm:flex`} onClick={() => { mediaRef.current.muted = !mediaRef.current.muted }} aria-label={state.muted ? 'Unmute' : 'Mute'} title="Mute (M)">{state.muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}</button>
                     <input type="range" aria-label="Volume" min="0" max="1" step="0.05" value={state.muted ? 0 : state.volume} onChange={event => { mediaRef.current.volume = Number(event.target.value); mediaRef.current.muted = false }} className="hidden lg:block w-16 accent-blue-500" />
                     <span data-subtitle-controls className="flex shrink-0 items-center" />
+                    <PlayerLearningTools mediaRef={mediaRef} hostRef={containerRef} video={video} onMarkers={setMarkers}/>
                     <select aria-label="Playback speed" value={state.rate} onChange={event => { mediaRef.current.playbackRate = Number(event.target.value); reveal() }} className="text-xs text-white bg-black/70 rounded-lg py-2 px-1 sm:px-2 cursor-pointer">
                         {[0.25,0.5,0.75,1,1.25,1.5,1.75,2].map(rate => <option key={rate} value={rate}>{rate}×</option>)}
                     </select>

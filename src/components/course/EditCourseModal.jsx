@@ -78,7 +78,7 @@ function EditCourseModal({ course, isOpen, onClose, onSave }) {
             const compressed = await compressImage(file, 200 * 1024)
             setFormData(prev => ({ ...prev, thumbnailData: compressed }))
             setErrors(prev => ({ ...prev, thumbnail: null }))
-        } catch (err) {
+        } catch {
             setErrors(prev => ({ ...prev, thumbnail: 'Failed to process image' }))
         }
     }

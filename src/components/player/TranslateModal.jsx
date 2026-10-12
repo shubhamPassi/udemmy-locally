@@ -1,29 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, Globe, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
-import { useSettings } from '../../contexts/SettingsContext'
+import {useSettings} from '../../contexts/contextHooks.js'
 import { SERVER_URL } from '../../utils/api'
 
-export const TRANSLATION_LANGUAGES = [
-    { code: 'ar', name: 'Arabic' },
-    { code: 'es', name: 'Spanish' },
-    { code: 'fr', name: 'French' },
-    { code: 'de', name: 'German' },
-    { code: 'zh', name: 'Chinese' },
-    { code: 'ja', name: 'Japanese' },
-    { code: 'ko', name: 'Korean' },
-    { code: 'ru', name: 'Russian' },
-    { code: 'pt', name: 'Portuguese' },
-    { code: 'it', name: 'Italian' },
-    { code: 'hi', name: 'Hindi' },
-    { code: 'tr', name: 'Turkish' },
-    { code: 'nl', name: 'Dutch' },
-    { code: 'pl', name: 'Polish' },
-    { code: 'vi', name: 'Vietnamese' },
-    { code: 'th', name: 'Thai' }
-]
+import {TRANSLATION_LANGUAGES} from '../../utils/translationLanguages.js'
 
 export default function TranslateModal({ isOpen, onClose, video, onSuccess, chunkCount = 0 }) {
-    const { settings } = useSettings()
+    useSettings()
     const [targetLang, setTargetLang] = useState('ar')
     const [isTranslating, setIsTranslating] = useState(false)
     const [progress, setProgress] = useState(0)

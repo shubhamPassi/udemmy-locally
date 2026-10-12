@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { X, HardDrive, Save, AlertTriangle, Folder, Video, Loader, ExternalLink } from 'lucide-react'
+import { X, HardDrive, Save, AlertTriangle, Folder, Video, Loader } from 'lucide-react';
 import { parseGoogleDriveUrl, scanDriveFolder, getDriveThumbnailUrl } from '../../utils/googleDrive'
 import { formatDuration } from '../../utils/db'
-import { useSettings } from '../../contexts/SettingsContext'
+import {useSettings} from '../../contexts/contextHooks.js'
 import { IS_BROWSER_MODE } from '../../utils/api'
 
 function GoogleDriveImportModal({ isOpen, onClose, onImport }) {

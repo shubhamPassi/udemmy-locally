@@ -2,6 +2,7 @@ import { compressThumbnail } from './thumbnailCompression.js'
 import * as api from './api.js'
 import { sharedRequest } from './sharedRequest.js'
 import { exportProgressBackup, restoreProgressBackup } from './progressBackup.js'
+import {validateLibraryBackup} from './libraryBackup.js'
 import { canonicalInstructor, normalizeCourseInstructors, instructorKey } from './instructorNames.js'
 import { restoreLocalModuleTitle } from './localCourseTitles.js'
 import { withPlaybackBookmark, isProgressResetting, writeCompletionBookmark } from './playbackBookmarks.js'
@@ -293,8 +294,9 @@ export async function exportAllData() {
 }
 
 export async function importData(data) {
+    validateLibraryBackup(data)
     const result=await api.post('/api/data/import', data)
-    restoreProgressBackup(data.progress)
+    if(!api.IS_BROWSER_MODE)await restoreProgressBackup(data.progress,true)
     return result
 }
 

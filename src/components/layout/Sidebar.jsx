@@ -9,12 +9,12 @@ import {
     ChevronRight,
     RotateCcw
 } from 'lucide-react'
-import { useSidebar } from '../../contexts/SidebarContext'
+import {useSidebar} from '../../contexts/contextHooks.js'
 import { useState, useEffect } from 'react'
 import { getAllCourses, getInstructorAvatarAsync } from '../../utils/db'
 import * as api from '../../utils/api'
 import { beginProgressReset, cancelProgressReset } from '../../utils/playbackBookmarks'
-import { useNotification } from '../../contexts/NotificationContext'
+import {useNotification} from '../../contexts/contextHooks.js'
 import ClearProgressDialog from '../common/ClearProgressDialog'
 
 function scheduleAfterFirstPaint(callback) {

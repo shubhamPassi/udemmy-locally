@@ -6,9 +6,13 @@ import { clearStudyHistory } from './studyTime.js'
 import { clearWatchCoverage } from './watchCoverage.js'
 import { loadBrowserImage } from './browserImages.js'
 import { moduleTotals } from './moduleTotals.js'
-import { exportProgressBackup, restoreProgressBackup } from './progressBackup.js'
-const tables = ['courses', 'modules', 'videos', 'notes', 'instructors', 'roadmaps', 'transcripts', 'summaries']
-let database
+import { exportProgressBackup } from './progressBackup.js'
+import { libraryTables as tables, openLibraryDatabase } from './libraryDatabase.js'
+import { flushProgressStorage, acceptProgressValues, clearAllDurableProgress } from './progressStorage.js'
+import { validateLibraryBackup, mergedProgressEntries } from './libraryBackup.js'
+import { sanitizeNoteHtml } from './noteSafety.js'
+import {mergeProgressRecord} from './progressRecords.js'
+const recovered = new WeakMap()
 const dirtyCourses = new Set()
 let aggregation = Promise.resolve(), aggregationTimer, recoveryTimer, recoveryEpoch = 0
 async function saveRecovery() {
@@ -20,24 +24,11 @@ function scheduleRecovery() {
     clearTimeout(recoveryTimer)
     recoveryTimer = setTimeout(() => saveRecovery().catch(console.error), 1000)
 }
-function openDatabase() {
-    if (!database) database = new Promise((resolve, reject) => {
-        const opening = indexedDB.open('tutin-web', 1)
-        opening.onupgradeneeded = () => {
-            for (const name of [...tables, 'settings']) {
-                const store = opening.result.objectStoreNames.contains(name)
-                    ? opening.transaction.objectStore(name)
-                    : opening.result.createObjectStore(name, { keyPath: 'id' })
-                for (const field of ['courseId', 'moduleId', 'videoId']) if (!store.indexNames.contains(field)) store.createIndex(field, field)
-            }
-        }
-        opening.onsuccess = () => {
-            opening.result.onversionchange = () => { opening.result.close(); database = null }
-            restoreLibraryRecovery(opening.result).then(() => { resolve(opening.result); scheduleRecovery() }, error => { database = null; reject(error) })
-        }
-        opening.onerror = () => { database = null; reject(opening.error) }
-    })
-    return database
+async function openDatabase() {
+    const db = await openLibraryDatabase()
+    if (!recovered.has(db)) recovered.set(db, restoreLibraryRecovery(db).then(scheduleRecovery))
+    await recovered.get(db)
+    return db
 }
 async function operation(table, method, value) {
     const db = await openDatabase()
@@ -120,6 +111,7 @@ export async function request(method, path, body = {}) {
             return {success:true}
         }
         if (id === 'reset-progress') {
+            await flushProgressStorage()
             recoveryEpoch++
             clearTimeout(recoveryTimer)
             await flushProgress()
@@ -142,6 +134,7 @@ export async function request(method, path, body = {}) {
             clearPlaybackBookmarks()
             clearStudyHistory()
             clearWatchCoverage()
+            await flushProgressStorage()
             await saveRecovery()
             try { localStorage.setItem('tutin_progress_reset', String(Date.now())) } catch {}
             return { success:true }
@@ -150,31 +143,54 @@ export async function request(method, path, body = {}) {
         if (id === 'download-image') return loadBrowserImage(body.url)
         if (id === 'detect-durations') return { updated: 0, failed: 0 }
         if (id === 'export') {
+            await flushProgress()
+            await flushProgressStorage().catch(()=>{})
             const data = { version: 4, exportedAt: now }
-            for (const name of tables) data[name] = (await all(name)).map(({fileHandle, folderHandle, ...row}) => row)
+            for (const name of tables) data[name] = (await all(name)).map(({
+  ...row
+}) => row)
             data.progress=exportProgressBackup()
             return data
         }
         if (id === 'reset') {
+            await flushProgressStorage()
             recoveryEpoch++; clearTimeout(recoveryTimer)
             for (const name of [...tables, 'settings']) await operation(name, 'clear')
             clearPlaybackBookmarks()
             clearStudyHistory()
             clearWatchCoverage()
+            clearAllDurableProgress()
+            await flushProgressStorage()
             saveLibraryRecovery({courses:[],modules:[],videos:[]})
             return { success: true }
         }
         if (id === 'import') {
-            for (const name of tables) for (const row of body[name] || []) {
-                if (!row?.id) continue
-                // JSON backups cannot contain File System Access handles. Keep any
-                // handles already granted in this browser when a row is restored.
-                const existing = await operation(name, 'get', row.id)
-                await save(name, { ...existing, ...row,
-                    ...(existing?.fileHandle && !row.fileHandle ? { fileHandle: existing.fileHandle } : {}),
-                    ...(existing?.folderHandle && !row.folderHandle ? { folderHandle: existing.folderHandle } : {}) })
+            validateLibraryBackup(body)
+            await flushProgressStorage()
+            const values = mergedProgressEntries(exportProgressBackup(), body.progress)
+            const db = await openDatabase()
+            const courses = new Set([...(await all('courses')), ...(body.courses || [])].map(row => row.id))
+            const modules = new Set([...(await all('modules')), ...(body.modules || [])].map(row => row.id))
+            for (const name of ['modules','videos','notes']) for (const row of body[name] || []) {
+                if (row.courseId && !courses.has(row.courseId)) throw new Error(`Backup ${name} references a missing course`)
+                if (row.moduleId && !modules.has(row.moduleId)) throw new Error(`Backup ${name} references a missing module`)
             }
-            restoreProgressBackup(body.progress)
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction([...tables, 'settings'], 'readwrite')
+                for (const name of tables) for (const row of body[name] || []) {
+                    const store = tx.objectStore(name), existing = store.get(row.id)
+                    existing.onsuccess = () => {
+                        const copy = { ...existing.result, ...row }
+                        if (existing.result?.fileHandle) copy.fileHandle = existing.result.fileHandle
+                        if (existing.result?.folderHandle) copy.folderHandle = existing.result.folderHandle
+                        if (name === 'notes') copy.content = sanitizeNoteHtml(copy.content)
+                        try { store.put(copy) } catch { tx.abort() }
+                    }
+                }
+                for (const [key, value] of Object.entries(values)) {const store=tx.objectStore('settings'),current=store.get('progress:'+key);current.onsuccess=()=>{values[key]=mergeProgressRecord(key,current.result?.value,value);store.put({id:'progress:'+key,value:values[key]})}}
+                tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error || new Error('Backup restoration aborted; existing data was preserved.'))
+            })
+            acceptProgressValues(values)
             await saveRecovery()
             publishLibraryChange('courses', null)
             return { success: true }
@@ -234,6 +250,7 @@ export async function request(method, path, body = {}) {
         id: id || body.id || `${table}_${crypto.randomUUID()}`, updatedAt: now }
     if (table === 'videos' && action === 'progress') row.lastWatchedAt = now
     if (table === 'courses') delete row.modules
+    if (table === 'notes') row.content = sanitizeNoteHtml(row.content)
     const result = await save(table, row)
     const affectsTotals = table === 'modules' || (table === 'videos' && (!existing || ['duration','isCompleted','moduleId','courseId'].some(key => key in body)))
     if (row.courseId && affectsTotals) invalidateCourse(row.courseId)

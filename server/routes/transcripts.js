@@ -2,7 +2,7 @@ import express from 'express'
 import fs from 'fs'
 import path from 'path'
 import multer from 'multer'
-import { getOne, run, getAll, getDataDir } from '../database.js'
+import { getOne, run, getDataDir } from '../database.js';
 import { parseSubtitleFile, chunksToSRT, chunksToVTT, extractLangCode, detectFormat } from '../utils/captionParser.js'
 import { saveCaptionFile, loadCaptionChunks, listVideoLanguages } from '../utils/courseAssets.js'
 import { translateChunks } from '../utils/aiTranslation.js'

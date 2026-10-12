@@ -7,7 +7,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Users, Search, BookOpen, Play, X, Clock, Camera } from 'lucide-react'
 import { getAllCourses, getInstructorAvatarAsync, setInstructorAvatar, formatDuration } from '../utils/db'
 import LoadingSpinner from '../components/common/LoadingSpinner'
-import { useNotification } from '../contexts/NotificationContext'
+import {useNotification} from '../contexts/contextHooks.js'
 
 function InstructorsPage() {
     useEffect(()=>subscribeLibraryChanges(()=>loadCourses(true)),[])

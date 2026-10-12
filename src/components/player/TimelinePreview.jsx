@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { warmTimelinePreviews, previewBucket, formatPreviewTime, canPrepareTimeline } from '../../utils/timelinePreview'
+import { previewCacheKey, loadPreviewFrames, storePreviewFrames } from '../../utils/previewCache.js'
 
 function previewVideo(source, crossOrigin) {
     const video = document.createElement('video')
     video.muted = true
     video.playsInline = true
-    video.preload = 'auto'
+    video.preload = 'metadata'
     video.crossOrigin = crossOrigin || null
     video.src = source
     // Keep the decoder mounted outside the player so browsers decode paused
@@ -37,9 +38,9 @@ function frameCapture() {
     }
 }
 
-export default function TimelinePreview({ mediaRef, position, duration }) {
+export default function TimelinePreview({ mediaRef, position, duration, video }) {
     const background = useRef(null)
-    const [cacheVersion, setCacheVersion] = useState(0)
+    const [, setCacheVersion] = useState(0)
     const [loadedMedia, setLoadedMedia] = useState(null)
     // A ref changing after mount does not trigger a React render. Observe the
     // media events directly instead of discovering its source on first hover.
@@ -58,15 +59,21 @@ export default function TimelinePreview({ mediaRef, position, duration }) {
     }, [mediaRef, duration])
     const source = loadedMedia?.source || ''
     const previewDuration = loadedMedia?.duration || duration
+    const cacheIdentity = previewCacheKey(video, previewDuration)
     const sampleTime = position ? previewBucket(position.time, previewDuration) : null
     const hoveredBucket = useRef(sampleTime)
     hoveredBucket.current = sampleTime
     useEffect(() => {
         if (!source || !previewDuration) return
         const media = mediaRef.current
-        let pool, disposed = false
-        const start = () => {
-            if (disposed || pool || !canPrepareTimeline(media, document.hidden)) return
+        let pool, disposed = false, starting=false, saveTimer
+        const pending=new Map(),key=cacheIdentity
+        const flush=()=>{clearTimeout(saveTimer);if(!pending.size)return;const frames=[...pending];pending.clear();storePreviewFrames(key,frames).catch(()=>{})}
+        const start = async () => {
+            if (disposed || pool || starting || !canPrepareTimeline(media, document.hidden)) return
+            starting=true
+            const initialFrames=await loadPreviewFrames(key).catch(()=>[])
+            if(disposed)return
             pool = warmTimelinePreviews({
                 duration: previewDuration,
                 createVideo: () => previewVideo(source, media.crossOrigin),
@@ -74,25 +81,26 @@ export default function TimelinePreview({ mediaRef, position, duration }) {
                 // Yield when playback buffers or the page is in the background.
                 canRun: () => canPrepareTimeline(media, document.hidden),
                 concurrency: navigator.connection?.saveData ? 1 : 2,
+                initialFrames,
                 onUpdate: time => {
+                    if(pool){pending.set(time,pool.get(time)?.image);if(!saveTimer)saveTimer=setTimeout(()=>{saveTimer=null;flush()},1000)}
                     if (!disposed && hoveredBucket.current === time) setCacheVersion(version => version + 1)
                 },
             })
             background.current = { source, duration: previewDuration, cache: pool }
             setCacheVersion(version => version + 1)
+            pool.done.then(flush)
         }
         const events = ['loadedmetadata', 'loadeddata', 'canplay', 'pause', 'seeked']
         events.forEach(event => media.addEventListener(event, start))
         document.addEventListener('visibilitychange', start)
         start()
-        return () => { disposed = true; events.forEach(event => media.removeEventListener(event, start)); document.removeEventListener('visibilitychange', start); pool?.dispose(); background.current = null }
-    }, [source, previewDuration])
+        return () => { disposed = true; flush();events.forEach(event => media.removeEventListener(event, start)); document.removeEventListener('visibilitychange', start); pool?.dispose(); background.current = null }
+    }, [source, previewDuration, mediaRef, cacheIdentity])
     // Hover only reads the cache. A missing frame becomes visible once prepared,
     // and stays unchanged for that entire ten-second interval.
-    const frame = useMemo(() => {
-        const prepared = background.current
-        return sampleTime === null || prepared?.source !== source || prepared?.duration !== previewDuration ? null : prepared.cache.get(sampleTime)
-    }, [source, sampleTime, previewDuration, cacheVersion])
+    const prepared = background.current
+    const frame = sampleTime === null || prepared?.source !== source || prepared?.duration !== previewDuration ? null : prepared.cache.get(sampleTime)
     if (!position) return null
     // Every position in the same ten-second interval reuses one cached frame.
     const image = frame?.image

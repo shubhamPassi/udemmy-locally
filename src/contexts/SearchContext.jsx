@@ -1,6 +1,6 @@
-import { createContext, useContext, useState } from 'react'
+import { useState } from 'react';
 
-const SearchContext = createContext()
+import {SearchContext} from './contextTypes.js'
 
 export function SearchProvider({ children }) {
     const [searchQuery, setSearchQuery] = useState('')
@@ -10,12 +10,4 @@ export function SearchProvider({ children }) {
             {children}
         </SearchContext.Provider>
     )
-}
-
-export function useSearch() {
-    const context = useContext(SearchContext)
-    if (!context) {
-        throw new Error('useSearch must be used within a SearchProvider')
-    }
-    return context
 }

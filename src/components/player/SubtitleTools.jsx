@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react'
 import {createPortal} from 'react-dom'
 import {MessageSquare,Upload,Settings,Check,X,ChevronDown} from 'lucide-react'
 import {parseSubtitles} from '../../utils/subtitles'
+import {readProgressValue,writeProgressValue} from '../../utils/progressStorage.js'
 
 function savedAppearance(){
     try{const saved=JSON.parse(localStorage.getItem('tutin_caption_appearance'));
@@ -16,10 +17,10 @@ export default function SubtitleTools({videoId,host,keyboardShortcuts=true}){
     enabledRef.current=enabled
     useEffect(()=>{
         setError('');setOpen(false);setShowAppearance(false);setEnabled(false)
-        try{const stored=JSON.parse(localStorage.getItem('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{setCues([])}
+        try{const stored=JSON.parse(readProgressValue('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{setCues([])}
     },[videoId])
     useEffect(()=>{
-        const refresh=event=>{if(event.detail?.videoId!==videoId)return;try{const stored=JSON.parse(localStorage.getItem('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{}}
+        const refresh=event=>{if(event.detail?.videoId!==videoId)return;try{const stored=JSON.parse(readProgressValue('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{}}
         window.addEventListener('tutin-subtitles-changed',refresh)
         return()=>window.removeEventListener('tutin-subtitles-changed',refresh)
     },[videoId])
@@ -62,7 +63,7 @@ export default function SubtitleTools({videoId,host,keyboardShortcuts=true}){
         const escape=event=>{if(event.key==='Escape'){setOpen(false);event.stopPropagation()}}
         document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape,true)
         return()=>{window.removeEventListener('resize',resize);document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape,true)}
-    },[open])
+    },[open,host])
     useEffect(()=>{slot?.dispatchEvent(new Event('tutin-subtitle-menu-change',{bubbles:true}))},[open,slot])
     useEffect(()=>{
         if(!keyboardShortcuts||!slot)return
@@ -81,7 +82,7 @@ export default function SubtitleTools({videoId,host,keyboardShortcuts=true}){
         try{
             if(file.size>2*1024*1024)throw Error('Subtitle file must be smaller than 2 MB.')
             const parsed=parseSubtitles(await file.text())
-            localStorage.setItem('tutin_subtitles_'+videoId,JSON.stringify(parsed))
+            writeProgressValue('tutin_subtitles_'+videoId,JSON.stringify(parsed))
             setCues(parsed);setError('');setOpen(false)
         }catch(err){setError(err.message)}
         event.target.value=''
@@ -106,7 +107,7 @@ export default function SubtitleTools({videoId,host,keyboardShortcuts=true}){
                 <label className="flex items-center justify-between gap-3"><span>Background</span><select aria-label="Caption background" value={appearance.background} onChange={event=>changeAppearance({background:event.target.value})} className="rounded bg-neutral-800 px-2 py-1 text-xs text-white"><option value="transparent">None</option><option value="dark">Dark</option></select></label>
                 <button onClick={()=>changeAppearance({size:26,background:'transparent'})} className="text-neutral-400 hover:text-white">Reset appearance</button>
             </div>}
-            {cues.length>0&&<button onClick={()=>{localStorage.removeItem('tutin_subtitles_'+videoId);setCues([]);setOpen(false)}} className="w-full border-t border-white/10 px-5 py-3 text-left text-xs text-neutral-500 hover:bg-white/10 hover:text-neutral-300">Remove imported subtitles</button>}
+            {cues.length>0&&<button onClick={()=>{writeProgressValue('tutin_subtitles_'+videoId,null);setCues([]);setOpen(false)}} className="w-full border-t border-white/10 px-5 py-3 text-left text-xs text-neutral-500 hover:bg-white/10 hover:text-neutral-300">Remove imported subtitles</button>}
             {!cues.length&&<p className="px-5 pb-4 text-xs leading-5 text-neutral-400">Add an SRT or VTT file to display subtitles.</p>}
             {error&&<p role="alert" className="px-5 pb-4 text-xs text-red-400">{error}</p>}
         </div>}

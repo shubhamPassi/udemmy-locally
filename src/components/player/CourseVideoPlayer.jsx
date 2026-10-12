@@ -1,6 +1,6 @@
 import SubtitleTools from './SubtitleTools'
 import { forwardRef, useRef } from 'react'
-import { useSettings } from '../../contexts/SettingsContext'
+import {useSettings} from '../../contexts/contextHooks.js'
 import ResumableEmbedPlayer from './ResumableEmbedPlayer'
 
 import AutomaticLocalPlayer from './AutomaticLocalPlayer'

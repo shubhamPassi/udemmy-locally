@@ -1,12 +1,13 @@
+import useEventCallback from '../hooks/useEventCallback.js'
 import { subscribeLibraryChanges } from '../utils/libraryChanges'
 import { batchWork } from '../utils/batchWork'
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
 import { Grid, List, SortAsc, ChevronDown, FolderOpen, Search } from 'lucide-react'
 import { getAllCourses, addCourse, addModule, addVideo, deleteCourse, setInstructorAvatar, recalculateAllCoursesProgress } from '../utils/db'
-import { useSettings } from '../contexts/SettingsContext'
-import { useSearch } from '../contexts/SearchContext'
-import { useNotification } from '../contexts/NotificationContext'
-import { useImport } from '../contexts/ImportContext'
+import {useSettings} from '../contexts/contextHooks.js'
+import {useSearch} from '../contexts/contextHooks.js'
+import {useNotification} from '../contexts/contextHooks.js'
+import {useImport} from '../contexts/contextHooks.js'
 import CourseCard from '../components/course/CourseCard'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import { getDriveVideoUrl } from '../utils/googleDrive'
@@ -35,6 +36,8 @@ function scheduleAfterFirstPaint(callback) {
 }
 
 function HomePage() {
+const saveCourseStructureToDatabaseEvent=useEventCallback(saveCourseStructureToDatabase)
+
     const [courses, setCourses] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [importData, setImportData] = useState(null)
@@ -348,7 +351,7 @@ function HomePage() {
 
                     showNotification(`Importing ${freshCourses.length} courses...`, 'info')
                     for (const course of freshCourses) {
-                        await saveCourseStructureToDatabase(course)
+                        await saveCourseStructureToDatabaseEvent(course)
                     }
 
                     const failedCount = data.failed?.length || 0
@@ -366,10 +369,10 @@ function HomePage() {
             if (!confirm(`A course named "${data.title}" already exists. Import anyway?`)) return
         }
         setImportData(data)
-    }, [pendingImport, courses, clearImport, showNotification])
+    }, [pendingImport, courses, clearImport, showNotification, saveCourseStructureToDatabaseEvent])
 
     // Handle YouTube import
-    useEffect(() => {
+    const processYouTubeImport=useEventCallback(() => {
         if (!pendingYouTube) return
         const courseData = pendingYouTube
         clearYouTube()
@@ -453,10 +456,11 @@ function HomePage() {
                 showNotification('Failed to save: ' + err.message, 'error')
             }
         })()
-    }, [pendingYouTube])
+    })
+    useEffect(()=>processYouTubeImport(), [pendingYouTube, processYouTubeImport])
 
     // Handle Google Drive import
-    useEffect(() => {
+    const processDriveImport=useEventCallback(() => {
         if (!pendingGoogleDrive) return
         const courseData = pendingGoogleDrive
         clearGoogleDrive()
@@ -521,10 +525,11 @@ function HomePage() {
                 showNotification('Failed to save: ' + err.message, 'error')
             }
         })()
-    }, [pendingGoogleDrive])
+    })
+    useEffect(()=>processDriveImport(), [pendingGoogleDrive, processDriveImport])
 
     // Handle External Link import
-    useEffect(() => {
+    const processExternalImport=useEventCallback(() => {
         if (!pendingExternalLink) return
         const courseData = pendingExternalLink
         clearExternalLink()
@@ -542,7 +547,8 @@ function HomePage() {
                 showNotification('Failed to save: ' + err.message, 'error')
             }
         })()
-    }, [pendingExternalLink])
+    })
+    useEffect(()=>processExternalImport(), [pendingExternalLink, processExternalImport])
 
     const sortOptions = [
         { value: 'lastAccessed', label: 'Recently Accessed' },

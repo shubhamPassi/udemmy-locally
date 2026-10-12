@@ -1,3 +1,4 @@
+import useEventCallback from '../../hooks/useEventCallback.js'
 import { driveFailureMessage } from '../../utils/driveFailure'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { updateVideoProgress, updateVideo, markVideoComplete } from '../../utils/db'
@@ -5,6 +6,7 @@ import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks
 import { IS_BROWSER_MODE } from '../../utils/api'
 import { playerShortcut } from '../../utils/playerShortcuts'
 import StreamPlayerControls from './StreamPlayerControls'
+import PlayerLearningTools from './PlayerLearningTools.jsx'
 import useStudyTime from '../../hooks/useStudyTime'
 
 let youtubeApi
@@ -22,8 +24,15 @@ function loadYouTubeApi() {
 }
 
 const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, courseId, settings, autoPlay, onTimeUpdate, onComplete, onNext, onPrevious, onAspectRatioChange }, ref) {
+const rememberEvent=useEventCallback(remember)
+const sampleEvent=useEventCallback(sample)
+const autoplayRef=useRef(autoPlay),nextEnabled=useRef(settings.autoPlayNext)
+autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
+
     const container = useRef(null)
     const host = useRef(null), native = useRef(null), player = useRef(null)
+    const repeatSection=useRef(false)
+    const repeatChanged=useEventCallback(enabled=>{repeatSection.current=enabled})
     const position = useRef(resumeTime(video, settings.resumePlayback)), duration = useRef(video.duration || 0)
     const observed = useRef(false), lastPersist = useRef(0), completed = useRef(video.isCompleted)
     const persistedDuration = useRef(video.duration || 0)
@@ -177,12 +186,12 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
         return () => window.removeEventListener('keydown', keydown, true)
     }, [video.id, settings.keyboardShortcuts, fallback, isYouTube])
     useEffect(() => {
-        const flush = () => remember(true)
+        const flush = () => rememberEvent(true)
         const onHidden = () => { if (document.visibilityState === 'hidden') flush() }
         window.addEventListener('pagehide', flush)
         document.addEventListener('visibilitychange', onHidden)
         return () => { flush(); window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', onHidden) }
-    }, [video.id])
+    }, [video.id, rememberEvent])
     useEffect(() => {
         if (!isYouTube) return
         let cancelled = false, timer
@@ -192,31 +201,31 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
             host.current.appendChild(mount)
             player.current = new YT.Player(mount, {
                 width: '100%', height: '100%', videoId: youtubeId,
-                playerVars: { enablejsapi: 1, origin: window.location.origin, start: Math.floor(position.current), autoplay: autoPlay ? 1 : 0, rel: 0 },
+                playerVars: { enablejsapi: 1, origin: window.location.origin, start: Math.floor(position.current), autoplay: autoplayRef.current ? 1 : 0, rel: 0 },
                 events: {
                     onReady: event => {
                         setMediaLoading(false)
                         const length = event.target.getDuration()
                         if (length > 0) { duration.current = length; updateVideo(video.id, { duration: length }).catch(console.error) }
                         if (position.current > 0) event.target.seekTo(position.current, true)
-                        if (!autoPlay) event.target.pauseVideo()
+                        if (!autoplayRef.current) event.target.pauseVideo()
                     },
                     onStateChange: event => {
                         flushStudyTime()
-                        if (event.data === 1) sample(event.target.getCurrentTime(), event.target.getDuration())
-                        if ((event.data === 2 || event.data === 0) && observed.current) sample(event.target.getCurrentTime(), event.target.getDuration(), true)
-                        if (event.data === 0 && settings.autoPlayNext) callbacks.current.onNext?.()
+                        if (event.data === 1) sampleEvent(event.target.getCurrentTime(), event.target.getDuration())
+                        if ((event.data === 2 || event.data === 0) && observed.current) sampleEvent(event.target.getCurrentTime(), event.target.getDuration(), true)
+                        if (event.data === 0 && nextEnabled.current&&!repeatSection.current) callbacks.current.onNext?.()
                     },
                     onError: () => setError('YouTube could not play this video. It may be unavailable or embedding may be disabled.'),
                 },
             })
             timer = setInterval(() => {
                 const yt = player.current
-                if (yt?.getPlayerState?.() === 1) sample(yt.getCurrentTime(), yt.getDuration())
+                if (yt?.getPlayerState?.() === 1) sampleEvent(yt.getCurrentTime(), yt.getDuration())
             }, 1000)
         }).catch(err => setError(err.message))
-        return () => { cancelled = true; clearInterval(timer); remember(true); player.current?.destroy?.(); player.current = null }
-    }, [video.id])
+        return () => { cancelled = true; clearInterval(timer); rememberEvent(true); player.current?.destroy?.(); player.current = null }
+    }, [video.id,isYouTube,youtubeId,flushStudyTime,sampleEvent, rememberEvent])
     return <div ref={container} className="w-full h-full relative bg-black">
         {isYouTube ? <div ref={host} className="w-full h-full" /> : fallback ? <>
             <iframe className="w-full h-full" src={`https://drive.google.com/file/d/${driveId}/preview`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={video.title} />
@@ -246,9 +255,10 @@ const ResumableEmbedPlayer = forwardRef(function ResumableEmbedPlayer({ video, c
             }}
             onPause={event => { clearBufferNotice(); if (!event.currentTarget.error && !retrying) continuePlaying.current = false; sampleNative(event, true) }}
             onSeeked={event => sampleNative(event, true)}
-            onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext) callbacks.current.onNext?.() }}
+            onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext&&event.currentTarget.dataset.repeatSection!=='true') callbacks.current.onNext?.() }}
             onError={handleDriveError} />}
-        {!isYouTube && !fallback && !error && !retrying && <StreamPlayerControls key={attempt} mediaRef={native} containerRef={container} showLoadingIndicator={!mediaLoading} />}
+        {isYouTube&&!error&&<div className="absolute right-3 top-3 z-20 rounded-full bg-black/70"><PlayerLearningTools youtubeRef={player} hostRef={container} video={video} onRepeatChange={repeatChanged}/></div>}
+        {!isYouTube && !fallback && !error && !retrying && <StreamPlayerControls key={attempt} mediaRef={native} containerRef={container} video={video} showLoadingIndicator={!mediaLoading} />}
         {(retrying || mediaLoading) && !error && !fallback && <div role="status" aria-label="Loading video" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40"><span className="h-11 w-11 rounded-full border-4 border-white/20 border-t-white animate-spin" /></div>}
         {slowBuffer&&!error&&!fallback&&<div className="absolute bottom-24 inset-x-4 z-30 rounded-lg bg-black/85 p-3 text-center text-xs text-white">Drive is taking longer to respond. Your progress is saved.<button onClick={()=>{remember(true);retryDrive(true)}} className="ml-3 rounded bg-blue-600 px-3 py-2">Reconnect</button></div>}
         {error && (isYouTube ? <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p> : <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-5"><div className="max-w-md text-center text-white"><p role="alert" className="text-sm leading-6">{error}</p><div className="mt-4 flex flex-wrap justify-center gap-3"><button onClick={() => retryDrive(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium">Retry video</button><button onClick={() => { clearTimeout(retryTimer.current); remember(true); setError(''); setRetrying(false); setFallback(true) }} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Use Drive preview</button></div></div></div>)}

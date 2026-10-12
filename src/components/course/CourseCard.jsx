@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Play, Clock, Video, Pencil, Trash2, RefreshCw, Link2 } from 'lucide-react'
 import { deleteCourse, getInstructorAvatarAsync, updateCourse } from '../../utils/db'
 import { useState, useEffect } from 'react'
-import { useNotification } from '../../contexts/NotificationContext'
+import {useNotification} from '../../contexts/contextHooks.js'
 
 function scheduleAfterFirstPaint(callback) {
     const run = () => {
@@ -58,14 +58,7 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
         }
     }
 
-    async function handleAvatarChange() {
-        // Reload avatar after change
-        if (course.instructor) {
-            const avatar = await getInstructorAvatarAsync(course.instructor)
-            setInstructorAvatar(avatar)
-        }
-        onRefresh?.()
-    }
+
 
     const completionPercentage = course.completionPercentage || 0
     const formattedDuration = courseDuration(course.totalDuration)
@@ -124,7 +117,7 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
     }
 
     const CardWrapper = isExternalCourse ? 'a' : Link
-    const wrapperProps = isExternalCourse 
+    const wrapperProps = isExternalCourse
         ? { href: course.courseUrl, target: '_blank', rel: 'noopener noreferrer', onClick: handleExternalClick }
         : { to: `/course/${course.id}` }
     const actions = (
@@ -179,7 +172,7 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
                             <Video className="w-10 h-10 text-gray-400 dark:text-neutral-600" />
                         </div>
                     )}
-                    
+
 
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         {isExternalCourse ? (

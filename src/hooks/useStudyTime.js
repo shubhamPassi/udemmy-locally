@@ -29,6 +29,8 @@ export default function useStudyTime(getPlayback,videoId,courseId) {
         const events=['play','pause','seeking','seeked','waiting','canplay','ratechange','ended']
         const element=getter.current()?.element
         const onChange=()=>tick(true)
+        const checkpoint=()=>tick(false)
+        element?.addEventListener('tutin-playback-checkpoint',checkpoint)
         events.forEach(event=>element?.addEventListener(event,onChange))
         const timer=setInterval(tick,1000)
         const hide=()=>tick(true)
@@ -40,6 +42,7 @@ export default function useStudyTime(getPlayback,videoId,courseId) {
             if(dirty)saveStudySession(id,{videoId,courseId,hours,updatedAt:new Date().toISOString()})
             clearInterval(timer)
             events.forEach(event=>element?.removeEventListener(event,onChange))
+            element?.removeEventListener('tutin-playback-checkpoint',checkpoint)
             window.removeEventListener('pagehide',hide);document.removeEventListener('visibilitychange',hide)
             flush.current=()=>{}
         }

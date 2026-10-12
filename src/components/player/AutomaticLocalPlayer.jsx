@@ -6,29 +6,32 @@ const LocalVideoPlayer=lazy(()=>import('./VideoPlayer'))
 const AutomaticLocalPlayer=forwardRef(function AutomaticLocalPlayer(props,ref){
     const [resolved,setResolved]=useState(null),[loading,setLoading]=useState(true),[access,setAccess]=useState(null),[error,setError]=useState(''),[recoveryNonce,setRecoveryNonce]=useState(0)
     const generation=useRef(0)
+    const currentVideo=useRef(props.video)
+    currentVideo.current=props.video
     useEffect(()=>{
+        const videoSnapshot=currentVideo.current,epochRef=generation
         const token=++generation.current
         setLoading(true);setError('');setAccess(null)
         async function run(){
-            if(!IS_BROWSER_MODE){setResolved(props.video);setLoading(false);return}
+            if(!IS_BROWSER_MODE){setResolved(videoSnapshot);setLoading(false);return}
             try{
-                const handle=props.video.fileHandle
+                const handle=videoSnapshot.fileHandle
                 if(isLocalFileHandle(handle)&&await handle.queryPermission({mode:'read'})==='granted'){
                     try{
-                        await handle.getFile()
-                        if(generation.current===token){setResolved(props.video);setLoading(false)}
+                        const file=await handle.getFile()
+                        if(generation.current===token){setResolved({...videoSnapshot,fileSize:file.size,lastModified:file.lastModified});setLoading(false)}
                         return
                     }catch{/* Recover the file from its remembered course folder. */}
                 }
-                const result=await restoreLocalCourse(props.courseId,null,props.video.id)
+                const result=await restoreLocalCourse(props.courseId,null,videoSnapshot.id)
                 if(generation.current!==token)return
-                const video=result.content?.videos?.find(video=>video.id===props.video.id)
-                if(isLocalFileHandle(video?.fileHandle))setResolved(video)
+                const video=result.content?.videos?.find(video=>video.id===videoSnapshot.id)
+                if(isLocalFileHandle(video?.fileHandle)){const file=await video.fileHandle.getFile();if(generation.current===token)setResolved({...video,fileSize:file.size,lastModified:file.lastModified})}
                 else{setResolved(null);setAccess(result)}
             }catch(err){if(generation.current===token){setResolved(null);setAccess({missing:true});setError(err.message)}}
             finally{if(generation.current===token)setLoading(false)}
         }
-        run();return()=>{generation.current++}
+        run();return()=>{epochRef.current++}
     },[props.video.id,props.video.fileAccessUpdatedAt,props.courseId,recoveryNonce])
     async function allowFolder(){
         setError('')

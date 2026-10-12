@@ -1,5 +1,6 @@
 import * as api from '../utils/api.js'
-import { createContext, useContext, useState, useEffect, useRef } from 'react'
+import {readDurableAppSettings,storageFailure} from '../utils/progressStorage.js'
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 const defaultSettings = {
     // Appearance
@@ -42,7 +43,7 @@ const defaultSettings = {
     dubbingDevice: 'auto', // 'auto', 'gpu', 'cpu'
 }
 
-const SettingsContext = createContext(null)
+import {SettingsContext} from './contextTypes.js'
 
 function scheduleAfterFirstPaint(callback) {
     let idle, fallback, cancelled = false
@@ -63,7 +64,7 @@ function scheduleAfterFirstPaint(callback) {
 export function SettingsProvider({ children }) {
     const [settings, setSettings] = useState(() => {
         try {
-            const saved = localStorage.getItem('tutin_settings')
+            const saved = readDurableAppSettings()?JSON.stringify(readDurableAppSettings()):localStorage.getItem('tutin_settings')
             let merged = defaultSettings
             if (saved) {
                 merged = { ...defaultSettings, ...JSON.parse(saved) }
@@ -135,19 +136,8 @@ export function SettingsProvider({ children }) {
 
     // Save settings to localStorage and server
     useEffect(() => {
-        try {
-            localStorage.setItem('tutin_settings', JSON.stringify(settings))
-            
-            // Don't sync to server during initial load to avoid a feedback loop
-            if (!isInitializedRef.current) return
-
-            // Sync with backend
-            api.put('/api/settings', settings).catch(err => {
-                console.warn('Settings sync to server delayed:', err.message)
-            })
-        } catch (e) {
-            console.error('Failed to save settings:', e)
-        }
+        try {localStorage.setItem('tutin_settings',JSON.stringify(settings))}catch{/* Primary settings storage remains writable when the mirror is full. */}
+        if(isInitializedRef.current)api.put('/api/settings',settings).catch(storageFailure)
     }, [settings])
 
     // Initial load from server
@@ -203,13 +193,13 @@ export function SettingsProvider({ children }) {
     }, [settings.accentColor, darkMode])
 
 
-    const updateSettings = (updates) => {
+    const updateSettings = useCallback((updates) => {
         setSettings(prev => ({ ...prev, ...updates }))
-    }
+    },[])
 
-    const resetSettings = () => {
+    const resetSettings = useCallback(() => {
         setSettings(defaultSettings)
-    }
+    },[])
 
     const getSetting = (key) => {
         return settings[key]
@@ -229,12 +219,6 @@ export function SettingsProvider({ children }) {
     )
 }
 
-export function useSettings() {
-    const context = useContext(SettingsContext)
-    if (!context) {
-        throw new Error('useSettings must be used within a SettingsProvider')
-    }
-    return context
-}
+
 
 export default SettingsContext

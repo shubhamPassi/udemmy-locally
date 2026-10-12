@@ -2,12 +2,21 @@ import {requestAISummary,summaryConfiguration} from './summaryInputs.js'
 import { isServerAvailable, put } from './api.js'
 /**
  * AI Summarization Utilities
- * 
+ *
  * Uses Transformers.js (Hugging Face) for Whisper transcription.
  * All processing happens in-browser, offline after initial model download.
  */
 
-import { updateVideo, getVideo } from './db.js'
+/**
+ * AI Summarization Utilities
+ *
+ * Uses Transformers.js (Hugging Face) for Whisper transcription.
+ * All processing happens in-browser, offline after initial model download.
+ */
+
+import { updateVideo } from './db.js';
+
+// Transformers.js pipeline (loaded on demand)
 
 // Transformers.js pipeline (loaded on demand)
 let transcriptionPipeline = null
@@ -431,7 +440,7 @@ export async function processVideoForSummary(videoId, fileSource, onProgress, ap
 
         // Save transcript and caption chunks
         const serverAvailable = await isServerAvailable()
-        
+
         if (serverAvailable) {
             await put(`/api/transcripts/${videoId}`, { chunks: captionChunks })
         } else {

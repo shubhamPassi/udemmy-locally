@@ -1,3 +1,4 @@
+import useEventCallback from '../hooks/useEventCallback.js'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -8,7 +9,7 @@ import {
 import { getAllCourses } from '../utils/db'
 import { getRoadmaps, addRoadmap, updateRoadmap, deleteRoadmap as deleteRoadmapDb } from '../utils/roadmapDb'
 import LoadingSpinner from '../components/common/LoadingSpinner'
-import { useNotification } from '../contexts/NotificationContext'
+import {useNotification} from '../contexts/contextHooks.js'
 import { fitRoadmapViewport } from '../utils/roadmapLayout'
 import {pushRoadmapHistory,undoRoadmapHistory} from '../utils/roadmapHistory'
 
@@ -26,6 +27,9 @@ function handleDialogKeyDown(event, busy, close) {
 }
 
 function RoadmapPage() {
+const loadDataEvent=useEventCallback(loadData)
+const saveRoadmapEvent=useEventCallback(saveRoadmap)
+
     const [courses, setCourses] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [roadmaps, setRoadmaps] = useState([])
@@ -66,8 +70,8 @@ function RoadmapPage() {
 
     // Load courses and roadmaps
     useEffect(() => {
-        loadData()
-    }, [])
+        loadDataEvent()
+    }, [loadDataEvent])
 
     async function loadData() {
         try {
@@ -138,7 +142,7 @@ function RoadmapPage() {
                 setSaveStatus('Saved')
             }
             return true
-        } catch (error) {
+        } catch {
             setSaveStatus('Save failed')
             showNotification('Could not save your roadmap. Please retry.', 'error')
             return false
@@ -415,12 +419,12 @@ function RoadmapPage() {
 
     // Auto-save on changes
     useEffect(() => {
-        if (!isDeleting && currentRoadmap && JSON.stringify([nodes, connections, pan, zoom]) !== savedSnapshot.current) {
+        if (!isDeleting && currentRoadmap?.id && JSON.stringify([nodes, connections, pan, zoom]) !== savedSnapshot.current) {
             setSaveStatus('Unsaved changes')
-            const timeout = setTimeout(saveRoadmap, 1000)
+            const timeout = setTimeout(saveRoadmapEvent, 1000)
             return () => clearTimeout(timeout)
         }
-    }, [currentRoadmap?.id, nodes, connections, pan, zoom, isDeleting])
+    }, [currentRoadmap?.id, nodes, connections, pan, zoom, isDeleting, saveRoadmapEvent])
 
     if (isLoading) {
         return (

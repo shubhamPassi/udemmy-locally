@@ -1,14 +1,11 @@
 import useModalFocus from '../../hooks/useModalFocus'
 import StorageStatus from './StorageStatus'
 import { useState, useRef } from 'react'
-import {
-    X, Sun, Moon, Monitor, Palette, Layout, Type, Settings,
-    Play, SkipForward, FastForward, Check, Download, Upload, Database, AlertTriangle, KeyRound, Eye, EyeOff, ExternalLink, Sparkles, Clock, PictureInPicture, MessageSquare, Send, Bug, Lightbulb, MessageCircle
-} from 'lucide-react'
-import { useSettings } from '../../contexts/SettingsContext'
-import { useTheme } from '../../contexts/ThemeContext'
-import { useNotification } from '../../contexts/NotificationContext'
-import { exportAllData, clearAllData, importData, recalculateAllCoursesProgress, detectAllDurations } from '../../utils/db'
+import { X, Sun, Moon, Monitor, Settings, FastForward, Check, Download, Upload, Database, AlertTriangle, KeyRound, Eye, EyeOff, ExternalLink, Sparkles, PictureInPicture, MessageSquare, Send, Bug, Lightbulb, MessageCircle } from 'lucide-react';
+import {useSettings} from '../../contexts/contextHooks.js'
+import {useTheme} from '../../contexts/contextHooks.js'
+import {useNotification} from '../../contexts/contextHooks.js'
+import { exportAllData, clearAllData, importData, recalculateAllCoursesProgress } from '../../utils/db';
 
 const accentColors = [
     { name: 'Classic / Glass', value: 'classic' },
@@ -37,8 +34,8 @@ function SettingsModal({ isOpen, onClose }) {
     const { theme, setTheme } = useTheme()
     const [activeTab, setActiveTab] = useState('general')
     const [showApiKeys, setShowApiKeys] = useState({ youtube: false, openRouter: false, googleDrive: false })
-    const [detectingDurations, setDetectingDurations] = useState(false)
-    const [durationResult, setDurationResult] = useState(null)
+    const [,,] = useState(false)
+    const [,,] = useState(null)
     const [feedbackCategory, setFeedbackCategory] = useState('General')
     const [feedbackMessage, setFeedbackMessage] = useState('')
     const [feedbackEmail, setFeedbackEmail] = useState('')

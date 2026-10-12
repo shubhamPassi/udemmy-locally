@@ -1,5 +1,5 @@
 import express from 'express'
-import { getDb, getOne, run, getAll } from '../database.js'
+import { getOne, run, getAll } from '../database.js';
 import { submitDubJob, pollJobStatus, cancelJob, isServiceRunning } from '../services/dubbingService.js'
 import { getDubsDir, getDubFilePath, loadCaptionChunks } from '../utils/courseAssets.js'
 import fs from 'fs'
@@ -102,7 +102,7 @@ router.get('/video/:videoId/status', async (req, res) => {
                 // If just finished, move file to permanent location
                 if (liveStatus.status === 'done' && liveStatus.audio_path) {
                     const { coursePath, relModPath, video } = getVideoInfo(req.params.videoId)
-                    const dubsDir = getDubsDir(coursePath, relModPath)
+                    getDubsDir(coursePath, relModPath);
                     const finalPath = getDubFilePath(coursePath, relModPath, video.file_name, job.language)
                     
                     fs.copyFileSync(liveStatus.audio_path, finalPath)

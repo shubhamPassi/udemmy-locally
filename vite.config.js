@@ -1,9 +1,21 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import {readFileSync,writeFileSync} from 'node:fs'
+import {resolve} from 'node:path'
+import {createHash} from 'node:crypto'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  define:{'import.meta.env.VITE_BUILD_COMMIT':JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA?.slice(0,7)||'local')},
+  plugins: [react(),{
+    name:'offline-app-shell',
+    writeBundle(options,bundle){
+      const assets=['/index.html','/manifest.webmanifest','/tutin-icon.svg',...Object.keys(bundle).filter(name=>/\.(js|css)$/.test(name)).map(name=>'/'+name)]
+      const version=createHash('sha256').update(JSON.stringify(assets)).digest('hex').slice(0,12)
+      writeFileSync(resolve(options.dir,'offline-manifest.json'),JSON.stringify(assets))
+      writeFileSync(resolve(options.dir,'sw.js'),readFileSync(resolve('public/sw.js'),'utf8').replace('__BUILD__',version))
+    },
+  }],
   base: './', // Use relative paths for deployment flexibility
   server: {
     port: 3000,

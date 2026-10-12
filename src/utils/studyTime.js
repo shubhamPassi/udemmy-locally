@@ -1,4 +1,5 @@
 import { isProgressResetting } from './playbackBookmarks.js'
+import { writeProgressValue, readProgressValue, progressKeys, clearProgressPrefix } from './progressStorage.js'
 const prefix='tutin_study_session_'
 const sessionCache=new Map()
 let sessionSnapshot=[]
@@ -25,16 +26,16 @@ export function measuredStudySeconds(previous,current,elapsed) {
 }
 export function saveStudySession(id,record) {
     if(isProgressResetting())return
-    try {localStorage.setItem(prefix+id,JSON.stringify({version:1,...record}))}catch{}
+    writeProgressValue(prefix+id,JSON.stringify({version:1,...record}))
 }
 export function readStudySessions() {
     const records=[],seen=new Set()
     try {
-        for(const key of Object.keys(localStorage)) {
+        for(const key of progressKeys()) {
             if(!key.startsWith(prefix))continue
             seen.add(key)
             try {
-                const raw=localStorage.getItem(key),cached=sessionCache.get(key)
+                const raw=readProgressValue(key),cached=sessionCache.get(key)
                 if(cached?.raw===raw){if(cached.record)records.push(cached.record);continue}
                 let record
                 try{record=JSON.parse(raw)}catch{sessionCache.set(key,{raw,record:null});continue}
@@ -57,7 +58,7 @@ export function readStudyHours() {
     return hours
 }
 export function clearStudyHistory() {
-    try {for(const key of Object.keys(localStorage))if(key.startsWith(prefix))localStorage.removeItem(key)}catch{}
+    clearProgressPrefix(prefix)
     sessionCache.clear();sessionSnapshot=[]
 }
 export function studyTimeLabel(seconds) {

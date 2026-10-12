@@ -9,7 +9,9 @@ export async function requestPersistentStorage() {
 export function saveLibraryRecovery(data) {
     try {
         const clean = row => {
-            const { fileHandle, folderHandle, ...copy } = row
+            const {
+  ...copy
+} = row
             if (copy.thumbnailData?.startsWith('data:')) copy.thumbnailData = null
             return copy
         }

@@ -15,3 +15,16 @@ export function parseSubtitles(text){
     if(!cues.length)throw Error('No valid subtitles found. Choose an SRT or VTT file.')
     return cues.sort((a,b)=>a.start-b.start)
 }
+export function subtitleTimestamp(seconds, separator='.') {
+    const value=Math.max(0,Math.round((Number(seconds)||0)*1000))
+    return `${String(Math.floor(value/3600000)).padStart(2,'0')}:${String(Math.floor(value/60000)%60).padStart(2,'0')}:${String(Math.floor(value/1000)%60).padStart(2,'0')}${separator}${String(value%1000).padStart(3,'0')}`
+}
+export function exportSubtitles(chunks, format='vtt') {
+    const cues=chunks.map(chunk=>({start:Number(chunk.start??chunk.timestamp?.[0]),end:Number(chunk.end??chunk.timestamp?.[1]),text:String(chunk.text||'').replace(/<[^>]*>/g,'')})).filter(cue=>Number.isFinite(cue.start)&&cue.start>=0&&Number.isFinite(cue.end)&&cue.end>cue.start&&cue.text.trim())
+    const srt=format==='srt'
+    return (srt?'':'WEBVTT\n\n')+cues.map((cue,index)=>`${srt?`${index+1}\n`:''}${subtitleTimestamp(cue.start,srt?',':'.')} --> ${subtitleTimestamp(cue.end,srt?',':'.')}\n${cue.text.trim()}\n`).join('\n')
+}
+export function searchTranscript(chunks, query) {
+    const term=query.trim().toLocaleLowerCase()
+    return chunks.filter(chunk=>!term||String(chunk.text||'').toLocaleLowerCase().includes(term))
+}

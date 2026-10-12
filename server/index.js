@@ -14,7 +14,7 @@ import cors from 'cors'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
-import { initDatabase, closeDatabase, getDb, getDataDir, getAll, getOne, run, transaction, saveDatabase } from './database.js'
+import { initDatabase, closeDatabase, getDataDir, getAll, getOne, run, saveDatabase } from './database.js'
 import { streamVideo, streamTranscodedVideo, streamWebmVideo, streamMpegtsVideo, streamCompatibleVideo, setAllowedRoots, addAllowedRoot } from './services/videoStreamer.js'
 import { repairPaths } from './services/pathRepair.js'
 import { parseMp4Duration } from './utils/mp4Parser.js'
@@ -183,7 +183,7 @@ async function start() {
                         coursesToRecalc.add(video.course_id)
                         updated++
                     }
-                } catch (e) { }
+                } catch { }
             }
 
             for (const courseId of coursesToRecalc) {

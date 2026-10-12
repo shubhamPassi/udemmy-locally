@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef } from 'react';
 
-const ImportContext = createContext(null)
+import {ImportContext} from './contextTypes.js'
 
 /**
  * Provides a clean channel for Header → HomePage communication,
@@ -61,12 +61,6 @@ export function ImportProvider({ children }) {
     )
 }
 
-export function useImport() {
-    const context = useContext(ImportContext)
-    if (!context) {
-        throw new Error('useImport must be used within an ImportProvider')
-    }
-    return context
-}
+
 
 export default ImportContext

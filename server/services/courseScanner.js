@@ -114,7 +114,7 @@ function findImagesRecursive(dirPath, maxDepth = 3, currentDepth = 0) {
                 results = results.concat(findImagesRecursive(fullPath, maxDepth, currentDepth + 1))
             }
         }
-    } catch (err) {}
+    } catch {}
     return results
 }
 

@@ -1,13 +1,11 @@
+import useEventCallback from '../../hooks/useEventCallback.js'
 import { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react'
-import {
-    Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-    SkipBack, SkipForward, Settings, PictureInPicture, FolderOpen, X, Repeat, Captions, CaptionsOff, Globe, Headphones,
-    Sparkles, FileText, Languages, Upload, Gauge, ChevronRight, ChevronLeft, Check
-} from 'lucide-react'
+import { SkipForward, PictureInPicture, X } from 'lucide-react';
+// YouTube videos use native iframe embed
 // YouTube videos use native iframe embed
 import { getVideoUrl, releaseVideoUrl } from '../../utils/fileSystem'
-import { updateVideoProgress, markVideoComplete, formatDuration, getCourse, updateVideo, updateCourse, getVideosByCourse } from '../../utils/db'
-import { useSettings } from '../../contexts/SettingsContext'
+import { updateVideoProgress, markVideoComplete, getCourse, updateVideo, updateCourse, getVideosByCourse } from '../../utils/db';
+import {useSettings} from '../../contexts/contextHooks.js'
 import { SERVER_URL } from '../../utils/api'
 import CaptionOverlay from './CaptionOverlay'
 import TranslateModal from './TranslateModal'
@@ -20,6 +18,10 @@ import StreamPlayerControls from './StreamPlayerControls'
 
 
 const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext, onPrevious, courseId, onTimeUpdate, autoPlay, onAspectRatioChange, onLocalAccessError }, ref) {
+const loadVideoEvent=useEventCallback(loadVideo)
+const togglePlayEvent=useEventCallback(togglePlay)
+const changeSpeedEvent=useEventCallback(changeSpeed)
+
     const { settings, updateSettings } = useSettings()
     const videoRef = useRef(null)
     useStudyTime(()=>{
@@ -30,12 +32,13 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     const localBookmarkRef = useRef(null)
     const bookmarkSecondRef = useRef(null)
     const containerRef = useRef(null)
-    const progressRef = useRef(null)
     const [videoUrl, setVideoUrl] = useState(null)
     const [isPlaying, setIsPlaying] = useState(false)
+    const playing=useRef(isPlaying)
+    playing.current=isPlaying
     const [currentTime, setCurrentTime] = useState(0)
     const [duration, setDuration] = useState(0)
-    
+
     // Refs for accessing latest state in closures (e.g. interval timers and YouTube message handlers)
     const currentTimeRef = useRef(currentTime)
     const durationRef = useRef(duration)
@@ -43,9 +46,9 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     useEffect(() => { durationRef.current = duration }, [duration])
     const [volume, setVolume] = useState(() => settings.volume)
     const [isMuted, setIsMuted] = useState(false)
-    const [isFullscreen, setIsFullscreen] = useState(false)
+    const [, setIsFullscreen] = useState(false)
     const [showControls, setShowControls] = useState(true)
-    const [isLoading, setIsLoading] = useState(true)
+    const [, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
     const [playbackSpeed, setPlaybackSpeed] = useState(() => settings.playbackSpeed)
     const [showSpeedMenu, setShowSpeedMenu] = useState(false)
@@ -56,7 +59,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     const [resumePosition, setResumePosition] = useState(0)
     const [captionsEnabled, setCaptionsEnabled] = useState(() => settings.captionsEnabled)
     const [captionPosition, setCaptionPosition] = useState(() => settings.captionPosition)
-    const [captionLanguages, setCaptionLanguages] = useState({ sourceExists: false, translatedLangs: [], existingLangs: [] })
+    const [, setCaptionLanguages] = useState({ sourceExists: false, translatedLangs: [], existingLangs: [] })
     const [selectedCaptionLang, setSelectedCaptionLang] = useState(() => settings.captionLanguage || 'source')
     const [captionChunks, setCaptionChunks] = useState([])
     const [showCCMenu, setShowCCMenu] = useState(false)
@@ -64,17 +67,17 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     const pendingAutoPlayRef = useRef(false) // Track autoplay intent during video transitions
     const [showTranslateModal, setShowTranslateModal] = useState(false)
     // [DUB FEATURE HIDDEN] — state kept but hardcoded to disabled
-    const dubAudioRef = useRef(null)
-    const dubLanguages = [] // was: useState([])
-    const setDubLanguages = () => {} // no-op
-    const selectedDubLang = 'none' // was: useState('none')
-    const setSelectedDubLang = () => {} // no-op
+    useRef(null);
+     // was: useState([])
+     // no-op
+     // was: useState('none')
+     // no-op
     const showAudioMenu = false // was: useState(false)
     const setShowAudioMenu = () => {} // no-op
-    const showDubModal = false // was: useState(false)
-    const setShowDubModal = () => {} // no-op
+     // was: useState(false)
+     // no-op
     const [showSettingsMenu, setShowSettingsMenu] = useState(false)
-    const [settingsSubMenu, setSettingsSubMenu] = useState('main')
+    const [,,] = useState('main')
 
     const progressIntervalRef = useRef(null)
     const controlsTimeoutRef = useRef(null)
@@ -180,7 +183,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                     }
                 })
 
-                if (isPlaying) {
+                if (playing.current) {
                     player.play().catch(err => console.log('mpegts play error:', err))
                 }
             } else {
@@ -229,7 +232,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     */
 
     // Load video when video prop changes
-    useEffect(() => {
+    const resetVideoSource=useEventCallback(() => {
         // Reset to 16:9 when switching videos — YouTube/Drive iframes can't report
         // their actual dimensions cross-origin, so 16:9 is the correct safe default.
         // Local file videos will update this via handleLoadedMetadata below.
@@ -255,7 +258,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         // Store autoplay intent — actual play() deferred to handleLoadedMetadata
         pendingAutoPlayRef.current = !!(video?.id && autoPlay)
 
-        loadVideo()
+        loadVideoEvent()
 
         if (video?.id && autoPlay) {
             // Keep transition overlay for a bit to cover the load
@@ -269,7 +272,8 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                 clearInterval(progressIntervalRef.current)
             }
         }
-    }, [video?.id, autoPlay])
+    })
+    useEffect(()=>resetVideoSource(), [video?.id, autoPlay, loadVideoEvent, resetVideoSource])
 
     async function loadVideo() {
         if (!video) {
@@ -297,7 +301,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             return
         }
 
-        // Handle Google Drive videos  
+        // Handle Google Drive videos
         if (video.driveFileId || video.url?.includes('drive.google.com')) {
             const url = video.url || `https://drive.google.com/uc?export=download&id=${video.driveFileId}`
             setVideoUrl(url)
@@ -411,7 +415,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             currentTimeRef.current=element.currentTime
             setCurrentTime(previous=>captionsEnabled || Math.floor(previous)!==second ? element.currentTime : previous)
             onTimeUpdate?.(videoRef.current.currentTime)
-            
+
             /* [DUB FEATURE HIDDEN] — dub audio sync disabled
             // Sync dub audio
             if (selectedDubLang !== 'none' && dubAudioRef.current) {
@@ -454,7 +458,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         getInternalVideo: () => {
             return embeddedPlayerRef.current?.getInternalVideo() || videoRef.current
         }
-    }), [])
+    }), [video?.url,video?.youtubeId])
 
     function handlePlay() {
         if (videoRef.current && videoRef.current.paused) return // Ignore if not actually playing
@@ -486,7 +490,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         }
 
         // Auto-play next if enabled - show countdown
-        if (localAutoPlay) {
+        if (localAutoPlay&&videoRef.current?.dataset.repeatSection!=='true') {
             setShowAutoPlayCountdown(true)
             setAutoPlayCountdown(3)
         }
@@ -494,7 +498,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
 
     // Auto-play countdown effect
     const countdownRef = useRef(null)
-    useEffect(() => {
+    const advanceCountdown=useEventCallback(() => {
         if (showAutoPlayCountdown && autoPlayCountdown > 0) {
             countdownRef.current = setTimeout(() => {
                 setAutoPlayCountdown(autoPlayCountdown - 1)
@@ -502,7 +506,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         } else if (showAutoPlayCountdown && autoPlayCountdown === 0) {
             // Start fade out before switching
             setIsTransitioning(true)
-            setTimeout(() => {
+            countdownRef.current=setTimeout(() => {
                 setShowAutoPlayCountdown(false)
                 onNext?.()
             }, 300) // Match fade duration
@@ -513,7 +517,8 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                 clearTimeout(countdownRef.current)
             }
         }
-    }, [showAutoPlayCountdown, autoPlayCountdown, onNext])
+    })
+    useEffect(()=>advanceCountdown(), [showAutoPlayCountdown, autoPlayCountdown, advanceCountdown])
 
     function cancelAutoPlay() {
         setShowAutoPlayCountdown(false)
@@ -543,7 +548,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         if (videoRef.current.readyState < 1 || videoRef.current.seeking) return
 
         try {
-            const isEmbedded = video?.youtubeId || video?.driveFileId || 
+            const isEmbedded = video?.youtubeId || video?.driveFileId ||
                 (video?.url && (video.url.includes('youtube.com') || video.url.includes('youtu.be') || video.url.includes('drive.google.com')))
             const currentT = isEmbedded ? currentTimeRef.current : videoRef.current.currentTime
             const currentD = isEmbedded ? durationRef.current : videoRef.current.duration
@@ -584,34 +589,9 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         }
     }
 
-    function handleSeek(e) {
-        if (!progressRef.current || !videoRef.current) return
 
-        const rect = progressRef.current.getBoundingClientRect()
-        const percent = (e.clientX - rect.left) / rect.width
-        const newTime = percent * duration
 
-        const isYt = video?.youtubeId || video?.url?.startsWith('http')
 
-        if (isYt) {
-            videoRef.current.seekTo(newTime)
-        } else {
-            videoRef.current.currentTime = newTime
-        }
-        setCurrentTime(newTime)
-    }
-
-    function handleVolumeChange(e) {
-        const newVolume = parseFloat(e.target.value)
-        setVolume(newVolume)
-        setIsMuted(newVolume === 0)
-
-        const isYt = video?.youtubeId || video?.url?.startsWith('http')
-        if (videoRef.current && !isYt) {
-            videoRef.current.volume = newVolume
-        }
-        updateSettings({ volume: newVolume })
-    }
 
     function toggleMute() {
         if (!videoRef.current) return
@@ -634,7 +614,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     function changeSpeed(speed) {
         setPlaybackSpeed(speed)
         updateSettings({ playbackSpeed: speed })
-        
+
         const isYt = video?.youtubeId || video?.url?.startsWith('http')
         if (videoRef.current && !isYt) {
             videoRef.current.playbackRate = speed
@@ -676,135 +656,133 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     }, [videoUrl])
 
     // Keyboard shortcuts
+    const handleKeyDownEvent=useEventCallback(function handleKeyDown(e) {
+  if (e.target.closest?.('[role="dialog"], [role="alertdialog"]')) return;
+  if (e.target.closest?.('select, [role="textbox"]')) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+  if (!settings.keyboardShortcuts) return;
+  // Don't intercept browser shortcuts (Ctrl+F, Ctrl+C, Cmd+A, Alt+…, etc.)
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const currentTime = videoRef.current?.currentTime || 0;
+  const duration = videoRef.current?.duration || durationRef.current;
+  const key = e.key.toLowerCase();
+  const speedOptions = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
+  // Handle number keys 0-9 for percentage jump
+  if (!e.shiftKey && !e.ctrlKey && key >= '0' && key <= '9') {
+    e.preventDefault();
+    const percent = parseInt(key) * 10;
+    if (videoRef.current && duration) {
+      videoRef.current.currentTime = percent / 100 * duration;
+    }
+    return;
+  }
+  switch (key) {
+    case ' ':
+    case 'k':
+      e.preventDefault();
+      togglePlayEvent();
+      break;
+    case 'arrowleft':
+      e.preventDefault();
+      if (videoRef.current) {
+        videoRef.current.currentTime = Math.max(0, currentTime - 5);
+      }
+      break;
+    case 'arrowright':
+      e.preventDefault();
+      if (videoRef.current) {
+        videoRef.current.currentTime = Math.min(duration, currentTime + 5);
+      }
+      break;
+    case 'j':
+      e.preventDefault();
+      if (videoRef.current) {
+        videoRef.current.currentTime = Math.max(0, currentTime - 10);
+      }
+      break;
+    case 'l':
+      e.preventDefault();
+      if (videoRef.current) {
+        videoRef.current.currentTime = Math.min(duration, currentTime + 10);
+      }
+      break;
+    case 'arrowup':
+      e.preventDefault();
+      setVolume(v => Math.min(1, (videoRef.current?.volume ?? v) + 0.05));
+      break;
+    case 'arrowdown':
+      e.preventDefault();
+      setVolume(v => Math.max(0, (videoRef.current?.volume ?? v) - 0.05));
+      break;
+    case 'm':
+      e.preventDefault();
+      toggleMute();
+      break;
+    case 'f':
+      e.preventDefault();
+      toggleFullscreen();
+      break;
+    case 'p':
+      e.preventDefault();
+      if (e.shiftKey) onPrevious?.();else togglePiP();
+      break;
+    case ',':
+      if (!videoRef.current?.paused) break;
+      e.preventDefault();
+      videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 1 / 30);
+      break;
+    case '<':
+      e.preventDefault();
+      // Decrease speed
+      const currentIdx = speedOptions.indexOf(videoRef.current?.playbackRate ?? playbackSpeed);
+      if (currentIdx > 0) {
+        changeSpeedEvent(speedOptions[currentIdx - 1]);
+      }
+      break;
+    case '.':
+      if (!videoRef.current?.paused) break;
+      e.preventDefault();
+      videoRef.current.currentTime = Math.min(duration, videoRef.current.currentTime + 1 / 30);
+      break;
+    case '>':
+      e.preventDefault();
+      // Increase speed
+      const currentSpeedIdx = speedOptions.indexOf(videoRef.current?.playbackRate ?? playbackSpeed);
+      if (currentSpeedIdx < speedOptions.length - 1) {
+        changeSpeedEvent(speedOptions[currentSpeedIdx + 1]);
+      }
+      break;
+    case 'n':
+      if (e.shiftKey) {
+        e.preventDefault();
+        onNext?.();
+      }
+      break;
+    case 'a':
+      e.preventDefault();
+      setLocalAutoPlay(prev => !prev);
+      break;
+    case 'c':
+      e.preventDefault();
+      setCaptionsEnabled(prev => !prev);
+      break;
+    case 'escape':
+      e.preventDefault();
+      setShowSpeedMenu(false);
+      setShowCCMenu(false);
+      setShowSettingsMenu(false);
+      break;
+  }
+})
     useEffect(() => {
         // Embedded players and the native Drive player provide their own controls.
         if (video?.youtubeId || video?.driveFileId || /youtu(?:be\.com|\.be)|drive\.google\.com/.test(video?.url || '')) return
-        function handleKeyDown(e) {
-            if (e.target.closest?.('[role="dialog"], [role="alertdialog"]')) return
-            if (e.target.closest?.('select, [role="textbox"]')) return
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return
-            if (!settings.keyboardShortcuts) return
-            // Don't intercept browser shortcuts (Ctrl+F, Ctrl+C, Cmd+A, Alt+…, etc.)
-            if (e.ctrlKey || e.metaKey || e.altKey) return
 
-            const currentTime=videoRef.current?.currentTime || 0
-            const duration=videoRef.current?.duration || durationRef.current
-            const key = e.key.toLowerCase()
-            const speedOptions = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 
-            // Handle number keys 0-9 for percentage jump
-            if (!e.shiftKey && !e.ctrlKey && key >= '0' && key <= '9') {
-                e.preventDefault()
-                const percent = parseInt(key) * 10
-                if (videoRef.current && duration) {
-                    videoRef.current.currentTime = (percent / 100) * duration
-                }
-                return
-            }
-
-            switch (key) {
-                case ' ':
-                case 'k':
-                    e.preventDefault()
-                    togglePlay()
-                    break
-                case 'arrowleft':
-                    e.preventDefault()
-                    if (videoRef.current) {
-                        videoRef.current.currentTime = Math.max(0, currentTime - 5)
-                    }
-                    break
-                case 'arrowright':
-                    e.preventDefault()
-                    if (videoRef.current) {
-                        videoRef.current.currentTime = Math.min(duration, currentTime + 5)
-                    }
-                    break
-                case 'j':
-                    e.preventDefault()
-                    if (videoRef.current) {
-                        videoRef.current.currentTime = Math.max(0, currentTime - 10)
-                    }
-                    break
-                case 'l':
-                    e.preventDefault()
-                    if (videoRef.current) {
-                        videoRef.current.currentTime = Math.min(duration, currentTime + 10)
-                    }
-                    break
-                case 'arrowup':
-                    e.preventDefault()
-                    setVolume(v => Math.min(1, (videoRef.current?.volume ?? v) + 0.05))
-                    break
-                case 'arrowdown':
-                    e.preventDefault()
-                    setVolume(v => Math.max(0, (videoRef.current?.volume ?? v) - 0.05))
-                    break
-                case 'm':
-                    e.preventDefault()
-                    toggleMute()
-                    break
-                case 'f':
-                    e.preventDefault()
-                    toggleFullscreen()
-                    break
-                case 'p':
-                    e.preventDefault()
-                    if (e.shiftKey) onPrevious?.()
-                    else togglePiP()
-                    break
-                case ',':
-                    if (!videoRef.current?.paused) break
-                    e.preventDefault()
-                    videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 1 / 30)
-                    break
-                case '<':
-                    e.preventDefault()
-                    // Decrease speed
-                    const currentIdx = speedOptions.indexOf(videoRef.current?.playbackRate ?? playbackSpeed)
-                    if (currentIdx > 0) {
-                        changeSpeed(speedOptions[currentIdx - 1])
-                    }
-                    break
-                case '.':
-                    if (!videoRef.current?.paused) break
-                    e.preventDefault()
-                    videoRef.current.currentTime = Math.min(duration, videoRef.current.currentTime + 1 / 30)
-                    break
-                case '>':
-                    e.preventDefault()
-                    // Increase speed
-                    const currentSpeedIdx = speedOptions.indexOf(videoRef.current?.playbackRate ?? playbackSpeed)
-                    if (currentSpeedIdx < speedOptions.length - 1) {
-                        changeSpeed(speedOptions[currentSpeedIdx + 1])
-                    }
-                    break
-                case 'n':
-                    if (e.shiftKey) {
-                        e.preventDefault()
-                        onNext?.()
-                    }
-                    break
-                case 'a':
-                    e.preventDefault()
-                    setLocalAutoPlay(prev => !prev)
-                    break
-                case 'c':
-                    e.preventDefault()
-                    setCaptionsEnabled(prev => !prev)
-                    break
-                case 'escape':
-                    e.preventDefault()
-                    setShowSpeedMenu(false)
-                    setShowCCMenu(false)
-                    setShowSettingsMenu(false)
-                    break
-            }
-        }
-
-        window.addEventListener('keydown', handleKeyDown)
-        return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [settings.keyboardShortcuts, video?.id])
+        window.addEventListener('keydown', handleKeyDownEvent)
+        return () => window.removeEventListener('keydown', handleKeyDownEvent)
+    }, [settings.keyboardShortcuts, handleKeyDownEvent,video?.url,video?.youtubeId,video?.driveFileId])
 
     // Auto-hide controls
     const hasOpenMenu = showSettingsMenu || showCCMenu || showSpeedMenu || showAudioMenu
@@ -827,7 +805,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
         function handleMouseLeave() {
             // If a menu is open, KEEP controls and menu visible
             if (hasOpenMenu) return
-            
+
             // Otherwise hide instantly like before
             setShowControls(false)
         }
@@ -908,7 +886,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
     // Sync internal video state with props/state
     useEffect(() => {
         if (!videoRef.current || !videoUrl) return
-        
+
         // Skip for YouTube/Drive (they handle autoplay via URL params)
         const isYt = video?.youtubeId || (video?.url && (video.url.includes('youtube.com') || video.url.includes('youtu.be')))
         const isDrive = video?.driveFileId || video?.url?.includes('drive.google.com')
@@ -933,7 +911,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             videoRef.current.pause()
             // [DUB FEATURE HIDDEN] if (dubAudioRef.current) dubAudioRef.current.pause()
         }
-    }, [isPlaying, videoUrl])
+    }, [isPlaying, videoUrl,video?.driveFileId,video?.url,video?.youtubeId])
 
     // Sync playback speed with video element
     useEffect(() => {
@@ -943,12 +921,12 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             if (videoRef.current) videoRef.current.playbackRate = rate
             // [DUB FEATURE HIDDEN] if (dubAudioRef.current) dubAudioRef.current.playbackRate = rate
         }
-    }, [playbackSpeed, videoUrl])
+    }, [playbackSpeed, videoUrl,video?.url,video?.youtubeId])
 
     // Fetch caption languages
     useEffect(() => {
         if (!video?.id) return
-        
+
         // Skip for external links for now
         if (video.youtubeId || video.url?.startsWith('http')) return
         if (!showCCMenu && !captionsEnabled) return
@@ -957,7 +935,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             .then(res => res.json())
             .then(data => setCaptionLanguages(data))
             .catch(err => console.error('Failed to fetch caption languages:', err))
-            
+
         /* [DUB FEATURE HIDDEN] — dub language fetch disabled
         // Fetch dub languages
         fetch(`${SERVER_URL}/api/dub/video/${video.id}/languages`)
@@ -965,8 +943,8 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             .then(data => setDubLanguages(data || []))
             .catch(err => console.error('Failed to fetch dub languages:', err))
         */
-            
-    }, [video?.id, showCCMenu, captionsEnabled]) // Re-fetch when captions become relevant
+
+    }, [video?.id,video?.url,video?.youtubeId, showCCMenu, captionsEnabled]) // Re-fetch when captions become relevant
 
     // Sync selected language with settings
     useEffect(() => {
@@ -974,12 +952,12 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             setSelectedCaptionLang(settings.captionLanguage)
             setCaptionsEnabled(true)
         }
-    }, [settings.captionLanguage])
+    }, [settings.captionLanguage,selectedCaptionLang])
 
     // Fetch caption chunks
     useEffect(() => {
         if (!video?.id) return
-        
+
         // Skip for external links
         if (video.youtubeId || video.url?.startsWith('http')) return
 
@@ -995,37 +973,15 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             })
             .then(data => setCaptionChunks(Array.isArray(data) ? data : []))
             .catch(err => console.error('Failed to fetch caption chunks:', err))
-            
+
         updateSettings({ captionLanguage: selectedCaptionLang })
-    }, [video?.id, selectedCaptionLang, captionsEnabled])
+    }, [video?.id,video?.url,video?.youtubeId, selectedCaptionLang, captionsEnabled,updateSettings])
 
     // Handle caption upload
-    const fileInputRef = useRef(null)
-    function handleUploadCaptions(e) {
-        const file = e.target.files?.[0]
-        if (!file || !video?.id) return
+    useRef(null);
 
-        const formData = new FormData()
-        formData.append('file', file)
 
-        fetch(`${SERVER_URL}/api/transcripts/${video.id}/upload`, {
-            method: 'POST',
-            body: formData
-        })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    setSelectedCaptionLang(data.language)
-                    setCaptionsEnabled(true)
-                    setShowCCMenu(false)
-                }
-            })
-            .catch(err => console.error('Failed to upload captions:', err))
-    }
 
-    function toggleCaptions() {
-        setCaptionsEnabled(prev => !prev)
-    }
 
     // Whether the control bar is currently visible
     const controlsVisible = showControls
@@ -1196,7 +1152,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
             />
             )}
 
-            {!isEmbeddedPlayer && !error && <StreamPlayerControls mediaRef={videoRef} containerRef={containerRef} />}
+            {!isEmbeddedPlayer && !error && <StreamPlayerControls mediaRef={videoRef} containerRef={containerRef} video={video} />}
             {/* Auto-play Countdown Overlay */}
             {showAutoPlayCountdown && (
                 <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-40">
@@ -1253,7 +1209,7 @@ const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext,
                     </div>
                 </div>
             )}
- 
+
             {/* Video Switch Transition Overlay */}
             <div
                 className={`absolute inset-0 bg-black z-[60] transition-opacity duration-500 pointer-events-none ${isTransitioning ? 'opacity-100' : 'opacity-0'}`}

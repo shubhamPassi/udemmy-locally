@@ -1,5 +1,8 @@
+import useEventCallback from '../../hooks/useEventCallback.js'
 import {summaryConfiguration,summaryTranscript} from '../../utils/summaryInputs'
-import {parseSubtitles} from '../../utils/subtitles'
+import {parseSubtitles,exportSubtitles,searchTranscript} from '../../utils/subtitles'
+import {downloadText} from '../../utils/downloadText.js'
+import {readProgressValue,writeProgressValue} from '../../utils/progressStorage.js'
 import {restoreLocalCourse,isLocalFileHandle} from '../../utils/automaticLocalFiles'
 import { useState, useEffect, useRef } from 'react'
 import { FileText, Sparkles, Loader2, AlertCircle, Download, Copy, RefreshCw, Upload, Captions, X, Globe } from 'lucide-react'
@@ -8,7 +11,7 @@ import { getVideo, updateVideo } from '../../utils/db'
 import { SERVER_URL, IS_BROWSER_MODE, isServerAvailable, get } from '../../utils/api'
 import { processVideoForSummary, isAIAvailable, regenerateSummaryOnly } from '../../utils/aiSummarization'
 import { verifyPermission } from '../../utils/fileSystem'
-import { useSettings } from '../../contexts/SettingsContext'
+import {useSettings} from '../../contexts/contextHooks.js'
 import TranslateModal from './TranslateModal'
 
 // Format seconds to MM:SS or HH:MM:SS
@@ -24,11 +27,15 @@ function formatTime(seconds) {
 }
 
 function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTime = 0 }) {
+const loadExistingDataEvent=useEventCallback(loadExistingData)
+
     const { settings, updateSettings } = useSettings()
     const summaryKey=settings.openRouterApiKey||import.meta.env.VITE_OPENROUTER_API_KEY
     const [transcript, setTranscript] = useState(null)
     const [summary, setSummary] = useState(null)
     const [captionChunks, setCaptionChunks] = useState([])
+    const [transcriptQuery,setTranscriptQuery]=useState('')
+    useEffect(()=>setTranscriptQuery(''),[video?.id])
     const [isProcessing, setIsProcessing] = useState(false)
     const [progress, setProgress] = useState({ stage: '', progress: 0, message: '' })
     const [error, setError] = useState(null)
@@ -45,7 +52,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
         setTranscript(null);setSummary(null);setCaptionChunks([])
         
         if (video?.id) {
-            loadExistingData()
+            loadExistingDataEvent()
         } else {
             setTranscript(null)
             setSummary(null)
@@ -57,7 +64,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
         setIsProcessing(false)
         setError(null)
         setProgress({ stage: '', progress: 0, message: '' })
-    }, [video?.id])
+    }, [video?.id, loadExistingDataEvent])
 
     // Re-fetch chunks when active language changes
     useEffect(() => {
@@ -118,7 +125,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
             } else {
                 const videoData = await getVideo(targetVideoId)
                 if(activeVideoIdRef.current!==targetVideoId)return
-                let imported=[];try{imported=JSON.parse(localStorage.getItem('tutin_subtitles_'+video.id))||[]}catch{}
+                let imported=[];try{imported=JSON.parse(readProgressValue('tutin_subtitles_'+video.id))||[]}catch{}
                 const existingTranscript=summaryTranscript(videoData,imported)
                 setTranscript(existingTranscript||null)
                 setSummary(videoData?.summary || null)
@@ -219,7 +226,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
                 const chunks=cues.map(cue=>({text:cue.text,timestamp:[cue.start,cue.end]}))
                 const text=chunks.map(chunk=>chunk.text).join(' ')
                 await updateVideo(video.id,{transcript:text,captionChunks:chunks,transcriptGeneratedAt:new Date().toISOString()})
-                localStorage.setItem('tutin_subtitles_'+video.id,JSON.stringify(cues))
+                writeProgressValue('tutin_subtitles_'+video.id,JSON.stringify(cues))
                 window.dispatchEvent(new CustomEvent('tutin-subtitles-changed',{detail:{videoId:video.id}}))
                 if(activeVideoIdRef.current!==targetVideoId)return
                 setTranscript(text);setCaptionChunks(chunks);setMissingCaptions(false);setError(null)
@@ -496,22 +503,20 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
 
                                                 {captionChunks.length > 0 && (
                                                     <>
-                                                        <a
-                                                            href={`${SERVER_URL}/api/transcripts/${video.id}/download?format=srt`}
-                                                            download
+                                                        <button type="button"
+                                                            onClick={()=>downloadText(exportSubtitles(captionChunks,'srt'),`${video.title.replace(/[^a-z0-9]/gi,'_')}.srt`)}
                                                             className="text-xs bg-light-surface dark:bg-dark-surface hover:bg-black/10 dark:hover:bg-white/10 px-3 py-1.5 rounded flex items-center gap-1.5 border border-light-border dark:border-dark-border"
                                                         >
                                                             <Download className="w-3 h-3" />
                                                             SRT
-                                                        </a>
-                                                        <a
-                                                            href={`${SERVER_URL}/api/transcripts/${video.id}/download?format=vtt`}
-                                                            download
+                                                        </button>
+                                                        <button type="button"
+                                                            onClick={()=>downloadText(exportSubtitles(captionChunks,'vtt'),`${video.title.replace(/[^a-z0-9]/gi,'_')}.vtt`,'text/vtt;charset=utf-8')}
                                                             className="text-xs bg-light-surface dark:bg-dark-surface hover:bg-black/10 dark:hover:bg-white/10 px-3 py-1.5 rounded flex items-center gap-1.5 border border-light-border dark:border-dark-border"
                                                         >
                                                             <Download className="w-3 h-3" />
                                                             VTT
-                                                        </a>
+                                                        </button>
                                                     </>
                                                 )}
                                             </div>
@@ -553,6 +558,7 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
                                             )}
                                         </div>
 
+                                    {captionChunks.length > 0 && <input type="search" aria-label="Search transcript" placeholder="Search transcript and click a timestamp to jump…" value={transcriptQuery} onChange={event=>setTranscriptQuery(event.target.value)} className="mb-3 w-full rounded-lg border border-light-border dark:border-dark-border bg-transparent p-2 text-sm" />}
                                     {captionChunks.length > 0 ? (() => {
                                         // Group chunks into sentences (combine words within 5 second windows)
                                         const groupedChunks = []
@@ -597,8 +603,9 @@ function AISummaryPanel({ video, courseId, onSeek, onVideoDataChange, currentTim
 
                                         return (
                                             <div className="space-y-2">
-                                                {groupedChunks.map((group, i) => {
-                                                    const isActive = i === currentGroupIndex
+                                                {!searchTranscript(groupedChunks,transcriptQuery).length && <p className="text-sm opacity-70">No matching transcript lines.</p>}
+                                                {searchTranscript(groupedChunks,transcriptQuery).map((group, i) => {
+                                                    const isActive = group === groupedChunks[currentGroupIndex]
                                                     return (
                                                         <div
                                                             key={i}

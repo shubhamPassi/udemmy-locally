@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import NotificationToast from '../components/common/NotificationToast'
+import {currentStorageError} from '../utils/progressStorage.js'
 
-const NotificationContext = createContext(null)
+import {NotificationContext} from './contextTypes.js'
 
 let nextId = 0
 
@@ -17,6 +18,12 @@ export function NotificationProvider({ children }) {
         setNotifications(prev => prev.filter(n => n.id !== id))
     }, [])
     const value = useMemo(() => ({ showNotification }), [showNotification])
+    useEffect(() => {
+        if(currentStorageError())showNotification(currentStorageError(),'error',15000)
+        const report = event => showNotification(event.detail, 'error', 15000)
+        window.addEventListener('tutin-storage-error', report)
+        return () => window.removeEventListener('tutin-storage-error', report)
+    }, [showNotification])
 
     return (
         <NotificationContext.Provider value={value}>
@@ -35,12 +42,4 @@ export function NotificationProvider({ children }) {
             </div>
         </NotificationContext.Provider>
     )
-}
-
-export function useNotification() {
-    const context = useContext(NotificationContext)
-    if (!context) {
-        throw new Error('useNotification must be used within a NotificationProvider')
-    }
-    return context
 }

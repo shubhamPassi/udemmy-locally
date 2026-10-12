@@ -1,5 +1,5 @@
 import express from 'express'
-import { getAll, getOne, run, transaction } from '../database.js'
+import { getAll, getOne, run } from '../database.js';
 import { recalculateCourseProgress } from './courses.js'
 
 const router = express.Router()

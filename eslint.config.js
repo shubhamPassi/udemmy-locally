@@ -14,6 +14,7 @@ export default [
             '.venv*/**',
             'coverage/**',
             '*.log',
+            'scratch/**','build/**','release*/**','installer*/**','TutIn-*/**',
         ],
     },
     js.configs.recommended,
@@ -33,7 +34,7 @@ export default [
         },
     },
     {
-        files: ['src/**/*.{js,jsx}', 'server/**/*.js', 'python/**/*.js', 'scripts/**/*.mjs', '*.js'],
+        files: ['src/**/*.{js,jsx}', 'server/**/*.js', 'api/**/*.js','tests/**/*.mjs','python/**/*.js', 'scripts/**/*.mjs', '*.js'],
         languageOptions: {
             ecmaVersion: 'latest',
             sourceType: 'module',
@@ -71,4 +72,5 @@ export default [
             'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
         },
     },
+    {files:['public/sw.js'],languageOptions:{globals:{...globals.serviceworker,AbortController:'readonly'}}},
 ]

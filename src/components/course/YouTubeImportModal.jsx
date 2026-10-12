@@ -1,8 +1,8 @@
 import useModalFocus from '../../hooks/useModalFocus'
 import { useState, useEffect, useRef } from 'react'
-import { X, Youtube, Save, AlertTriangle, PlayCircle, List, Loader, Settings } from 'lucide-react'
-import { formatDuration, parseISODuration } from '../../utils/db'
-import { useSettings } from '../../contexts/SettingsContext'
+import { X, Youtube, Save, AlertTriangle, Loader } from 'lucide-react';
+import { parseISODuration } from '../../utils/db';
+import {useSettings} from '../../contexts/contextHooks.js'
 import { IS_BROWSER_MODE } from '../../utils/api'
 import { fetchPublicImport } from '../../utils/publicImport'
 

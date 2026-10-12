@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react';
+
+// Sentence-ending punctuation (covers Latin, Arabic, Hebrew, CJK, ellipsis…)
 
 // Sentence-ending punctuation (covers Latin, Arabic, Hebrew, CJK, ellipsis…)
 const SENTENCE_END = /[.?!。？！…]+\s*$/

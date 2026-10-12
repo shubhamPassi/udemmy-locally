@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { useState, useEffect } from 'react';
 
-const SidebarContext = createContext()
+import {SidebarContext} from './contextTypes.js'
 
 export function SidebarProvider({ children }) {
     const [isExpanded, setIsExpanded] = useState(() => {
@@ -56,12 +56,4 @@ export function SidebarProvider({ children }) {
             {children}
         </SidebarContext.Provider>
     )
-}
-
-export function useSidebar() {
-    const context = useContext(SidebarContext)
-    if (!context) {
-        throw new Error('useSidebar must be used within a SidebarProvider')
-    }
-    return context
 }
