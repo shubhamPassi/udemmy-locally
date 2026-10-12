@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTimelinePreview, timelinePosition } from '../src/utils/timelinePreview.js'
+import { createTimelinePreview, timelinePosition, previewSampleTimes, warmTimelinePreviews } from '../src/utils/timelinePreview.js'
 
 class Decoder extends EventTarget {
     readyState = 2
@@ -60,4 +60,50 @@ test('pointer position maps to the hovered timestamp and clamps the timeline edg
     assert.deepEqual(timelinePosition(31, rect, 100), { time: 10.5, x: 21 })
     assert.equal(timelinePosition(-50, rect, 100).time, 0)
     assert.equal(timelinePosition(500, rect, 100).time, 100)
+})
+
+test('background workers prepare the full timeline and cached hover reads require no seek', async () => {
+    const videos = []
+    const pool = warmTimelinePreviews({
+        duration: 100,
+        createVideo: () => { const video = new Decoder(); videos.push(video); return video },
+        capture: media => `frame:${media.currentTime}`,
+        delay: 0,
+    })
+    await pool.done
+    assert.equal(videos.length, 2)
+    assert.equal(videos.flatMap(video => video.seeks).length, previewSampleTimes(100).length - 1)
+    const seeks = videos.flatMap(video => video.seeks).length
+    assert.deepEqual(pool.nearest(15), { time: 15, image: 'frame:15' })
+    assert.equal(videos.flatMap(video => video.seeks).length, seeks)
+    assert.ok(pool.nearest(99).time > 95)
+    pool.dispose()
+    assert.equal(pool.nearest(15), null)
+})
+
+test('preparation is bounded for long videos and distributes early samples across the timeline', () => {
+    const times = previewSampleTimes(36000)
+    assert.ok(times.length <= 746)
+    assert.equal(times[1], 1500)
+    assert.equal(times[24], 35999.999)
+    assert.equal(new Set(times).size, times.length)
+})
+
+test('buffering pauses preparation and source changes cancel all pending work', async () => {
+    const videos = []
+    const pool = warmTimelinePreviews({ duration: 100, createVideo: () => { const video = new Decoder(); videos.push(video); return video }, capture: () => 'image', canRun: () => false, delay: 1 })
+    await settle()
+    assert.equal(videos.flatMap(video => video.seeks).length, 0)
+    pool.dispose()
+    await pool.done
+    assert.equal(pool.nearest(15), null)
+})
+
+test('persistent frame failures stop background requests instead of scanning every timestamp', async () => {
+    const videos = []
+    const pool = warmTimelinePreviews({ duration: 100, createVideo: () => { const video = new Decoder(); videos.push(video); return video }, capture: () => { throw new Error('blocked') }, delay: 0 })
+    await pool.done
+    assert.ok(videos.flatMap(video => video.seeks).length <= 6)
+    assert.equal(pool.nearest(15), null)
+    pool.dispose()
 })

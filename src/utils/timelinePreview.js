@@ -61,3 +61,66 @@ export function timelinePosition(clientX, rect, duration) {
     const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)))
     return { time: fraction * duration, x: fraction * rect.width }
 }
+
+// Cover the entire timeline first, then fill in finer intervals. Concurrency is
+// bounded because hundreds of simultaneous media seeks would starve playback.
+export function previewSampleTimes(duration, maxFrames = 720) {
+    if (!(duration > 0)) return []
+    const step = Math.max(5, duration / maxFrames)
+    const times = new Set()
+    const add = time => times.add(Math.round(Math.min(time, Math.max(0, duration - 0.001)) * 1000) / 1000)
+    for (let index = 0; index <= 24; index++) add(duration * index / 24)
+    for (let time = 0; time < duration; time += step) add(time)
+    return [...times]
+}
+
+export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate, canRun = () => true, concurrency = 2, delay = 80 }) {
+    const times = previewSampleTimes(duration), frames = new Map(), workers = []
+    let next = 0, disposed = false
+    const pending = new Set()
+    const pause = () => new Promise(resolve => {
+        const timer = setTimeout(() => { pending.delete(cancel); resolve() }, delay)
+        const cancel = () => { clearTimeout(timer); resolve() }
+        pending.add(cancel)
+    })
+    async function run() {
+        const video = createVideo()
+        let finish, failures = 0
+        const decoder = createTimelinePreview(video, capture, (time, image) => finish?.({ time, image }))
+        const cancel = () => finish?.({ image: null })
+        workers.push({ decoder, cancel })
+        while (!disposed && next < times.length && failures < 3) {
+            if (!canRun()) { await pause(); continue }
+            const time = times[next++]
+            const frame = await new Promise(resolve => { finish = resolve; decoder.request(time) })
+            finish = null
+            if (disposed) break
+            if (frame.image) {
+                failures = 0
+                frames.set(frame.time, frame.image)
+                onUpdate?.()
+            } else failures++
+            await pause()
+        }
+        decoder.dispose()
+    }
+    const done = Promise.all(Array.from({ length: Math.max(1, Math.min(2, concurrency)) }, run))
+    return {
+        done,
+        nearest(time) {
+            let nearest = null, distance = Infinity
+            for (const [timestamp, image] of frames) {
+                const difference = Math.abs(timestamp - time)
+                if (difference < distance) { distance = difference; nearest = { time: timestamp, image } }
+            }
+            return nearest
+        },
+        dispose() {
+            disposed = true
+            for (const worker of workers) { worker.cancel(); worker.decoder.dispose() }
+            for (const cancel of pending) cancel()
+            pending.clear()
+            frames.clear()
+        },
+    }
+}
