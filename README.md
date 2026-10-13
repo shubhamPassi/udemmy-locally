@@ -5,7 +5,7 @@
 
 Organize local courses, Google Drive courses, and custom YouTube playlists with saved progress, subtitles, notes, learning roadmaps, and study statistics.
 
-**Live site:** [udemy.chaigallery.in](https://udemy.chaigallery.in/)
+**Live site:** [udemmy-locally.vercel.app](https://udemmy-locally.vercel.app/)
 
 ## Site screenshot
 
