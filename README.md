@@ -1,59 +1,72 @@
-# TutIn - AI-Powered Course Learning Platform
+# TutIn — Video Course Learning Platform
 
-[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/noureldenadel/TutIn/releases)
+[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](package.json)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> Your offline-first, AI-enhanced management system for local video courses and YouTube playlists.
+Organize local courses, Google Drive courses, and custom YouTube playlists with saved progress, subtitles, notes, learning roadmaps, and study statistics.
 
-**TutIn** is a privacy-focused, local-first learning platform designed to organize and enrich your video courses. Built with React and Vite, it allows you to mount local directories securely using the browser's File System Access API, while also offering support for online content like YouTube playlists.
+**Live site:** [udemy.chaigallery.in](https://udemy.chaigallery.in/)
 
-![TutIn](./docs/screenshots/screenshot.png)
+## Quick start
 
-## 🚀 Quick Start (Windows)
+Install Node.js (Node 22 is used in CI), then run:
 
-1. Double-click the `start-dev.bat` file in the root folder.
-2. The script will install dependencies and launch the app in your browser automatically.
+```sh
+npm ci
+npm run dev
+```
 
-## ✨ Key Features
+On Windows, `start-dev.bat` installs missing dependencies and launches the app. Use `npm run start` for the optional Express companion server or `npm run desktop:build` for Electron.
 
-- **Hybrid Video Support:** Seamlessly organize local video directories as well as online YouTube playlists.
-- **Privacy-First Data:** All course progress, custom roadmaps, and timestamped screenshot notes are stored entirely on your device using IndexedDB.
-- **Offline AI Transcription:** Transcribe speech directly in your browser without internet using WebGPU-accelerated `Transformers.js` (Whisper).
-- **AI Summaries:** Generate structured study notes from transcripts using Gemini.
-- **Immersive Player:** Features timestamped rich-text notes, drag-and-drop subtitles, speed controls, and a dynamic ambient glow mode.
-- **Visual Roadmap:** An interactive, drag-and-drop canvas to map out course prerequisites and learning paths.
+## Features
 
-## 📖 Usage
+- **Course imports:** Local folders, Google Drive, YouTube playlists, and additional YouTube URLs in an existing custom playlist.
+- **Instructors:** Choose an existing instructor or add one during import; rename and merge instructors to group related courses.
+- **Player:** Keyboard shortcuts, speed controls, fullscreen, controls that hide after two seconds of inactivity, A–B repeat, sleep timer, chapters, and timestamped note links.
+- **Timeline previews:** Background preparation of frames every ten seconds for supported videos. Persistent previews have a 32 MB storage budget and 30-day expiry. Availability depends on access to the video source.
+- **Duration visibility:** The header toggle hides upcoming lesson durations and course totals by default; toggle it off to display them.
+- **Subtitles:** Import SRT/VTT, search timestamped transcripts, download subtitles, and customize caption appearance. Subtitles start disabled.
+- **Progress and notes:** Durable playback bookmarks, unique watched ranges, study history, and sanitized rich-text notes with screenshots.
+- **Roadmaps:** Create a roadmap before adding courses, edit connections, rename roadmaps, and undo changes.
+- **Statistics:** Day/Week totals, hourly and daily charts, course breakdowns, streaks, optional daily goals, and CSV export.
+- **Offline shell:** After an online visit, saved library information, notes, and statistics can remain accessible offline.
 
-### Importing Courses
-- **Local Folder**: Click **Add Course** -> **Import from Folder**. Select your directory, and TutIn will automatically detect modules based on subfolders.
-- **YouTube/Google Drive**: Click **Add Course** and select the respective option. Paste the URL, and TutIn will fetch the metadata.
+## Study statistics
 
-### AI Transcription & Summarization
-- While playing a video, open the **AI Summary** panel in the sidebar.
-- Click **Transcribe Video** to run Whisper AI entirely locally in your browser.
-- Once transcribed, click **Generate Summary** to get AI-generated study notes via Gemini.
+Select **Day** to show the selected day's total, or **Week** to show the seven-day period ending on the selected date. The total in **Study consistency** follows this selection and changes when you navigate dates. Current and best streaks describe recorded study history.
 
-### Notes & Roadmaps
-- **Timestamped Notes**: Use the Notes panel to add rich-text notes that lock to the current video timestamp. Paste or drag screenshots directly into notes.
-- **Visual Roadmap**: Navigate to the Roadmap page to create custom learning paths, connecting prerequisite courses visually.
+Study time measures recorded playback: pauses, buffering, and skipped sections do not count. Unique watched coverage separately avoids counting replayed sections twice. Activity before tracking began cannot be reconstructed.
 
-## 🏗️ Tech Stack
-- **Frontend**: React 18, Vite 6, Tailwind CSS, React Router 7.
-- **Backend Services**: Node.js + Express + SQLite (Companion Server for persistent streaming).
-- **Storage**: IndexedDB (client-side data) & SQLite.
-- **AI Processing**: Transformers.js (WebGPU Whisper) and OpenRouter API (Gemini).
+The **Daily study goal** dropdown offers Off, 15, 30, 45, 60, 90, and 120 minutes, with readable colors in both themes. The goal tracks today's activity even when viewing past dates.
 
-## ⚙️ Configuration & API Keys
+## AI transcription and summaries
 
-TutIn is designed to be completely offline, but you can plug in API keys to unlock advanced features:
-1. Open the app and click the **Settings** gear icon.
-2. Navigate to the **AI & API Keys** tab.
-3. Add your **Google API Key** (for YouTube imports) and/or **OpenRouter API Key** (for Gemini summaries).
+Open the player AI panel to transcribe a supported local video or use imported subtitles. Local Whisper transcription uses WebGPU when available, with CPU/WASM support. The model requires an initial download and processing uses your device's resources.
 
-> **Note**: AI Transcription runs 100% locally on your machine via WebGPU. No API keys or internet connection are required to transcribe your videos.
+For summaries, add an **OpenRouter API key** in **Settings → AI & API Keys**. The default model is `openrouter/free`. Free inference depends on provider availability and rate limits; choosing another model may incur charges. Summary requests send transcript content to the provider.
 
-<div align="center">
-<br/>
-<b>Made with ❤️ for learners who lock in</b>
-</div>
+The Google API key setting supports YouTube and Google Drive features that require their APIs. Google Colab integration is currently a proposal, not an implemented feature.
+
+## Storage and backups
+
+- The hosted app stores its library and durable progress in IndexedDB, with compatibility records in localStorage. The companion server also uses SQLite.
+- Export backups from **Settings → Data**. Backups include watched ranges, study history, and chapters; restoration validates records before applying them.
+- A hard refresh normally preserves browser storage. Clearing site data, private browsing, or browser storage eviction can remove it. Keep an exported backup.
+- Local folder access recovers automatically where saved permissions allow it. Browsers may still require renewed permission. Backups cannot restore missing files or file access permissions.
+- The red **Clear progress** control asks for confirmation before resetting progress.
+
+The offline shell does not cache online video streams, API responses, or AI model downloads. Google Drive preview embeds do not expose playback timing; automatic resume and accurate watch tracking require an accessible direct video source or local copy. YouTube controls its embedded player's native timeline.
+
+## Development and validation
+
+```sh
+npm test
+npm run lint
+npm run build -- --base=/
+```
+
+Run all checks with `npm run check`. GitHub Actions runs tests, lint, and the production build on pushes and pull requests. Automated tests cover storage, backup validation, import rollback, subtitles, previews, study calculations, and learning tools. Real-device touch/fullscreen behavior and provider availability require separate verification.
+
+**Stack:** React 18, Vite 6, Tailwind CSS, React Router 7, IndexedDB, optional Express/SQLite services, Electron, and Transformers.js.
+
+See [implementation details](docs/IMPROVEMENTS.md) for storage, player, offline, and validation behavior.
