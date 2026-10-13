@@ -9,7 +9,7 @@ Organize local courses, Google Drive courses, and custom YouTube playlists with 
 
 ## Site screenshot
 
-![TutIn homepage with course cards, progress, instructor navigation, and course search](docs/screenshots/homepage.png)
+![TutIn homepage with course cards, progress, instructor navigation, and course search](docs/screenshots/homepage-cropped.png)
 
 ## Quick start
 
