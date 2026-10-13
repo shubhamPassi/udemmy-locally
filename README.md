@@ -9,7 +9,7 @@ Organize local courses, Google Drive courses, and custom YouTube playlists with 
 
 ## Site screenshot
 
-![TutIn Learning Statistics with study consistency, daily goals, and the Day/Week selector](docs/screenshots/learning-statistics.png)
+![TutIn homepage with course cards, progress, instructor navigation, and course search](docs/screenshots/homepage.png)
 
 ## Quick start
 
