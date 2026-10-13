@@ -7,6 +7,10 @@ Organize local courses, Google Drive courses, and custom YouTube playlists with 
 
 **Live site:** [udemy.chaigallery.in](https://udemy.chaigallery.in/)
 
+## Site screenshot
+
+![TutIn Learning Statistics with study consistency, daily goals, and the Day/Week selector](docs/screenshots/learning-statistics.png)
+
 ## Quick start
 
 Install Node.js (Node 22 is used in CI), then run:
