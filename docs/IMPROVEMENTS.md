@@ -14,8 +14,6 @@ Implemented on 13 October 2026. This release adds no paid service.
 
 - Drive resume and statistics are restored through a native player with a redirect-only Cloudflare endpoint. The browser obtains video bytes directly from Google, while bookmarks, measured study time, and unique watched ranges remain in browser storage. A video-specific no-referrer policy avoids Google's referrer-dependent confirmation response. Background Drive thumbnail/duration downloads stay disabled; Google preview remains a clearly labelled fallback if direct access fails. Time spent in the old preview-only mode cannot be recovered.
 
-- Cloudflare migration: hosted Drive videos now open Google's preview immediately, avoiding server video relays and background Drive frame/metadata downloads. The Cloudflare Worker returns HTTP 410 for old relay URLs. Local playback and YouTube behavior remain available; historical bookmarks stay stored, but Drive preview cannot report new playback time.
-
 - Drive playback automatically switches to Google's preview player after two failed direct-stream retries. Existing bookmarks remain intact; preview mode offers a direct Drive link and a retry of the resumable player. Google preview does not expose playback time, so it cannot update resume positions or study-time tracking.
 
 - Ten-second preview frames are prepared independently of hover, saved between visits, and refreshed when the video identity or file metadata changes. Saved previews have a 32 MB budget and 30-day expiry. Transient failures receive a selective retry. Preview media never contributes to watched progress.
