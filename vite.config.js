@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto'
 
 // https://vite.dev/config/
 export default defineConfig({
-  define:{'import.meta.env.VITE_BUILD_COMMIT':JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA?.slice(0,7)||'local')},
+  define:{'import.meta.env.VITE_BUILD_COMMIT':JSON.stringify((process.env.CF_PAGES_COMMIT_SHA||process.env.VERCEL_GIT_COMMIT_SHA||process.env.BUILD_COMMIT)?.slice(0,7)||'local')},
   plugins: [react(),{
     name:'offline-app-shell',
     writeBundle(options,bundle){

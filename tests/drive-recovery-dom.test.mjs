@@ -7,7 +7,7 @@ import {mkdtempSync,rmSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join,resolve} from 'node:path'
 
-test('Drive failures automatically open preview after bounded retries and preserve the bookmark',async()=>{
+for (const hosted of [false, true]) test(hosted ? 'hosted Drive playback and reload never create a native video or relay request' : 'Drive failures automatically open preview after bounded retries and preserve the bookmark',async()=>{
     const dom=new JSDOM('<div id="root"></div>',{url:'https://app.test',pretendToBeVisual:true})
     const saved=new Map(),timers=[],originalTimeout=globalThis.setTimeout
     for(const key of ['window','document','navigator','localStorage','Event','CustomEvent','HTMLElement','IS_REACT_ACT_ENVIRONMENT','MessageChannel']){
@@ -20,7 +20,7 @@ test('Drive failures automatically open preview after bounded retries and preser
     try{
         await build({stdin:{contents:"export {default as Player} from './src/components/player/ResumableEmbedPlayer.jsx';export {createRoot} from 'react-dom/client';export {act,createElement as element} from 'react';export {writes} from './src/utils/playbackBookmarks.js';",resolveDir:resolve('.'),loader:'jsx'},bundle:true,jsx:'automatic',platform:'browser',format:'cjs',outfile:output,define:{'process.env.NODE_ENV':'"development"'},plugins:[{name:'isolate-player',setup(build){
             build.onLoad({filter:/[\\/]utils[\\/]db\.js$/},()=>({contents:'export const updateVideoProgress=async()=>{},updateVideo=async()=>{},markVideoComplete=async()=>{};'}))
-            build.onLoad({filter:/[\\/]utils[\\/]api\.js$/},()=>({contents:'export const IS_BROWSER_MODE=true;'}))
+            build.onLoad({filter:/[\\/]utils[\\/]api\.js$/},()=>({contents:`export const IS_BROWSER_MODE=${hosted};`}))
             build.onLoad({filter:/[\\/]utils[\\/]playbackBookmarks\.js$/},()=>({contents:'export const writes=[];export const resumeTime=()=>125;export const writePlaybackBookmark=(...args)=>writes.push(args);'}))
             build.onLoad({filter:/[\\/]hooks[\\/]useStudyTime\.js$/},()=>({contents:'export default function useStudyTime(){return ()=>{}}'}))
             build.onLoad({filter:/[\\/](StreamPlayerControls|PlayerLearningTools)\.jsx$/},()=>({contents:'export default function Controls(){return null}'}))
@@ -28,6 +28,16 @@ test('Drive failures automatically open preview after bounded retries and preser
         api=createRequire(import.meta.url)(output)
         root=api.createRoot(document.getElementById('root'))
         await api.act(async()=>root.render(api.element(api.Player,{video:{id:'lesson',driveFileId:'public12345',duration:600,title:'Lesson'},courseId:'course',settings:{resumePlayback:true,autoMarkCompleteAt:95}})))
+        if(hosted){
+            assert.equal(document.querySelector('video'),null)
+            assert.match(document.querySelector('iframe').src,/file\/d\/public12345\/preview$/)
+            assert.equal(document.querySelector('button').textContent,'Reload preview')
+            await api.act(async()=>document.querySelector('button').click())
+            assert.equal(document.querySelector('video'),null)
+            assert.ok(document.querySelector('iframe'))
+            assert.deepEqual(api.writes,[])
+            return
+        }
         let media=document.querySelector('video')
         Object.defineProperty(media,'duration',{value:600,configurable:true})
         await api.act(async()=>media.dispatchEvent(new Event('loadedmetadata')))

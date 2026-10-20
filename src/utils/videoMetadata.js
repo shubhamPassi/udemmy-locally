@@ -1,11 +1,13 @@
 import { getVideoUrl, releaseVideoUrl } from './fileSystem.js'
 import { IS_BROWSER_MODE } from './api.js'
 import { updateVideo } from './db.js'
+import { preferHostedDrivePreview } from './hostedVideoPolicy.js'
 export async function loadVideoMetadata(video, signal, persist = true) {
     if(video.duration>0)return video.duration
+    if(preferHostedDrivePreview(video, IS_BROWSER_MODE))throw new Error('Hosted Drive videos use Google preview; background video downloads are disabled')
     if(video.youtubeId || /youtu(?:be\.com|\.be)/.test(video.url||''))throw new Error('Duration becomes available when the YouTube lesson opens')
     let source, revoke=false
-    if(video.driveFileId)source=IS_BROWSER_MODE?`/api/drive-video?id=${encodeURIComponent(video.driveFileId)}`:`https://drive.usercontent.google.com/download?id=${encodeURIComponent(video.driveFileId)}&export=download&confirm=t`
+    if(video.driveFileId)source=`https://drive.usercontent.google.com/download?id=${encodeURIComponent(video.driveFileId)}&export=download&confirm=t`
     else {
         if(video.fileHandle && await video.fileHandle.queryPermission({mode:'read'})!=='granted')throw new Error('Folder access required')
         source=await getVideoUrl(video.fileHandle||video.filePath);revoke=source.startsWith('blob:')
@@ -31,7 +33,7 @@ export async function loadVideoMetadata(video, signal, persist = true) {
 }
 // Bound concurrency so a large playlist cannot compete with the active video for every connection.
 export async function scanVideoMetadata(videos, signal, onResult, onProgress, load = loadVideoMetadata) {
-    const pending=videos.filter(video=>!(video.duration>0)),total=pending.length
+    const pending=videos.filter(video=>!(video.duration>0)&&!preferHostedDrivePreview(video,IS_BROWSER_MODE)),total=pending.length
     let index=0,done=0,failed=0
     onProgress({total,done,failed})
     async function worker(){while(index<pending.length&&!signal.aborted){const video=pending[index++];try{const duration=await load(video,signal);if(!signal.aborted)onResult(video.id,duration)}catch{failed++}finally{done++;if(!signal.aborted)onProgress({total,done,failed})}}}

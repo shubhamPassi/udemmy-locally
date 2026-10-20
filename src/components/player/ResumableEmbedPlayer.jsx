@@ -7,6 +7,7 @@ import { playerShortcut } from '../../utils/playerShortcuts'
 import StreamPlayerControls from './StreamPlayerControls'
 import PlayerLearningTools from './PlayerLearningTools.jsx'
 import useStudyTime from '../../hooks/useStudyTime'
+import { preferHostedDrivePreview } from '../../utils/hostedVideoPolicy'
 
 let youtubeApi
 function loadYouTubeApi() {
@@ -37,7 +38,8 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     const persistedDuration = useRef(video.duration || 0)
     const nativeReady = useRef(false)
     const lastCachedSecond = useRef(null)
-    const [fallback, setFallback] = useState(false), [error, setError] = useState('')
+    const hostedPreview = preferHostedDrivePreview(video, IS_BROWSER_MODE)
+    const [fallback, setFallback] = useState(hostedPreview), [error, setError] = useState('')
     const [retrying, setRetrying] = useState(false), [attempt, setAttempt] = useState(0)
     const [mediaLoading,setMediaLoading]=useState(true)
     const [slowBuffer,setSlowBuffer]=useState(false)
@@ -56,7 +58,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
         if (manual) retryCount.current = 0
         nativeReady.current = false
         setError('')
-        setFallback(false)
+        setFallback(hostedPreview)
         setRetrying(true)
         setMediaLoading(true)
         setAttempt(value => value + 1)
@@ -227,8 +229,8 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     }, [video.id,isYouTube,youtubeId,flushStudyTime,sampleEvent, rememberEvent])
     return <div ref={container} className="w-full h-full relative bg-black">
         {isYouTube ? <div ref={host} className="w-full h-full" /> : fallback ? <>
-            <iframe className="w-full h-full" src={`https://drive.google.com/file/d/${driveId}/preview`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={video.title} />
-            <div role="status" className="absolute bottom-0 inset-x-0 p-2 text-xs bg-black/90 text-white flex flex-wrap items-center justify-between gap-2"><p>Switched to Drive preview because the direct stream failed. Preview cannot save playback time. Your previous position is still saved.</p><div className="flex flex-wrap gap-2"><button onClick={() => retryDrive(true)} className="rounded bg-blue-600 px-3 py-2 text-white">Retry resumable player</button><a href={`https://drive.google.com/file/d/${driveId}/view`} target="_blank" rel="noopener noreferrer" className="rounded border border-white/30 px-3 py-2 text-white">Open in Drive</a></div></div>
+            <iframe key={attempt} className="w-full h-full" src={`https://drive.google.com/file/d/${driveId}/preview`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={video.title} />
+            <div role="status" className="absolute bottom-0 inset-x-0 p-2 text-xs bg-black/90 text-white flex flex-wrap items-center justify-between gap-2"><p>{hostedPreview ? 'Video streams directly from Google to keep hosting free.' : 'Switched to Drive preview because the direct stream failed.'} Preview cannot save playback time. Your previous position is still saved.</p><div className="flex flex-wrap gap-2"><button onClick={() => retryDrive(true)} className="rounded bg-blue-600 px-3 py-2 text-white">{hostedPreview ? 'Reload preview' : 'Retry resumable player'}</button><a href={`https://drive.google.com/file/d/${driveId}/view`} target="_blank" rel="noopener noreferrer" className="rounded border border-white/30 px-3 py-2 text-white">Open in Drive</a></div></div>
         </> : <video key={`media-${attempt}`} ref={native} className="w-full h-full object-contain" playsInline crossOrigin="anonymous" autoPlay={continuePlaying.current}
             src={IS_BROWSER_MODE ? `/api/drive-video?id=${encodeURIComponent(driveId)}${attempt ? `&retry=${attempt}` : ''}` : `https://drive.usercontent.google.com/download?id=${encodeURIComponent(driveId)}&export=download&confirm=t`}
             onLoadedMetadata={event => {

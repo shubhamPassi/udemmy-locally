@@ -5,7 +5,7 @@
 
 Organize local courses, Google Drive courses, and custom YouTube playlists with saved progress, subtitles, notes, learning roadmaps, and study statistics.
 
-**Live site:** [udemmy-locally.vercel.app](https://udemmy-locally.vercel.app/)
+**Live site:** [udemy.chaigallery.in](https://udemy.chaigallery.in/) · [Cloudflare fallback](https://tutin-learning.passishubham1.workers.dev/)
 
 ## Site screenshot
 
@@ -27,7 +27,7 @@ On Windows, `start-dev.bat` installs missing dependencies and launches the app. 
 - **Course imports:** Local folders, Google Drive, YouTube playlists, and additional YouTube URLs in an existing custom playlist.
 - **Instructors:** Choose an existing instructor or add one during import; rename and merge instructors to group related courses.
 - **Player:** Keyboard shortcuts, speed controls, fullscreen, controls that hide after two seconds of inactivity, A–B repeat, sleep timer, chapters, and timestamped note links.
-- **Timeline previews:** Background preparation of frames every ten seconds for supported videos. Persistent previews have a 32 MB storage budget and 30-day expiry. Availability depends on access to the video source.
+- **Timeline previews:** Background preparation of frames every ten seconds for supported local videos. Persistent previews have a 32 MB storage budget and 30-day expiry. Hosted Drive videos play directly through Google preview, with no video relay or background frame downloads through the host.
 - **Duration visibility:** The header toggle hides upcoming lesson durations and course totals by default; toggle it off to display them.
 - **Subtitles:** Import SRT/VTT, search timestamped transcripts, download subtitles, and customize caption appearance. Subtitles start disabled.
 - **Progress and notes:** Durable playback bookmarks, unique watched ranges, study history, and sanitized rich-text notes with screenshots.
@@ -60,6 +60,12 @@ The Google API key setting supports YouTube and Google Drive features that requi
 - The red **Clear progress** control asks for confirmation before resetting progress.
 
 The offline shell does not cache online video streams, API responses, or AI model downloads. Google Drive preview embeds do not expose playback timing; automatic resume and accurate watch tracking require an accessible direct video source or local copy. YouTube controls its embedded player's native timeline.
+
+## Cloudflare hosting
+
+The hosted app runs on Cloudflare Workers with Static Assets. Static pages and assets are served separately from API functions; public course imports use the Worker. Hosted Drive playback streams directly from Google to avoid consuming a server relay's transfer allowance. No paid storage or video service is provisioned; dynamic requests remain subject to Cloudflare's free-plan limits.
+
+Run `npm run deploy:cloudflare` after `npx wrangler login` to build and deploy. See [Cloudflare deployment and migration](docs/CLOUDFLARE.md) for routing, backups, verification, and deployment instructions. The former Vercel address is not the active Cloudflare site.
 
 ## Development and validation
 

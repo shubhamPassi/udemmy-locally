@@ -13,3 +13,4 @@ jobs:
       - run: npm test
       - run: npm run lint
       - run: npm run build -- --base=/
+      - run: npx wrangler deploy --dry-run

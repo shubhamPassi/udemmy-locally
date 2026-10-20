@@ -8,6 +8,8 @@ export default [
     {
         ignores: [
             'dist/**',
+            'dist-*/**',
+            '.wrangler/**',
             'node_modules/**',
             'server/node_modules/**',
             '.venv/**',
@@ -34,7 +36,7 @@ export default [
         },
     },
     {
-        files: ['src/**/*.{js,jsx}', 'server/**/*.js', 'api/**/*.js','tests/**/*.mjs','python/**/*.js', 'scripts/**/*.mjs', '*.js'],
+        files: ['src/**/*.{js,jsx}', 'server/**/*.js', 'api/**/*.js', 'cloudflare/**/*.js','tests/**/*.mjs','python/**/*.js', 'scripts/**/*.mjs', '*.js'],
         languageOptions: {
             ecmaVersion: 'latest',
             sourceType: 'module',

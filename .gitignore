@@ -81,6 +81,8 @@ models/
 scripts/*
 !scripts/generate-icons.mjs
 scratch/
+.wrangler/
+dist-*/
 fixOrder.mjs
 
 # Resolved docs
