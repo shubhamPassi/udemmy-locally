@@ -20,12 +20,12 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
     const previousPerformance=Object.getOwnPropertyDescriptor(globalThis,'performance')
     let root,api
     try{
-        await build({stdin:{contents:"export {default as Player} from './src/components/player/ResumableEmbedPlayer.jsx';export {createRoot} from 'react-dom/client';export {act,createElement as element} from 'react';export {writes} from './src/utils/playbackBookmarks.js';export {readStudySessions} from './src/utils/studyTime.js';export {readCoverage} from './src/utils/watchCoverage.js';export {flushProgressStorage} from './src/utils/progressStorage.js';",resolveDir:resolve('.'),loader:'jsx'},bundle:true,jsx:'automatic',platform:'browser',format:'cjs',outfile:output,define:{'process.env.NODE_ENV':'"development"'},plugins:[{name:'isolate-player',setup(build){
+        await build({stdin:{contents:"export {default as Player} from './src/components/player/ResumableEmbedPlayer.jsx';export {createRoot} from 'react-dom/client';export {act,createElement as element} from 'react';export {writes} from './src/utils/playbackBookmarks.js';export {renderedControls} from './src/components/player/StreamPlayerControls.jsx';export {readStudySessions} from './src/utils/studyTime.js';export {readCoverage} from './src/utils/watchCoverage.js';export {flushProgressStorage} from './src/utils/progressStorage.js';",resolveDir:resolve('.'),loader:'jsx'},bundle:true,jsx:'automatic',platform:'browser',format:'cjs',outfile:output,define:{'process.env.NODE_ENV':'"development"'},plugins:[{name:'isolate-player',setup(build){
             build.onLoad({filter:/[\\/]utils[\\/]db\.js$/},()=>({contents:'export const updateVideoProgress=async()=>{},updateVideo=async()=>{},markVideoComplete=async()=>{};'}))
             build.onLoad({filter:/[\\/]utils[\\/]api\.js$/},()=>({contents:`export const IS_BROWSER_MODE=${hosted};`}))
             build.onLoad({filter:/[\\/]utils[\\/]playbackBookmarks\.js$/},()=>({contents:'export const writes=[];export const resumeTime=()=>writes.at(-1)?.[1]||125;export const writePlaybackBookmark=(...args)=>writes.push(args);export const isProgressResetting=()=>false;'}))
             if(!hosted)build.onLoad({filter:/[\\/]hooks[\\/]useStudyTime\.js$/},()=>({contents:'export default function useStudyTime(){return ()=>{}}'}))
-            build.onLoad({filter:/[\\/](StreamPlayerControls|PlayerLearningTools)\.jsx$/},()=>({contents:'export default function Controls(){return null}'}))
+            build.onLoad({filter:/[\\/](StreamPlayerControls|PlayerLearningTools)\.jsx$/},()=>({contents:'export const renderedControls=[];export default function Controls(props){renderedControls.push(props);return null}'}))
         }}]})
         api=createRequire(import.meta.url)(output)
         let clock=0
@@ -37,6 +37,7 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
             assert.equal(new URL(media.src).hostname,'www.googleapis.com')
             assert.equal(new URL(media.src).searchParams.get('alt'),'media')
             assert.equal(new URL(media.src).searchParams.get('key'),'test-key')
+            assert.equal(api.renderedControls.at(-1).allowFramePreviews,true)
             assert.equal(document.querySelector('iframe'),null)
             let paused=false,seeking=false
             Object.defineProperties(media,{duration:{value:600,configurable:true},readyState:{value:4,configurable:true},paused:{get:()=>paused,configurable:true},seeking:{get:()=>seeking,configurable:true}})

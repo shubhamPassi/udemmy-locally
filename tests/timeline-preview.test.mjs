@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTimelinePreview, timelinePosition, previewSampleTimes, warmTimelinePreviews, previewBucket, formatPreviewTime, canPrepareTimeline } from '../src/utils/timelinePreview.js'
+import { createTimelinePreview, timelinePosition, previewSampleTimes, warmTimelinePreviews, previewBucket, formatPreviewTime, canPrepareTimeline, previewWorkload } from '../src/utils/timelinePreview.js'
 
 class Decoder extends EventTarget {
     readyState = 2
@@ -17,6 +17,19 @@ class Decoder extends EventTarget {
     removeAttribute() {}
 }
 const settle = () => new Promise(resolve => setTimeout(resolve, 30))
+
+test('Drive background previews use a single paced decoder while local previews retain their concurrency', async () => {
+    const drive = {driveFileId:'public12345'}
+    assert.deepEqual(previewWorkload(drive), {concurrency:1,delay:400})
+    assert.deepEqual(previewWorkload(drive,true), {concurrency:1,delay:1000})
+    assert.deepEqual(previewWorkload({filePath:'lesson.mp4'}), {concurrency:2,delay:80})
+    let decoders=0
+    const pool=warmTimelinePreviews({...previewWorkload(drive),delay:0,duration:20,createVideo:()=>{decoders++;return new Decoder()},capture:media=>`frame:${media.currentTime}`})
+    await pool.done
+    assert.equal(decoders,1)
+    assert.equal(pool.get(10).image,'frame:10')
+    pool.dispose()
+})
 
 test('hover requests decode exact fractional times without playing; repeated frames are cached', async () => {
     const video = new Decoder(), frames = []

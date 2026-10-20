@@ -254,7 +254,7 @@ Local companion mode can deliver local videos through Express range endpoints. N
 
 YouTube lessons use YouTube's embedded player API for playback state and position. YouTube retains control of its media delivery and native timeline; TutIn cannot turn YouTube into a raw video source for the local video element.
 
-Background thumbnail preparation remains available for supported local videos at ten-second intervals. Persistent previews use a 32 MB budget and 30-day expiry. Hosted Drive background frame and duration scans remain disabled; the active lesson records its duration when metadata loads.
+Background thumbnail preparation uses ten-second intervals for supported local videos and direct Drive playback with a configured Google API key. Drive frames are fetched directly from Google using one paced decoder that yields during playback buffering; cached frames are reused on later visits. Persistent previews use a 32 MB budget and 30-day expiry. Initial preparation takes time and consumes additional Google-to-browser data. Background duration scans of other Drive lessons remain disabled; the active lesson records its duration when metadata loads.
 
 ## Storage and backups
 

@@ -1,3 +1,12 @@
+import { isDriveVideo } from './hostedVideoPolicy.js'
+
+// Remote previews share bandwidth with playback and Google's request quotas.
+export function previewWorkload(video, saveData = false) {
+    return isDriveVideo(video)
+        ? { concurrency: 1, delay: saveData ? 1000 : 400 }
+        : { concurrency: saveData ? 1 : 2, delay: 80 }
+}
+
 // A separate, paused decoder keeps hover seeks out of playback and study tracking.
 export function createTimelinePreview(video, capture, publish) {
     let latest = null, running = false, disposed = false, cancelWait

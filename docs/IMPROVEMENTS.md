@@ -12,7 +12,7 @@ Implemented on 13 October 2026. This release adds no paid service.
 
 ## Player and learning tools
 
-- Drive playback now uses only the custom native player and direct Google source URLs. A configured Google API key selects Google's official media API for publicly downloadable files; missing keys use Google's public download URL, which Google may refuse. All hosted video relays and redirects are retired, including the old Vercel relay. Native bookmarks, measured study time, and unique watched ranges remain in browser storage. Background Drive thumbnail/duration downloads stay disabled. Time spent in the old preview-only mode cannot be recovered.
+- Drive playback now uses only the custom native player and direct Google source URLs. A configured Google API key selects Google's official media API for publicly downloadable files; missing keys use Google's public download URL, which Google may refuse. All hosted video relays and redirects are retired, including the old Vercel relay. Native bookmarks, measured study time, and unique watched ranges remain in browser storage. Drive timeline previews are enabled with a configured key and use a single paced decoder directly against Google, with cached ten-second frames and buffering priority. Background scans of other Drive lessons remain disabled. Time spent in the old preview-only mode cannot be recovered.
 
 - Drive failures no longer switch to Google's preview player. After bounded retries, an error explains API key, access, or original-codec requirements and offers Retry and Google API settings. Existing progress is preserved; failed playback cannot generate study time.
 

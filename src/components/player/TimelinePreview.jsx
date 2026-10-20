@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { warmTimelinePreviews, previewBucket, formatPreviewTime, canPrepareTimeline } from '../../utils/timelinePreview'
+import { warmTimelinePreviews, previewBucket, formatPreviewTime, canPrepareTimeline, previewWorkload } from '../../utils/timelinePreview'
 import { previewCacheKey, loadPreviewFrames, storePreviewFrames } from '../../utils/previewCache.js'
 
 function previewVideo(source, crossOrigin) {
@@ -60,6 +60,7 @@ export default function TimelinePreview({ mediaRef, position, duration, video, p
     const source = loadedMedia?.source || ''
     const previewDuration = loadedMedia?.duration || duration
     const cacheIdentity = previewCacheKey(video, previewDuration)
+    const { concurrency, delay } = previewWorkload(video, !!navigator.connection?.saveData)
     const sampleTime = position ? previewBucket(position.time, previewDuration) : null
     const hoveredBucket = useRef(sampleTime)
     hoveredBucket.current = sampleTime
@@ -80,7 +81,8 @@ export default function TimelinePreview({ mediaRef, position, duration, video, p
                 capture: frameCapture(),
                 // Yield when playback buffers or the page is in the background.
                 canRun: () => canPrepareTimeline(media, document.hidden),
-                concurrency: navigator.connection?.saveData ? 1 : 2,
+                concurrency,
+                delay,
                 initialFrames,
                 onUpdate: time => {
                     if(pool){pending.set(time,pool.get(time)?.image);if(!saveTimer)saveTimer=setTimeout(()=>{saveTimer=null;flush()},1000)}
@@ -96,7 +98,7 @@ export default function TimelinePreview({ mediaRef, position, duration, video, p
         document.addEventListener('visibilitychange', start)
         start()
         return () => { disposed = true; flush();events.forEach(event => media.removeEventListener(event, start)); document.removeEventListener('visibilitychange', start); pool?.dispose(); background.current = null }
-    }, [source, previewDuration, mediaRef, cacheIdentity, prepareFrames])
+    }, [source, previewDuration, mediaRef, cacheIdentity, prepareFrames, concurrency, delay])
     // Hover only reads the cache. A missing frame becomes visible once prepared,
     // and stays unchanged for that entire ten-second interval.
     const prepared = background.current
