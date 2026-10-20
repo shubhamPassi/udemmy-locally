@@ -12,6 +12,8 @@ Implemented on 13 October 2026. This release adds no paid service.
 
 ## Player and learning tools
 
+- Drive playback automatically switches to Google's preview player after two failed direct-stream retries. Existing bookmarks remain intact; preview mode offers a direct Drive link and a retry of the resumable player. Google preview does not expose playback time, so it cannot update resume positions or study-time tracking.
+
 - Ten-second preview frames are prepared independently of hover, saved between visits, and refreshed when the video identity or file metadata changes. Saved previews have a 32 MB budget and 30-day expiry. Transient failures receive a selective retry. Preview media never contributes to watched progress.
 - The **Learning tools** book icon opens A–B repeat, a 15/30/60-minute sleep timer, manual chapters, timestamped note links and a keyboard shortcut guide.
 - Chapters persist and are included in backups. Native timelines show chapter and note markers. YouTube offers these tools through the overlay; its own timeline remains under YouTube's control.

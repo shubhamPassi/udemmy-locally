@@ -1,0 +1,54 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {JSDOM} from 'jsdom'
+import {build} from 'esbuild'
+import {createRequire} from 'node:module'
+import {mkdtempSync,rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join,resolve} from 'node:path'
+
+test('Drive failures automatically open preview after bounded retries and preserve the bookmark',async()=>{
+    const dom=new JSDOM('<div id="root"></div>',{url:'https://app.test',pretendToBeVisual:true})
+    const saved=new Map(),timers=[],originalTimeout=globalThis.setTimeout
+    for(const key of ['window','document','navigator','localStorage','Event','CustomEvent','HTMLElement','IS_REACT_ACT_ENVIRONMENT','MessageChannel']){
+        saved.set(key,Object.getOwnPropertyDescriptor(globalThis,key))
+        Object.defineProperty(globalThis,key,{configurable:true,writable:true,value:key==='IS_REACT_ACT_ENVIRONMENT'?true:key==='MessageChannel'?class{constructor(){this.port1={onmessage:null};this.port2={postMessage:()=>setImmediate(()=>this.port1.onmessage?.())}}}:dom.window[key]})
+    }
+    globalThis.setTimeout=(fn,delay,...args)=>[1500,3000].includes(delay)?(timers.push(fn),timers.length):originalTimeout(fn,delay,...args)
+    const directory=mkdtempSync(join(tmpdir(),'tutin-drive-test-')),output=join(directory,'player.cjs')
+    let root,api
+    try{
+        await build({stdin:{contents:"export {default as Player} from './src/components/player/ResumableEmbedPlayer.jsx';export {createRoot} from 'react-dom/client';export {act,createElement as element} from 'react';export {writes} from './src/utils/playbackBookmarks.js';",resolveDir:resolve('.'),loader:'jsx'},bundle:true,jsx:'automatic',platform:'browser',format:'cjs',outfile:output,define:{'process.env.NODE_ENV':'"development"'},plugins:[{name:'isolate-player',setup(build){
+            build.onLoad({filter:/[\\/]utils[\\/]db\.js$/},()=>({contents:'export const updateVideoProgress=async()=>{},updateVideo=async()=>{},markVideoComplete=async()=>{};'}))
+            build.onLoad({filter:/[\\/]utils[\\/]api\.js$/},()=>({contents:'export const IS_BROWSER_MODE=true;'}))
+            build.onLoad({filter:/[\\/]utils[\\/]playbackBookmarks\.js$/},()=>({contents:'export const writes=[];export const resumeTime=()=>125;export const writePlaybackBookmark=(...args)=>writes.push(args);'}))
+            build.onLoad({filter:/[\\/]hooks[\\/]useStudyTime\.js$/},()=>({contents:'export default function useStudyTime(){return ()=>{}}'}))
+            build.onLoad({filter:/[\\/](StreamPlayerControls|PlayerLearningTools)\.jsx$/},()=>({contents:'export default function Controls(){return null}'}))
+        }}]})
+        api=createRequire(import.meta.url)(output)
+        root=api.createRoot(document.getElementById('root'))
+        await api.act(async()=>root.render(api.element(api.Player,{video:{id:'lesson',driveFileId:'public12345',duration:600,title:'Lesson'},courseId:'course',settings:{resumePlayback:true,autoMarkCompleteAt:95}})))
+        let media=document.querySelector('video')
+        Object.defineProperty(media,'duration',{value:600,configurable:true})
+        await api.act(async()=>media.dispatchEvent(new Event('loadedmetadata')))
+        media.currentTime=150
+        await api.act(async()=>media.dispatchEvent(new Event('timeupdate')))
+        for(let attempt=0;attempt<3;attempt++){
+            await api.act(async()=>document.querySelector('video').dispatchEvent(new Event('error')))
+            if(attempt<2){assert.equal(document.querySelector('iframe'),null);await api.act(async()=>timers.shift()())}
+        }
+        assert.equal(document.querySelector('video'),null)
+        assert.match(document.querySelector('iframe').src,/file\/d\/public12345\/preview$/)
+        assert.match(document.querySelector('[role="status"]').textContent,/previous position is still saved/)
+        assert.equal(api.writes.at(-1)[1],150)
+        await api.act(async()=>document.querySelector('button').click())
+        assert.equal(document.querySelector('iframe'),null)
+        assert.ok(document.querySelector('video'))
+    }finally{
+        if(root&&api)await api.act(async()=>root.unmount())
+        globalThis.setTimeout=originalTimeout
+        dom.window.close()
+        for(const[key,descriptor]of saved){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key]}
+        rmSync(directory,{recursive:true,force:true})
+    }
+})
