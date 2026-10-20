@@ -1,14 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import worker from '../cloudflare/worker.js'
-import { preferHostedDrivePreview } from '../src/utils/hostedVideoPolicy.js'
+import { disableHostedDriveBackground } from '../src/utils/hostedVideoPolicy.js'
 
 test('hosted Drive policy preserves local and YouTube player behavior',()=>{
-    assert.equal(preferHostedDrivePreview({driveFileId:'public12345'},true),true)
-    assert.equal(preferHostedDrivePreview({url:'https://drive.google.com/file/d/public12345/view'},true),true)
-    assert.equal(preferHostedDrivePreview({driveFileId:'public12345'},false),false)
-    assert.equal(preferHostedDrivePreview({youtubeId:'youtube1234'},true),false)
-    assert.equal(preferHostedDrivePreview({filePath:'lesson.mp4'},true),false)
+    assert.equal(disableHostedDriveBackground({driveFileId:'public12345'},true),true)
+    assert.equal(disableHostedDriveBackground({url:'https://drive.google.com/file/d/public12345/view'},true),true)
+    assert.equal(disableHostedDriveBackground({driveFileId:'public12345'},false),false)
+    assert.equal(disableHostedDriveBackground({youtubeId:'youtube1234'},true),false)
+    assert.equal(disableHostedDriveBackground({filePath:'lesson.mp4'},true),false)
 })
 
 test('Cloudflare serves the SPA through assets and never fetches video bytes',async()=>{
@@ -19,8 +19,13 @@ test('Cloudflare serves the SPA through assets and never fetches video bytes',as
     try{
         assert.equal(await (await worker.fetch(new Request('https://app.test/course/saved'),env)).text(),'app-shell')
         assert.equal(assets,1)
-        const blocked=await worker.fetch(new Request('https://app.test/api/drive-video?id=public12345'),env)
-        assert.equal(blocked.status,410)
+        const redirected=await worker.fetch(new Request('https://app.test/api/drive-video?id=public12345',{headers:{Range:'bytes=100-200'}}),env)
+        assert.equal(redirected.status,307)
+        assert.equal(redirected.headers.get('Referrer-Policy'),'no-referrer')
+        assert.match(redirected.headers.get('Location'),/^https:\/\/drive.usercontent.google.com\/download\?id=public12345&/)
+        assert.equal(await redirected.text(),'')
+        assert.equal((await worker.fetch(new Request('https://app.test/api/drive-video?id=bad'),env)).status,400)
+        assert.equal((await worker.fetch(new Request('https://app.test/api/drive-video?id=public12345',{method:'POST'}),env)).status,405)
         assert.equal(fetches,0)
         const missing=await worker.fetch(new Request('https://app.test/api/missing'),env)
         assert.equal(missing.status,404)

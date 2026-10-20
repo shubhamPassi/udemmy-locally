@@ -6,7 +6,7 @@ import PlayerLearningTools from './PlayerLearningTools.jsx'
 import useEventCallback from '../../hooks/useEventCallback.js'
 import { timelinePosition } from '../../utils/timelinePreview'
 
-export default function StreamPlayerControls({ mediaRef, containerRef, video, showLoadingIndicator = true }) {
+export default function StreamPlayerControls({ mediaRef, containerRef, video, showLoadingIndicator = true, allowFramePreviews = true }) {
     const [state, setState] = useState({ time: 0, duration: 0, paused: true, muted: false, volume: 1, rate: 1, buffering: true })
     const [visible, setVisible] = useState(true)
     const [preview, setPreview] = useState(null)
@@ -89,7 +89,7 @@ export default function StreamPlayerControls({ mediaRef, containerRef, video, sh
         {state.paused && shown && <button onClick={toggle} aria-label="Play" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-black/65 border border-white/20 text-white flex items-center justify-center hover:bg-blue-600"><Play className="w-7 h-7 ml-1" fill="currentColor" /></button>}
         <div ref={controlsBar} className={`relative px-3 sm:px-5 pt-8 pb-2 bg-gradient-to-t from-black/95 via-black/70 to-transparent transition-opacity duration-150 ${shown ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onFocusCapture={reveal} onPointerDown={() => { interacting.current = true; clearTimeout(hideTimer.current) }}>
             <div className="relative" onPointerLeave={() => setPreview(null)}>
-            <TimelinePreview mediaRef={mediaRef} position={shown ? preview : null} duration={state.duration} video={video} />
+            <TimelinePreview mediaRef={mediaRef} position={shown ? preview : null} duration={state.duration} video={video} prepareFrames={allowFramePreviews} />
             {state.duration>0&&markers.filter(marker=>marker.time<state.duration).map((marker,index)=><button key={`${marker.time}-${index}`} aria-label={`Jump to ${marker.title}`} title={marker.title} onClick={()=>{mediaRef.current.currentTime=marker.time;reveal()}} className="absolute bottom-1 z-10 h-4 w-2 -translate-x-1/2 rounded-sm bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" style={{left:`${marker.time/state.duration*100}%`}}/>)}
             <input type="range" aria-label="Video position" min="0" max={state.duration || 1} step="0.1" value={Math.min(state.time, state.duration || 1)} disabled={!state.duration}
                 onPointerMove={event => { if (state.duration) { const rect = event.currentTarget.getBoundingClientRect(); setPreview({ ...timelinePosition(event.clientX, rect, state.duration), width: rect.width }); reveal() } }}

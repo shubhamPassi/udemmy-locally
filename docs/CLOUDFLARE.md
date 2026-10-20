@@ -16,11 +16,12 @@ Before deploying, run `npm run check` and `npx wrangler deploy --dry-run`. GitHu
 
 ## Video traffic and free limits
 
-- Hosted Drive playback uses Google's iframe directly. The app does not relay video bytes or generate background timeline frames from Drive.
-- `/api/drive-video` returns HTTP 410 without contacting Google. This protects against older cached app versions continuing to request the former video relay.
+- Hosted Drive playback uses the native video player. `/api/drive-video` returns a validated HTTP 307 redirect with `Referrer-Policy: no-referrer`; Google sends video bytes directly to the browser. Cloudflare never fetches or relays those bytes.
+- The redirect preserves range requests for seeking and avoids sending the app's URL as a referrer. It changes only the video's redirect policy, leaving YouTube embeds and referrer-restricted API keys unaffected.
+- Native Drive playback records bookmarks, actual study time, and unique watched ranges. Background Drive thumbnail and duration scans remain disabled; active-lesson duration is saved when metadata loads.
 - Public course imports use `/api/public-import`; successful public metadata is cached for five minutes. Existing API keys remain browser settings.
 - Local files still use the normal native player, bookmarks, subtitles, and previews. YouTube uses its own player.
-- Google preview does not expose playback time. Previous bookmarks remain stored, but automatic resume, watched-range updates, and study-time measurement cannot run inside that iframe. Completion can still be marked manually.
+- If Google refuses direct playback, bounded retries fall back to Google preview. That iframe cannot expose playback time, so tracking is unavailable in fallback mode. Existing bookmarks are preserved, and a retry button returns to the native player. Public download access is required for direct playback; existing preview-only study time cannot be reconstructed.
 - No D1, R2, KV, Stream, paid plan, or paid compute resource is provisioned. Dynamic Worker requests still have Cloudflare free-plan limits; this is not unlimited backend hosting.
 
 ## Domain migration and saved data
@@ -33,4 +34,4 @@ For rollback, redeploy a previously tested Cloudflare version with Wrangler or t
 
 ## Verification without a browser
 
-The Node tests cover Worker import routing, disabled video relay, native versus hosted Drive policy, and player recovery with a simulated DOM. Verify production with HTTP requests to `/`, a nested course URL, `/api/health`, a real public import, and `/api/drive-video` (expected 410). Do not clear or modify users' browser storage to test deployment.
+The Node tests cover Worker import routing, redirect-only delivery with no video fetch, native Drive resume, real study measurements, pause/seek/replay handling, and player recovery with a simulated DOM. Verify production with HTTP requests to `/`, a nested course URL, `/api/health`, a real public import, and `/api/drive-video` (expected 307 with no body). Check the redirect separately from Google's bounded media response. Do not clear or modify users' browser storage to test deployment.

@@ -7,8 +7,21 @@ function json(body, status = 200, headers = {}) {
 export default {
     async fetch(request, env, context) {
         const url = new URL(request.url)
-        if (url.pathname === '/api/health') return json({ status: 'ok', hosting: 'cloudflare', drivePlayback: 'google-preview', videoRelay: false })
-        if (url.pathname === '/api/drive-video') return json({ error: 'Video relay is disabled. Use Google Drive preview to play directly from Google.' }, 410)
+        if (url.pathname === '/api/health') return json({ status: 'ok', hosting: 'cloudflare', drivePlayback: 'native-direct', videoRelay: false })
+        if (url.pathname === '/api/drive-video') {
+            if (!['GET', 'HEAD'].includes(request.method)) return json({ error: 'Method not allowed' }, 405, { Allow: 'GET, HEAD' })
+            const id = url.searchParams.get('id')
+            if (!id || !/^[a-zA-Z0-9_-]{8,160}$/.test(id)) return json({ error: 'Invalid public Drive file ID' }, 400)
+            // Return only a redirect: Google sends the video to the browser.
+            // Apply policy on this redirect, without changing page-wide policy
+            // (which would break referrer-restricted API keys and YouTube).
+            return new Response(null, { status: 307, headers: {
+                Location: `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`,
+                'Referrer-Policy': 'no-referrer',
+                'Cache-Control': 'private, max-age=300',
+                'X-Content-Type-Options': 'nosniff',
+            } })
+        }
         if (url.pathname === '/api/public-import') {
             if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405, { Allow: 'GET' })
             const query = Object.fromEntries(['provider', 'id', 'type'].map(key => [key, url.searchParams.get(key) || (key === 'type' ? 'playlist' : '')]))

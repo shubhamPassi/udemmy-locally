@@ -27,7 +27,7 @@ On Windows, `start-dev.bat` installs missing dependencies and launches the app. 
 - **Course imports:** Local folders, Google Drive, YouTube playlists, and additional YouTube URLs in an existing custom playlist.
 - **Instructors:** Choose an existing instructor or add one during import; rename and merge instructors to group related courses.
 - **Player:** Keyboard shortcuts, speed controls, fullscreen, controls that hide after two seconds of inactivity, A–B repeat, sleep timer, chapters, and timestamped note links.
-- **Timeline previews:** Background preparation of frames every ten seconds for supported local videos. Persistent previews have a 32 MB storage budget and 30-day expiry. Hosted Drive videos play directly through Google preview, with no video relay or background frame downloads through the host.
+- **Timeline previews:** Background preparation of frames every ten seconds for supported local videos. Persistent previews have a 32 MB storage budget and 30-day expiry. Hosted Drive videos use direct Google delivery with native resume and statistics; background Drive frame downloads stay disabled.
 - **Duration visibility:** The header toggle hides upcoming lesson durations and course totals by default; toggle it off to display them.
 - **Subtitles:** Import SRT/VTT, search timestamped transcripts, download subtitles, and customize caption appearance. Subtitles start disabled.
 - **Progress and notes:** Durable playback bookmarks, unique watched ranges, study history, and sanitized rich-text notes with screenshots.
@@ -59,7 +59,7 @@ The Google API key setting supports YouTube and Google Drive features that requi
 - Local folder access recovers automatically where saved permissions allow it. Browsers may still require renewed permission. Backups cannot restore missing files or file access permissions.
 - The red **Clear progress** control asks for confirmation before resetting progress.
 
-The offline shell does not cache online video streams, API responses, or AI model downloads. Google Drive preview embeds do not expose playback timing; automatic resume and accurate watch tracking require an accessible direct video source or local copy. YouTube controls its embedded player's native timeline.
+The offline shell does not cache online video streams, API responses, or AI model downloads. Drive's native player saves resume positions and statistics while streaming directly from Google through a redirect-only endpoint. If direct playback fails, Google preview remains available as a fallback; that iframe cannot expose playback time or track study statistics. YouTube controls its embedded player's native timeline.
 
 ## Cloudflare hosting
 

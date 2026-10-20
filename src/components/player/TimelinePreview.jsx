@@ -38,7 +38,7 @@ function frameCapture() {
     }
 }
 
-export default function TimelinePreview({ mediaRef, position, duration, video }) {
+export default function TimelinePreview({ mediaRef, position, duration, video, prepareFrames = true }) {
     const background = useRef(null)
     const [, setCacheVersion] = useState(0)
     const [loadedMedia, setLoadedMedia] = useState(null)
@@ -64,7 +64,7 @@ export default function TimelinePreview({ mediaRef, position, duration, video })
     const hoveredBucket = useRef(sampleTime)
     hoveredBucket.current = sampleTime
     useEffect(() => {
-        if (!source || !previewDuration) return
+        if (!prepareFrames || !source || !previewDuration) return
         const media = mediaRef.current
         let pool, disposed = false, starting=false, saveTimer
         const pending=new Map(),key=cacheIdentity
@@ -96,7 +96,7 @@ export default function TimelinePreview({ mediaRef, position, duration, video })
         document.addEventListener('visibilitychange', start)
         start()
         return () => { disposed = true; flush();events.forEach(event => media.removeEventListener(event, start)); document.removeEventListener('visibilitychange', start); pool?.dispose(); background.current = null }
-    }, [source, previewDuration, mediaRef, cacheIdentity])
+    }, [source, previewDuration, mediaRef, cacheIdentity, prepareFrames])
     // Hover only reads the cache. A missing frame becomes visible once prepared,
     // and stays unchanged for that entire ten-second interval.
     const prepared = background.current
