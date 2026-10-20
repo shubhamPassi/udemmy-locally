@@ -59,7 +59,9 @@ The Google API key setting supports YouTube and Google Drive features that requi
 - Local folder access recovers automatically where saved permissions allow it. Browsers may still require renewed permission. Backups cannot restore missing files or file access permissions.
 - The red **Clear progress** control asks for confirmation before resetting progress.
 
-The offline shell does not cache online video streams, API responses, or AI model downloads. Drive's native player saves resume positions and statistics while streaming directly from Google through a redirect-only endpoint. If direct playback fails, Google preview remains available as a fallback; that iframe cannot expose playback time or track study statistics. YouTube controls its embedded player's native timeline.
+The offline shell does not cache online video streams, API responses, or AI model downloads. Drive's custom player requests video directly from Google and records resume positions, study time, and unique watched ranges. There is no video relay, site redirect, or Drive preview fallback. YouTube controls its embedded player's native timeline.
+
+For reliable public Drive playback, enable Google Drive API in your Google Cloud project, create a browser API key, and add it in **Settings → AI & API Keys → Google API Key**. Restrict the key to the Drive API and the website origins you use (for example, `https://udemy.chaigallery.in/*`). Video requests then go directly to Google's media API. Public download permission and a browser-supported original codec are required. An API key does not grant access to private or download-restricted files. Without a key, the player attempts Google's public download URL, which Google may refuse. Failed playback keeps existing progress and provides a direct link to the relevant settings tab.
 
 ## Cloudflare hosting
 

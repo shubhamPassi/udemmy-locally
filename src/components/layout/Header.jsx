@@ -4,7 +4,7 @@ import { Sun, Moon, Settings, Menu, Search, X, FolderOpen, Youtube, HardDrive, C
 import {useTheme} from '../../contexts/contextHooks.js'
 import {useSidebar} from '../../contexts/contextHooks.js'
 import {useSearch} from '../../contexts/contextHooks.js'
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import {useSettings} from '../../contexts/contextHooks.js'
 import {useNotification} from '../../contexts/contextHooks.js'
 import {useImport} from '../../contexts/contextHooks.js'
@@ -27,6 +27,15 @@ function Header() {
     const { searchQuery, setSearchQuery } = useSearch()
     const location = useLocation()
     const [showSettings, setShowSettings] = useState(false)
+    const [settingsTab, setSettingsTab] = useState('general')
+    useEffect(() => {
+        const open = event => {
+            setSettingsTab(event.detail?.tab === 'ai_keys' ? 'ai_keys' : 'general')
+            setShowSettings(true)
+        }
+        window.addEventListener('tutin-open-settings', open)
+        return () => window.removeEventListener('tutin-open-settings', open)
+    }, [])
     const [showAddMenu, setShowAddMenu] = useState(false)
     const [showYouTubeModal, setShowYouTubeModal] = useState(false)
     const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false)
@@ -204,7 +213,7 @@ function Header() {
 
                         {/* Settings */}
                         <button
-                            onClick={() => setShowSettings(true)}
+                            onClick={() => { setSettingsTab('general'); setShowSettings(true) }}
                             className="p-2 rounded-full text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-all duration-200"
                             aria-label="Open settings"
                         >
@@ -217,6 +226,8 @@ function Header() {
             <Suspense fallback={null}>
                 {showSettings && (
                     <SettingsModal
+                        key={settingsTab}
+                        initialTab={settingsTab}
                         isOpen={showSettings}
                         onClose={() => setShowSettings(false)}
                     />

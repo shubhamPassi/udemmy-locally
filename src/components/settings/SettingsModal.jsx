@@ -26,13 +26,13 @@ const completionThresholds = [
     { label: '100%', value: 100 }
 ]
 
-function SettingsModal({ isOpen, onClose }) {
+function SettingsModal({ isOpen, onClose, initialTab = 'general' }) {
     const modalHost=useRef(null)
     useModalFocus(isOpen,modalHost,onClose)
 
     const { settings, updateSettings, resetSettings } = useSettings()
     const { theme, setTheme } = useTheme()
-    const [activeTab, setActiveTab] = useState('general')
+    const [activeTab, setActiveTab] = useState(initialTab)
     const [showApiKeys, setShowApiKeys] = useState({ youtube: false, openRouter: false, googleDrive: false })
     const [,,] = useState(false)
     const [,,] = useState(null)
@@ -372,7 +372,7 @@ function SettingsModal({ isOpen, onClose }) {
                                 <div className="border-t border-light-border dark:border-dark-border pt-6 space-y-4">
                                     <h3 className="text-sm font-bold text-primary-fg uppercase tracking-wider">API Keys</h3>
                                     <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                                        Keys are saved locally in your browser and never shared.
+                                        Keys are saved locally and sent to their respective API providers when used.
                                     </p>
 
                                     {/* Google API Key */}
@@ -397,6 +397,7 @@ function SettingsModal({ isOpen, onClose }) {
                                         </div>
                                         <div className="relative">
                                             <input
+                                                aria-label="Google API key"
                                                 type={showApiKeys.youtube ? 'text' : 'password'}
                                                 value={settings.googleApiKey || ''}
                                                 onChange={(e) => updateSettings({ googleApiKey: e.target.value })}
@@ -411,6 +412,7 @@ function SettingsModal({ isOpen, onClose }) {
                                                 {showApiKeys.youtube ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </button>
                                         </div>
+                                        <p className="mt-3 text-xs leading-5 text-light-text-secondary dark:text-dark-text-secondary">For direct Drive playback with resume and statistics, enable Google Drive API for this key. Allow this site's origin in the key's website restrictions and allow the Drive API. The file must permit public downloads; private files require Google authorization. Video bytes go directly from Google to your browser.</p>
                                     </div>
 
                                     {/* OpenRouter */}

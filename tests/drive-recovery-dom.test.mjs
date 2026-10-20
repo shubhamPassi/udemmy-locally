@@ -8,7 +8,7 @@ import {tmpdir} from 'node:os'
 import {join,resolve} from 'node:path'
 import 'fake-indexeddb/auto'
 
-for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native playback and records real study time without counting pauses or seeks' : 'Drive failures automatically open preview after bounded retries and preserve the bookmark',async()=>{
+for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native playback and records real study time without counting pauses or seeks' : 'Drive failure preserves the native player and bookmark without switching to preview',async()=>{
     const dom=new JSDOM('<div id="root"></div>',{url:'https://app.test',pretendToBeVisual:true})
     const saved=new Map(),timers=[],originalTimeout=globalThis.setTimeout
     for(const key of ['window','document','navigator','localStorage','Event','CustomEvent','HTMLElement','IS_REACT_ACT_ENVIRONMENT','MessageChannel']){
@@ -31,10 +31,12 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
         let clock=0
         if(hosted)Object.defineProperty(globalThis,'performance',{configurable:true,value:{now:()=>clock}})
         root=api.createRoot(document.getElementById('root'))
-        await api.act(async()=>root.render(api.element(api.Player,{video:{id:'lesson',driveFileId:'public12345',duration:600,title:'Lesson'},courseId:'course',settings:{resumePlayback:true,autoMarkCompleteAt:95}})))
+        await api.act(async()=>root.render(api.element(api.Player,{video:{id:'lesson',driveFileId:'public12345',duration:600,title:'Lesson'},courseId:'course',settings:{resumePlayback:true,autoMarkCompleteAt:95,googleApiKey:hosted?'test-key':''}})))
         if(hosted){
             const media=document.querySelector('video')
-            assert.match(media.src,/\/api\/drive-video\?id=public12345$/)
+            assert.equal(new URL(media.src).hostname,'www.googleapis.com')
+            assert.equal(new URL(media.src).searchParams.get('alt'),'media')
+            assert.equal(new URL(media.src).searchParams.get('key'),'test-key')
             assert.equal(document.querySelector('iframe'),null)
             let paused=false,seeking=false
             Object.defineProperties(media,{duration:{value:600,configurable:true},readyState:{value:4,configurable:true},paused:{get:()=>paused,configurable:true},seeking:{get:()=>seeking,configurable:true}})
@@ -54,7 +56,7 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
             assert.deepEqual(api.readCoverage('lesson'),[[125,130],[300,305]])
             assert.equal(api.writes.at(-1)[1],130)
             await api.act(async()=>root.render(null))
-            await api.act(async()=>root.render(api.element(api.Player,{video:{id:'lesson',driveFileId:'public12345',duration:600,title:'Lesson'},courseId:'course',settings:{resumePlayback:true,autoMarkCompleteAt:95}})))
+            await api.act(async()=>root.render(api.element(api.Player,{video:{id:'lesson',driveFileId:'public12345',duration:600,title:'Lesson'},courseId:'course',settings:{resumePlayback:true,autoMarkCompleteAt:95,googleApiKey:'test-key'}})))
             const restored=document.querySelector('video')
             Object.defineProperty(restored,'duration',{value:600,configurable:true})
             await api.act(async()=>restored.dispatchEvent(new Event('loadedmetadata')))
@@ -70,9 +72,9 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
             await api.act(async()=>document.querySelector('video').dispatchEvent(new Event('error')))
             if(attempt<2){assert.equal(document.querySelector('iframe'),null);await api.act(async()=>timers.shift()())}
         }
-        assert.equal(document.querySelector('video'),null)
-        assert.match(document.querySelector('iframe').src,/file\/d\/public12345\/preview$/)
-        assert.match(document.querySelector('[role="status"]').textContent,/previous position is still saved/)
+        assert.ok(document.querySelector('video'))
+        assert.equal(document.querySelector('iframe'),null)
+        assert.match(document.querySelector('[role="alert"]').textContent,/Add a Google API key/)
         assert.equal(api.writes.at(-1)[1],150)
         await api.act(async()=>document.querySelector('button').click())
         assert.equal(document.querySelector('iframe'),null)

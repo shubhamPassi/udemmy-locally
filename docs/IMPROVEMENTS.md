@@ -12,9 +12,9 @@ Implemented on 13 October 2026. This release adds no paid service.
 
 ## Player and learning tools
 
-- Drive resume and statistics are restored through a native player with a redirect-only Cloudflare endpoint. The browser obtains video bytes directly from Google, while bookmarks, measured study time, and unique watched ranges remain in browser storage. A video-specific no-referrer policy avoids Google's referrer-dependent confirmation response. Background Drive thumbnail/duration downloads stay disabled; Google preview remains a clearly labelled fallback if direct access fails. Time spent in the old preview-only mode cannot be recovered.
+- Drive playback now uses only the custom native player and direct Google source URLs. A configured Google API key selects Google's official media API for publicly downloadable files; missing keys use Google's public download URL, which Google may refuse. All hosted video relays and redirects are retired, including the old Vercel relay. Native bookmarks, measured study time, and unique watched ranges remain in browser storage. Background Drive thumbnail/duration downloads stay disabled. Time spent in the old preview-only mode cannot be recovered.
 
-- Drive playback automatically switches to Google's preview player after two failed direct-stream retries. Existing bookmarks remain intact; preview mode offers a direct Drive link and a retry of the resumable player. Google preview does not expose playback time, so it cannot update resume positions or study-time tracking.
+- Drive failures no longer switch to Google's preview player. After bounded retries, an error explains API key, access, or original-codec requirements and offers Retry and Google API settings. Existing progress is preserved; failed playback cannot generate study time.
 
 - Ten-second preview frames are prepared independently of hover, saved between visits, and refreshed when the video identity or file metadata changes. Saved previews have a 32 MB budget and 30-day expiry. Transient failures receive a selective retry. Preview media never contributes to watched progress.
 - The **Learning tools** book icon opens A–B repeat, a 15/30/60-minute sleep timer, manual chapters, timestamped note links and a keyboard shortcut guide.

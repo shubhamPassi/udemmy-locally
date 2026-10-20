@@ -8,6 +8,7 @@ import StreamPlayerControls from './StreamPlayerControls'
 import PlayerLearningTools from './PlayerLearningTools.jsx'
 import useStudyTime from '../../hooks/useStudyTime'
 import { disableHostedDriveBackground } from '../../utils/hostedVideoPolicy'
+import { directDriveVideoUrl, directDriveFailureMessage } from '../../utils/directDrivePlayback'
 
 let youtubeApi
 function loadYouTubeApi() {
@@ -39,7 +40,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     const nativeReady = useRef(false)
     const lastCachedSecond = useRef(null)
     const disableBackground = disableHostedDriveBackground(video, IS_BROWSER_MODE)
-    const [fallback, setFallback] = useState(false), [error, setError] = useState('')
+    const [error, setError] = useState('')
     const [retrying, setRetrying] = useState(false), [attempt, setAttempt] = useState(0)
     const [mediaLoading,setMediaLoading]=useState(true)
     const [slowBuffer,setSlowBuffer]=useState(false)
@@ -50,6 +51,16 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     const isYouTube = !!(video.youtubeId || /youtu(?:be\.com|\.be)/.test(video.url || ''))
     const youtubeId = video.youtubeId || video.url?.match(/(?:[?&]v=|youtu\.be\/)([^?&/]+)/)?.[1]
     const driveId = video.driveFileId || video.url?.match(/(?:\/d\/|[?&]id=)([a-zA-Z0-9_-]+)/)?.[1]
+    const driveSource = directDriveVideoUrl(driveId, settings.googleApiKey)
+    useEffect(() => {
+        if (isYouTube) return
+        clearTimeout(retryTimer.current)
+        retryCount.current = 0
+        nativeReady.current = false
+        setError('')
+        setRetrying(false)
+        setMediaLoading(true)
+    }, [driveSource, isYouTube])
     useEffect(() => () => {clearTimeout(retryTimer.current);clearTimeout(bufferTimer.current);clearTimeout(bufferRetryTimer.current)}, [])
     function clearBufferNotice(){clearTimeout(bufferTimer.current);clearTimeout(bufferRetryTimer.current);setSlowBuffer(false)}
     function retryDrive(manual = false) {
@@ -58,25 +69,14 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
         if (manual) retryCount.current = 0
         nativeReady.current = false
         setError('')
-        setFallback(false)
         setRetrying(true)
         setMediaLoading(true)
         setAttempt(value => value + 1)
     }
-    function showDrivePreview() {
-        clearTimeout(retryTimer.current)
-        clearBufferNotice()
-        flushStudyTime()
-        remember(true)
-        nativeReady.current = false
-        setError('')
-        setRetrying(false)
-        setMediaLoading(false)
-        setFallback(true)
-    }
     function handleDriveError(event) {
         const media = event.currentTarget
-        console.warn('Drive direct playback failed:', media.error?.code, media.error?.message)
+        if (media !== native.current) return
+        console.warn('Drive direct playback failed. Media error code:', media.error?.code)
         if (nativeReady.current && media.currentTime > 0) sample(media.currentTime, media.duration, true)
         continuePlaying.current = continuePlaying.current || !media.paused
         nativeReady.current = false
@@ -85,7 +85,12 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
             setRetrying(true)
             retryTimer.current = setTimeout(() => retryDrive(), retryCount.current * 1500)
         } else {
-            showDrivePreview()
+            clearBufferNotice()
+            flushStudyTime()
+            remember(true)
+            setRetrying(false)
+            setMediaLoading(false)
+            setError(directDriveFailureMessage(media.error?.code, !!settings.googleApiKey?.trim()))
         }
     }
     const flushStudyTime=useStudyTime(()=>{
@@ -136,7 +141,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     }), [isYouTube])
     useEffect(() => {
         function keydown(event) {
-            if (!settings.keyboardShortcuts || fallback) return
+            if (!settings.keyboardShortcuts) return
             const action = playerShortcut(event)
             const media = native.current, yt = player.current
             if (!action || (isYouTube ? !yt?.getPlayerState : !media || media.readyState < 1)) return
@@ -185,7 +190,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
         }
         window.addEventListener('keydown', keydown, true)
         return () => window.removeEventListener('keydown', keydown, true)
-    }, [video.id, settings.keyboardShortcuts, fallback, isYouTube])
+    }, [video.id, settings.keyboardShortcuts, isYouTube])
     useEffect(() => {
         const flush = () => rememberEvent(true)
         const onHidden = () => { if (document.visibilityState === 'hidden') flush() }
@@ -227,12 +232,9 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
         }).catch(err => setError(err.message))
         return () => { cancelled = true; clearInterval(timer); rememberEvent(true); player.current?.destroy?.(); player.current = null }
     }, [video.id,isYouTube,youtubeId,flushStudyTime,sampleEvent, rememberEvent])
-    return <div ref={container} className={`w-full h-full relative bg-black${fallback && !isYouTube ? ' flex flex-col' : ''}`}>
-        {isYouTube ? <div ref={host} className="w-full h-full" /> : fallback ? <>
-            <iframe key={attempt} className="w-full min-h-0 flex-1 border-0" src={`https://drive.google.com/file/d/${driveId}/preview`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={video.title} />
-            <div className="shrink-0 border-t border-white/10 bg-neutral-900 px-3 py-2 text-xs text-white flex flex-wrap items-center justify-between gap-2"><details className="min-w-0 flex-1"><summary className="cursor-pointer text-neutral-300 hover:text-white">Drive preview · Resume and statistics unavailable</summary><p role="status" className="mt-2 max-w-xl leading-5 text-neutral-400">Switched to Drive preview because the direct stream failed. Preview cannot save playback time or record study statistics. Your previous position is still saved. Retry the resumable player to restore tracking.</p></details><div className="flex shrink-0 flex-wrap gap-2"><button onClick={() => retryDrive(true)} className="rounded px-3 py-2 text-neutral-300 hover:bg-white/10 hover:text-white">Retry resumable player</button><a href={`https://drive.google.com/file/d/${driveId}/view`} target="_blank" rel="noopener noreferrer" className="rounded px-3 py-2 text-neutral-300 hover:bg-white/10 hover:text-white">Open in Drive</a></div></div>
-        </> : <video key={`media-${attempt}`} ref={native} className="w-full h-full object-contain" playsInline crossOrigin="anonymous" autoPlay={continuePlaying.current}
-            src={IS_BROWSER_MODE ? `/api/drive-video?id=${encodeURIComponent(driveId)}${attempt ? `&retry=${attempt}` : ''}` : `https://drive.usercontent.google.com/download?id=${encodeURIComponent(driveId)}&export=download&confirm=t`}
+    return <div ref={container} className="w-full h-full relative bg-black">
+        {isYouTube ? <div ref={host} className="w-full h-full" /> : <video key={`media-${attempt}`} ref={native} className="w-full h-full object-contain" playsInline crossOrigin="anonymous" autoPlay={continuePlaying.current}
+            src={driveSource}
             onLoadedMetadata={event => {
                 const element = event.currentTarget
                 duration.current = element.duration
@@ -259,10 +261,10 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
             onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext&&event.currentTarget.dataset.repeatSection!=='true') callbacks.current.onNext?.() }}
             onError={handleDriveError} />}
         {isYouTube&&!error&&<div className="absolute right-3 top-3 z-20 rounded-full bg-black/70"><PlayerLearningTools youtubeRef={player} hostRef={container} video={video} onRepeatChange={repeatChanged}/></div>}
-        {!isYouTube && !fallback && !error && !retrying && <StreamPlayerControls key={`controls-${attempt}`} mediaRef={native} containerRef={container} video={video} allowFramePreviews={!disableBackground} showLoadingIndicator={!mediaLoading} />}
-        {(retrying || mediaLoading) && !error && !fallback && <div role="status" aria-label="Loading video" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40"><span className="h-11 w-11 rounded-full border-4 border-white/20 border-t-white animate-spin" /></div>}
-        {slowBuffer&&!error&&!fallback&&<div className="absolute bottom-24 inset-x-4 z-30 rounded-lg bg-black/85 p-3 text-center text-xs text-white">Drive is taking longer to respond. Your progress is saved.<button onClick={()=>{remember(true);retryDrive(true)}} className="ml-3 rounded bg-blue-600 px-3 py-2">Reconnect</button></div>}
-        {error && (isYouTube ? <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p> : <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-5"><div className="max-w-md text-center text-white"><p role="alert" className="text-sm leading-6">{error}</p><div className="mt-4 flex flex-wrap justify-center gap-3"><button onClick={() => retryDrive(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium">Retry video</button><button onClick={showDrivePreview} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Use Drive preview</button></div></div></div>)}
+        {!isYouTube && !error && !retrying && <StreamPlayerControls key={`controls-${attempt}`} mediaRef={native} containerRef={container} video={video} allowFramePreviews={!disableBackground} showLoadingIndicator={!mediaLoading} />}
+        {(retrying || mediaLoading) && !error && <div role="status" aria-label="Loading video" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40"><span className="h-11 w-11 rounded-full border-4 border-white/20 border-t-white animate-spin" /></div>}
+        {slowBuffer&&!error&&<div className="absolute bottom-24 inset-x-4 z-30 rounded-lg bg-black/85 p-3 text-center text-xs text-white">Drive is taking longer to respond. Your progress is saved.<button onClick={()=>{remember(true);retryDrive(true)}} className="ml-3 rounded bg-blue-600 px-3 py-2">Reconnect</button></div>}
+        {error && (isYouTube ? <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p> : <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-5"><div className="max-w-md text-center text-white"><p role="alert" className="text-sm leading-6">{error}</p><div className="mt-4 flex flex-wrap justify-center gap-3"><button onClick={() => retryDrive(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium">Retry video</button><button onClick={() => window.dispatchEvent(new CustomEvent('tutin-open-settings', { detail: { tab: 'ai_keys' } }))} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Google API settings</button></div></div></div>)}
     </div>
 })
 export default ResumableEmbedPlayer
