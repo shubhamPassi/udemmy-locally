@@ -60,7 +60,7 @@ export default function TimelinePreview({ mediaRef, position, duration, video, p
     const source = loadedMedia?.source || ''
     const previewDuration = loadedMedia?.duration || duration
     const cacheIdentity = previewCacheKey(video, previewDuration)
-    const { concurrency, delay } = previewWorkload(video, !!navigator.connection?.saveData)
+    const { concurrency, delay, minBufferSeconds, maxFailures } = previewWorkload(video, !!navigator.connection?.saveData)
     const sampleTime = position ? previewBucket(position.time, previewDuration) : null
     const hoveredBucket = useRef(sampleTime)
     hoveredBucket.current = sampleTime
@@ -68,10 +68,11 @@ export default function TimelinePreview({ mediaRef, position, duration, video, p
         if (!prepareFrames || !source || !previewDuration) return
         const media = mediaRef.current
         let pool, disposed = false, starting=false, saveTimer
+        const canRun = () => canPrepareTimeline(media, document.hidden, minBufferSeconds)
         const pending=new Map(),key=cacheIdentity
         const flush=()=>{clearTimeout(saveTimer);if(!pending.size)return;const frames=[...pending];pending.clear();storePreviewFrames(key,frames).catch(()=>{})}
         const start = async () => {
-            if (disposed || pool || starting || !canPrepareTimeline(media, document.hidden)) return
+            if (disposed || pool || starting || !canRun()) return
             starting=true
             const initialFrames=await loadPreviewFrames(key).catch(()=>[])
             if(disposed)return
@@ -80,9 +81,10 @@ export default function TimelinePreview({ mediaRef, position, duration, video, p
                 createVideo: () => previewVideo(source, media.crossOrigin),
                 capture: frameCapture(),
                 // Yield when playback buffers or the page is in the background.
-                canRun: () => canPrepareTimeline(media, document.hidden),
+                canRun,
                 concurrency,
                 delay,
+                maxFailures,
                 initialFrames,
                 onUpdate: time => {
                     if(pool){pending.set(time,pool.get(time)?.image);if(!saveTimer)saveTimer=setTimeout(()=>{saveTimer=null;flush()},1000)}
@@ -93,12 +95,16 @@ export default function TimelinePreview({ mediaRef, position, duration, video, p
             setCacheVersion(version => version + 1)
             pool.done.then(flush)
         }
-        const events = ['loadedmetadata', 'loadeddata', 'canplay', 'pause', 'seeked']
+        const prioritizePlayback = () => { if (!canRun()) pool?.suspend() }
+        const interrupts = ['waiting', 'stalled', 'seeking', 'play', 'error']
+        interrupts.forEach(event => media.addEventListener(event, prioritizePlayback))
+        const events = ['loadedmetadata', 'loadeddata', 'canplay', 'pause', 'seeked', 'progress', 'timeupdate']
         events.forEach(event => media.addEventListener(event, start))
-        document.addEventListener('visibilitychange', start)
+        const visibility = () => { prioritizePlayback(); start() }
+        document.addEventListener('visibilitychange', visibility)
         start()
-        return () => { disposed = true; flush();events.forEach(event => media.removeEventListener(event, start)); document.removeEventListener('visibilitychange', start); pool?.dispose(); background.current = null }
-    }, [source, previewDuration, mediaRef, cacheIdentity, prepareFrames, concurrency, delay])
+        return () => { disposed = true; flush();events.forEach(event => media.removeEventListener(event, start)); interrupts.forEach(event => media.removeEventListener(event, prioritizePlayback)); document.removeEventListener('visibilitychange', visibility); pool?.dispose(); background.current = null }
+    }, [source, previewDuration, mediaRef, cacheIdentity, prepareFrames, concurrency, delay, minBufferSeconds, maxFailures])
     // Hover only reads the cache. A missing frame becomes visible once prepared,
     // and stays unchanged for that entire ten-second interval.
     const prepared = background.current

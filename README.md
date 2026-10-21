@@ -254,7 +254,7 @@ Local companion mode can deliver local videos through Express range endpoints. N
 
 YouTube lessons use YouTube's embedded player API for playback state and position. YouTube retains control of its media delivery and native timeline; TutIn cannot turn YouTube into a raw video source for the local video element.
 
-Background thumbnail preparation uses ten-second intervals for supported local videos and direct Drive playback with a configured Google API key. Drive frames are fetched directly from Google using one paced decoder that yields during playback buffering; cached frames are reused on later visits. Persistent previews use a 32 MB budget and 30-day expiry. Initial preparation takes time and consumes additional Google-to-browser data. Background duration scans of other Drive lessons remain disabled; the active lesson records its duration when metadata loads.
+Background thumbnail preparation uses ten-second intervals for supported local videos and direct Drive playback with a configured Google API key. Drive frames are fetched directly from Google using one paced decoder, with at least two seconds between completed frame jobs (five seconds with Data Saver). While playing, it waits for 30 seconds of buffered media, cancels in-flight work on buffering/seeking, and stops on its first preview failure. Cached frames survive these pauses and are reused on later visits. Persistent previews use a 32 MB budget and 30-day expiry. Initial preparation takes time and consumes additional Google-to-browser data. Background duration scans of other Drive lessons remain disabled; the active lesson records its duration when metadata loads.
 
 ## Storage and backups
 
@@ -472,6 +472,7 @@ The test suite uses Node, mocked IndexedDB, simulated DOM, and mocked media even
 | Symptom | Check |
 | --- | --- |
 | Drive video fails but plays on drive.google.com | Confirm the Google key, Drive API enablement, referrer/API restrictions, public download permission, and original codec. Google's own player may use a different playback representation. |
+| Google reports automated requests or temporarily refuses media | Close old app tabs to stop their background jobs, wait before retrying, and avoid repeated reloads. Application changes cannot remove a provider-side block immediately. |
 | No resume or statistics after failed playback | Tracking requires native playback events. The app preserves old records but cannot infer watching that happened outside its player. |
 | Courses appear missing on another address | Check the origin. Export/import between the custom domain, fallback domain, localhost, and the old Vercel domain. |
 | Localhost cannot connect to the API | Start the companion server and check port `9474` and the startup banner. |

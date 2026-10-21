@@ -3,8 +3,8 @@ import { isDriveVideo } from './hostedVideoPolicy.js'
 // Remote previews share bandwidth with playback and Google's request quotas.
 export function previewWorkload(video, saveData = false) {
     return isDriveVideo(video)
-        ? { concurrency: 1, delay: saveData ? 1000 : 400 }
-        : { concurrency: saveData ? 1 : 2, delay: 80 }
+        ? { concurrency: 1, delay: saveData ? 5000 : 2000, minBufferSeconds: 30, maxFailures: 1 }
+        : { concurrency: saveData ? 1 : 2, delay: 80, minBufferSeconds: 0, maxFailures: 6 }
 }
 
 // A separate, paused decoder keeps hover seeks out of playback and study tracking.
@@ -100,11 +100,19 @@ export function previewSampleTimes(duration) {
     return [...times]
 }
 
-export function canPrepareTimeline(media, hidden = false) {
-    return !hidden && !!media && !media.error && !media.seeking && media.readyState >= 1 && (media.paused || media.readyState >= 3)
+export function canPrepareTimeline(media, hidden = false, minBufferSeconds = 0) {
+    if (hidden || !media || media.error || media.seeking || media.readyState < 1 || (!media.paused && media.readyState < 3)) return false
+    if (!minBufferSeconds) return true
+    if (media.readyState < 2) return false
+    if (media.paused) return true
+    const required = Number.isFinite(media.duration) ? Math.min(minBufferSeconds, Math.max(0, media.duration - media.currentTime)) : minBufferSeconds
+    for (let index = 0; index < (media.buffered?.length || 0); index++) {
+        if (media.buffered.start(index) <= media.currentTime && media.buffered.end(index) - media.currentTime >= required) return true
+    }
+    return false
 }
 
-export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate, initialFrames = [], canRun = () => true, concurrency = 2, delay = 80 }) {
+export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate, initialFrames = [], canRun = () => true, concurrency = 2, delay = 80, maxFailures = 6 }) {
     const frames = new Map(initialFrames), times = previewSampleTimes(duration).filter(time=>!frames.has(time)).map(time=>({time,attempt:0})), workers = []
     let next = 0, disposed = false
     const pending = new Set()
@@ -115,30 +123,33 @@ export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate,
     })
     async function run() {
         if(next>=times.length || disposed)return
-        const video = createVideo()
-        let finish, failures = 0
-        const decoder = createTimelinePreview(video, capture, (time, image, error) => finish?.({ time, image, error }))
-        const cancel = () => finish?.({ image: null })
-        workers.push({ decoder, cancel })
-        while (!disposed && next < times.length && failures < 6) {
-            if (!canRun()) { await pause(); continue }
+        const worker = { decoder: null, video: null, finish: null }
+        let failures = 0
+        workers.push(worker)
+        while (!disposed && next < times.length && failures < maxFailures) {
+            if (!canRun()) { worker.decoder?.dispose(); worker.decoder = null; await pause(); continue }
+            if (!worker.decoder) {
+                worker.video = createVideo()
+                worker.decoder = createTimelinePreview(worker.video, capture, (time, image, error) => worker.finish?.({ time, image, error }))
+            }
             const request = times[next++], time=request.time
             if (frames.has(time)) continue
-            const frame = await new Promise(resolve => { finish = resolve; decoder.request(time) })
-            finish = null
+            const frame = await new Promise(resolve => { worker.finish = resolve; worker.decoder.request(time) })
+            worker.finish = null
             if (disposed) break
+            if (frame.cancelled) { times.push(request); continue }
             if (frame.image) {
                 failures = 0
                 frames.set(frame.time, frame.image)
                 onUpdate?.(frame.time)
             } else {
                 failures++
-                if(frame.error?.name==='SecurityError'||video.error?.code===4)break
+                if(frame.error?.name==='SecurityError'||worker.video.error?.code===4)break
                 if(request.attempt<1)times.push({time,attempt:request.attempt+1})
             }
             await pause()
         }
-        decoder.dispose()
+        worker.decoder?.dispose()
     }
     const done = Promise.all(Array.from({ length: Math.max(1, Math.min(2, concurrency)) }, run))
     return {
@@ -147,9 +158,16 @@ export function warmTimelinePreviews({ duration, createVideo, capture, onUpdate,
             const timestamp = previewBucket(time, duration), image = frames.get(timestamp)
             return image ? { time: timestamp, image } : null
         },
+        suspend() {
+            for (const worker of workers) {
+                worker.finish?.({ image: null, cancelled: true })
+                worker.decoder?.dispose()
+                worker.decoder = null
+            }
+        },
         dispose() {
             disposed = true
-            for (const worker of workers) { worker.cancel(); worker.decoder.dispose() }
+            for (const worker of workers) { worker.finish?.({ image: null, cancelled: true }); worker.decoder?.dispose() }
             for (const cancel of pending) cancel()
             pending.clear()
             frames.clear()

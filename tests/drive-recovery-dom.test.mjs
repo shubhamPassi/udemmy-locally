@@ -10,12 +10,12 @@ import 'fake-indexeddb/auto'
 
 for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native playback and records real study time without counting pauses or seeks' : 'Drive failure preserves the native player and bookmark without switching to preview',async()=>{
     const dom=new JSDOM('<div id="root"></div>',{url:'https://app.test',pretendToBeVisual:true})
-    const saved=new Map(),timers=[],originalTimeout=globalThis.setTimeout
+    const saved=new Map(),timers=[],watchdogs=[],originalTimeout=globalThis.setTimeout
     for(const key of ['window','document','navigator','localStorage','Event','CustomEvent','HTMLElement','IS_REACT_ACT_ENVIRONMENT','MessageChannel']){
         saved.set(key,Object.getOwnPropertyDescriptor(globalThis,key))
         Object.defineProperty(globalThis,key,{configurable:true,writable:true,value:key==='IS_REACT_ACT_ENVIRONMENT'?true:key==='MessageChannel'?class{constructor(){this.port1={onmessage:null};this.port2={postMessage:()=>setImmediate(()=>this.port1.onmessage?.())}}}:dom.window[key]})
     }
-    globalThis.setTimeout=(fn,delay,...args)=>[1500,3000].includes(delay)?(timers.push(fn),timers.length):originalTimeout(fn,delay,...args)
+    globalThis.setTimeout=(fn,delay,...args)=>{if(delay===30000)watchdogs.push(fn);return [1500,3000].includes(delay)?(timers.push(fn),timers.length):originalTimeout(fn,delay,...args)}
     const directory=mkdtempSync(join(tmpdir(),'tutin-drive-test-')),output=join(directory,'player.cjs')
     const previousPerformance=Object.getOwnPropertyDescriptor(globalThis,'performance')
     let root,api
@@ -62,6 +62,14 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
             Object.defineProperty(restored,'duration',{value:600,configurable:true})
             await api.act(async()=>restored.dispatchEvent(new Event('loadedmetadata')))
             assert.equal(restored.currentTime,130)
+            Object.defineProperty(restored,'readyState',{value:4,configurable:true})
+            await api.act(async()=>restored.dispatchEvent(new Event('playing')))
+            assert.equal(document.querySelector('[aria-label="Loading video"]'),null)
+            await api.act(async()=>root.render(api.element(api.Player,{key:'stalled',video:{id:'stalled-lesson',driveFileId:'public12345',duration:600,title:'Lesson'},courseId:'course',settings:{resumePlayback:true,autoMarkCompleteAt:95,googleApiKey:'test-key'}})))
+            assert.ok(document.querySelector('[aria-label="Loading video"]'))
+            await api.act(async()=>watchdogs.at(-1)())
+            assert.equal(document.querySelector('[aria-label="Loading video"]'),null)
+            assert.match(document.querySelector('[role="alert"]').textContent,/taking too long/)
             return
         }
         let media=document.querySelector('video')
@@ -74,6 +82,10 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
             if(attempt<2){assert.equal(document.querySelector('iframe'),null);await api.act(async()=>timers.shift()())}
         }
         assert.ok(document.querySelector('video'))
+        Object.defineProperty(document.querySelector('video'),'error',{value:{code:4},configurable:true})
+        await api.act(async()=>document.querySelector('video').dispatchEvent(new Event('error')))
+        assert.ok(document.querySelector('[role="alert"]'))
+        assert.equal(timers.length,0)
         assert.equal(document.querySelector('iframe'),null)
         assert.match(document.querySelector('[role="alert"]').textContent,/Add a Google API key/)
         assert.equal(api.writes.at(-1)[1],150)

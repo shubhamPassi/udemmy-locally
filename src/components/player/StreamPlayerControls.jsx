@@ -59,7 +59,7 @@ export default function StreamPlayerControls({ mediaRef, containerRef, video, sh
             const next = { time: media.currentTime, duration: Number.isFinite(media.duration) ? media.duration : 0, paused: media.paused, muted: media.muted, volume: media.volume, rate: media.playbackRate, buffering: !media.paused && media.readyState < 3 }
             return Math.floor(previous.time) === Math.floor(next.time) && Object.keys(next).filter(key => key !== 'time').every(key => next[key] === previous[key]) ? previous : next
         })
-        const events = ['timeupdate', 'loadedmetadata', 'durationchange', 'play', 'pause', 'ended', 'volumechange', 'ratechange', 'waiting', 'canplay', 'seeked']
+        const events = ['timeupdate', 'loadedmetadata', 'loadeddata', 'durationchange', 'play', 'playing', 'pause', 'ended', 'volumechange', 'ratechange', 'waiting', 'canplay', 'seeking', 'seeked', 'progress', 'stalled', 'emptied']
         events.forEach(event => media.addEventListener(event, sync)); sync()
         return () => { events.forEach(event => media.removeEventListener(event, sync)); clearTimeout(hideTimer.current) }
     }, [mediaRef])

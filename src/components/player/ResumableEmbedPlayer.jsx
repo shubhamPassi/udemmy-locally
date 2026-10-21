@@ -52,15 +52,30 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     const youtubeId = video.youtubeId || video.url?.match(/(?:[?&]v=|youtu\.be\/)([^?&/]+)/)?.[1]
     const driveId = video.driveFileId || video.url?.match(/(?:\/d\/|[?&]id=)([a-zA-Z0-9_-]+)/)?.[1]
     const driveSource = directDriveVideoUrl(driveId, settings.googleApiKey)
+    useEffect(() => { retryCount.current = 0 }, [driveSource])
     useEffect(() => {
         if (isYouTube) return
         clearTimeout(retryTimer.current)
-        retryCount.current = 0
-        nativeReady.current = false
+        const media = native.current
+        nativeReady.current = !!media && media.readyState >= 1
         setError('')
         setRetrying(false)
-        setMediaLoading(true)
-    }, [driveSource, isYouTube])
+        setMediaLoading(!media || media.readyState < 2)
+        const ready = () => {
+            if (media?.readyState >= 2) { clearTimeout(timeout); setMediaLoading(false); setRetrying(false) }
+        }
+        const timeout = setTimeout(() => {
+            if (media === native.current && media?.readyState < 2 && !media.error) {
+                setMediaLoading(false)
+                setRetrying(false)
+                setError('Google is taking too long to load this video. It may be temporarily limiting requests. Your saved position is preserved. Please retry later.')
+            }
+        }, 30000)
+        const events = ['loadeddata', 'canplay', 'playing']
+        events.forEach(event => media?.addEventListener(event, ready))
+        ready()
+        return () => { clearTimeout(timeout); events.forEach(event => media?.removeEventListener(event, ready)) }
+    }, [driveSource, isYouTube, attempt])
     useEffect(() => () => {clearTimeout(retryTimer.current);clearTimeout(bufferTimer.current);clearTimeout(bufferRetryTimer.current)}, [])
     function clearBufferNotice(){clearTimeout(bufferTimer.current);clearTimeout(bufferRetryTimer.current);setSlowBuffer(false)}
     function retryDrive(manual = false) {
@@ -80,7 +95,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
         if (nativeReady.current && media.currentTime > 0) sample(media.currentTime, media.duration, true)
         continuePlaying.current = continuePlaying.current || !media.paused
         nativeReady.current = false
-        if (retryCount.current < 2) {
+        if (![3, 4].includes(media.error?.code) && retryCount.current < 2) {
             retryCount.current++
             setRetrying(true)
             retryTimer.current = setTimeout(() => retryDrive(), retryCount.current * 1500)
@@ -240,7 +255,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
                 duration.current = element.duration
                 if (position.current > 0) element.currentTime = Math.min(position.current, Math.max(0, element.duration - 1))
                 nativeReady.current = true
-                setMediaLoading(false)
+                setMediaLoading(element.readyState < 2)
                 setRetrying(false)
                 setError('')
                 updateVideo(video.id, { duration: element.duration }).catch(console.error)
@@ -248,8 +263,9 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
             }}
             onTimeUpdate={event => sampleNative(event)}
             onPlay={() => { continuePlaying.current = true }}
-            onPlaying={() => { retryCount.current = 0; setRetrying(false);clearBufferNotice() }}
-            onCanPlay={clearBufferNotice}
+            onLoadedData={() => { setMediaLoading(false); setRetrying(false) }}
+            onPlaying={() => { retryCount.current = 0; setMediaLoading(false); setRetrying(false);clearBufferNotice() }}
+            onCanPlay={() => { setMediaLoading(false); setRetrying(false); clearBufferNotice() }}
             onWaiting={event=>{
                 const media=event.currentTarget
                 clearTimeout(bufferTimer.current);clearTimeout(bufferRetryTimer.current)

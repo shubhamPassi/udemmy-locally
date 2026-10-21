@@ -20,14 +20,56 @@ const settle = () => new Promise(resolve => setTimeout(resolve, 30))
 
 test('Drive background previews use a single paced decoder while local previews retain their concurrency', async () => {
     const drive = {driveFileId:'public12345'}
-    assert.deepEqual(previewWorkload(drive), {concurrency:1,delay:400})
-    assert.deepEqual(previewWorkload(drive,true), {concurrency:1,delay:1000})
-    assert.deepEqual(previewWorkload({filePath:'lesson.mp4'}), {concurrency:2,delay:80})
+    assert.deepEqual(previewWorkload(drive), {concurrency:1,delay:2000,minBufferSeconds:30,maxFailures:1})
+    assert.deepEqual(previewWorkload(drive,true), {concurrency:1,delay:5000,minBufferSeconds:30,maxFailures:1})
+    assert.deepEqual(previewWorkload({filePath:'lesson.mp4'}), {concurrency:2,delay:80,minBufferSeconds:0,maxFailures:6})
     let decoders=0
     const pool=warmTimelinePreviews({...previewWorkload(drive),delay:0,duration:20,createVideo:()=>{decoders++;return new Decoder()},capture:media=>`frame:${media.currentTime}`})
     await pool.done
     assert.equal(decoders,1)
     assert.equal(pool.get(10).image,'frame:10')
+    pool.dispose()
+})
+
+test('remote preparation waits for a first frame and sufficient playback buffer',()=>{
+    const media={readyState:1,paused:true,seeking:false,currentTime:10,duration:100}
+    assert.equal(canPrepareTimeline(media,false,30),false)
+    media.readyState=2
+    assert.equal(canPrepareTimeline(media,false,30),true)
+    media.paused=false;media.readyState=4
+    media.buffered={length:1,start:()=>0,end:()=>20}
+    assert.equal(canPrepareTimeline(media,false,30),false)
+    media.buffered.end=()=>45
+    assert.equal(canPrepareTimeline(media,false,30),true)
+    assert.equal(canPrepareTimeline({...media,seeking:true},false,30),false)
+    assert.equal(canPrepareTimeline(media,true,30),false)
+})
+
+test('buffering cancels an in-flight decoder and resumes without discarding cached frames',async()=>{
+    let allowed=true,release
+    const videos=[]
+    const pool=warmTimelinePreviews({duration:30,concurrency:1,delay:1,canRun:()=>allowed,initialFrames:[[0,'saved-frame']],createVideo:()=>{const video=new Decoder();videos.push(video);return video},capture:()=>new Promise(resolve=>{release=resolve})})
+    await settle()
+    allowed=false;pool.suspend()
+    const stopped=videos[0]
+    release?.('stale-frame')
+    await settle()
+    assert.equal(pool.get(0).image,'saved-frame')
+    assert.equal(pool.get(10),null)
+    assert.equal(videos.length,1)
+    assert.equal(stopped.seeks.length,1)
+    allowed=true
+    await settle()
+    assert.equal(videos.length,2)
+    pool.dispose()
+    await pool.done
+})
+
+test('remote preview failures stop at the configured limit without a retry burst',async()=>{
+    let captures=0
+    const pool=warmTimelinePreviews({...previewWorkload({driveFileId:'public12345'}),duration:100,delay:0,createVideo:()=>new Decoder(),capture:()=>{captures++;throw Error('Google refused request')}})
+    await pool.done
+    assert.equal(captures,1)
     pool.dispose()
 })
 
