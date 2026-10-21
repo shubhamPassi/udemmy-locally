@@ -35,6 +35,7 @@ const defaultSettings = {
     autoDetectThumbnails: false,
 
     // API Keys
+    googleOAuthClientId: '',
     googleApiKey: '', // Covers both YouTube and Google Drive APIs
     openRouterApiKey: '',
     openRouterModel: 'openrouter/free',

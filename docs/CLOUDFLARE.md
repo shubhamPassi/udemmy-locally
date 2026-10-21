@@ -18,7 +18,7 @@ Before deploying, run `npm run check` and `npx wrangler deploy --dry-run`. GitHu
 
 - Hosted Drive playback uses the custom native player with a Google URL as its source. With a Google API key configured, the source is Google's official `files.get?alt=media` endpoint. Without a key, it attempts Google's public download URL, which is not guaranteed to work in an embedded player.
 - No video bytes or playback redirects pass through Cloudflare. `/api/drive-video` is retired with HTTP 410 and no Location header. The old Vercel video relay is also retired. The frontend never requests either endpoint.
-- Native Drive playback records bookmarks, actual study time, and unique watched ranges. With a Google API key configured, timeline previews warm directly from Google at ten-second intervals using one paced background decoder. Jobs wait at least two seconds (five with Data Saver), require 30 seconds of buffer while playing, abort in-flight requests on buffering/seeking, and stop on the first preview failure. Persistent frames survive suspension. These requests consume Google-to-browser data, not Cloudflare transfer. Background duration scans of other Drive lessons remain disabled; active-lesson duration is saved when metadata loads.
+- Native Drive playback records bookmarks, actual study time, and unique watched ranges. Background Drive frame extraction and duration scans are disabled to avoid repeated media requests. Active-lesson duration is saved when metadata loads; hover timestamps remain available. OAuth playback uses a browser service worker and short-lived per-tab authorization headers directly to Google.
 - Loading state clears on media readiness/playing events. Initial loading has a 30-second timeout, and unsupported/failed media responses do not receive automatic repeated format-error retries. Google may still temporarily block automated media requests; the application cannot clear an existing provider block.
 - Public course imports use `/api/public-import`; successful public metadata is cached for five minutes. Existing API keys remain browser settings.
 - Local files still use the normal native player, bookmarks, subtitles, and previews. YouTube uses its own player.
@@ -37,3 +37,19 @@ For rollback, redeploy a previously tested Cloudflare version with Wrangler or t
 ## Verification without a browser
 
 The Node tests cover Worker import routing, retired relay endpoints, direct Google source URLs, native Drive resume, real study measurements, pause/seek/replay handling, and failure without preview fallback in a simulated DOM. Verify production with HTTP requests to `/`, a nested course URL, `/api/health`, a real public import, and `/api/drive-video` (expected 410 without a Location header). Do not clear or modify users' browser storage to test deployment. Tests cannot guarantee that Google will authorize a particular user's key or file; that access must be configured in Google.
+
+### Account-authorized Google Drive playback
+
+For private or account-restricted videos, open **Settings → AI & API Keys → Google Drive account playback**. Configure an OAuth **Web application** Client ID (not an API key), then click **Connect Google Drive** and approve read-only access with the account that can download the video.
+
+Google Cloud setup:
+1. Enable Google Drive API in your project.
+2. Configure the OAuth consent screen, add `https://www.googleapis.com/auth/drive.readonly`, and add your Google account as a test user while the app is in Testing.
+3. Create an OAuth Web application Client ID. Add `https://udemy.chaigallery.in` and, if used, `https://tutin-learning.passishubham1.workers.dev` as authorized JavaScript origins. No callback URL or client secret is used by this popup token flow.
+4. Paste the Client ID in Settings. Google consent requires your interaction; configuration alone does not authorize access.
+
+The browser service worker attaches a short-lived bearer token to direct Google media requests and preserves HTTP Range seeking. Tokens are kept only in memory, scoped to the browser tab, never stored in settings or URLs, never cached with media, and never sent to Cloudflare. Reloading and token expiry require reconnecting. An idle service worker can recover a still-valid token only from the requesting live tab's memory. Disconnect clears the token and revokes its Google grant. After an update, close older app tabs and reopen if the new playback worker is not active.
+
+Background **Drive** frame extraction is disabled to avoid repeated media requests competing with playback. Local-video previews remain available; the Drive timeline still shows hover timestamps. Google can still refuse a request because of account permissions, disabled downloads, quotas, or automated-traffic restrictions; OAuth does not bypass those restrictions. Original codecs must still be supported by the browser.
+
+References: [Google token model](https://developers.google.com/identity/oauth2/web/guides/use-token-model), [Drive downloads](https://developers.google.com/workspace/drive/api/guides/manage-downloads), [why media tokens must not be placed in URLs](https://workspace.google.com/blog/developers-practitioners/upcoming-changes-to-the-google-drive-api-and-google-picker-api).

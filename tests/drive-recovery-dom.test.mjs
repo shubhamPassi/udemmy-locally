@@ -37,7 +37,7 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
             assert.equal(new URL(media.src).hostname,'www.googleapis.com')
             assert.equal(new URL(media.src).searchParams.get('alt'),'media')
             assert.equal(new URL(media.src).searchParams.get('key'),'test-key')
-            assert.equal(api.renderedControls.at(-1).allowFramePreviews,true)
+            assert.equal(api.renderedControls.at(-1).allowFramePreviews,false)
             assert.equal(document.querySelector('iframe'),null)
             let paused=false,seeking=false
             Object.defineProperties(media,{duration:{value:600,configurable:true},readyState:{value:4,configurable:true},paused:{get:()=>paused,configurable:true},seeking:{get:()=>seeking,configurable:true}})

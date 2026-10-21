@@ -254,7 +254,7 @@ Local companion mode can deliver local videos through Express range endpoints. N
 
 YouTube lessons use YouTube's embedded player API for playback state and position. YouTube retains control of its media delivery and native timeline; TutIn cannot turn YouTube into a raw video source for the local video element.
 
-Background thumbnail preparation uses ten-second intervals for supported local videos and direct Drive playback with a configured Google API key. Drive frames are fetched directly from Google using one paced decoder, with at least two seconds between completed frame jobs (five seconds with Data Saver). While playing, it waits for 30 seconds of buffered media, cancels in-flight work on buffering/seeking, and stops on its first preview failure. Cached frames survive these pauses and are reused on later visits. Persistent previews use a 32 MB budget and 30-day expiry. Initial preparation takes time and consumes additional Google-to-browser data. Background duration scans of other Drive lessons remain disabled; the active lesson records its duration when metadata loads.
+Background thumbnail preparation uses ten-second intervals for supported local videos. Persistent previews use a 32 MB budget and 30-day expiry. Drive frame extraction and background duration scans of other Drive lessons are disabled to reduce repeated media requests; the active lesson records its duration when metadata loads. Drive hover timestamps remain available.
 
 ## Storage and backups
 
@@ -510,3 +510,5 @@ wrangler.jsonc                Cloudflare Worker, asset and custom-domain configu
 ```
 
 See [implementation notes](docs/IMPROVEMENTS.md) for additional storage, player, and offline behavior. This README describes the current implementation; Google Colab processing, private Drive OAuth access, a central cloud progress database, and automatic cross-device synchronization are not implemented.
+
+Google Drive account playback now supports Google Identity Services OAuth (configured in Settings → AI & API Keys). The browser service worker attaches memory-only, per-tab authorization headers directly to Google requests, preserving seeking, resume and study tracking without a hosting relay. Set up a Google OAuth Web Client ID and approve consent before using account playback; see [setup instructions](docs/CLOUDFLARE.md#account-authorized-google-drive-playback). Drive background timeline frame extraction is disabled to reduce media traffic; local previews remain available. OAuth cannot override Google's download or traffic restrictions.

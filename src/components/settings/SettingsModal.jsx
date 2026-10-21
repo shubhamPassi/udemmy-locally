@@ -1,5 +1,6 @@
 import useModalFocus from '../../hooks/useModalFocus'
 import StorageStatus from './StorageStatus'
+import DriveAccount from './DriveAccount.jsx'
 import { useState, useRef } from 'react'
 import { X, Sun, Moon, Monitor, Settings, FastForward, Check, Download, Upload, Database, AlertTriangle, KeyRound, Eye, EyeOff, ExternalLink, Sparkles, PictureInPicture, MessageSquare, Send, Bug, Lightbulb, MessageCircle } from 'lucide-react';
 import {useSettings} from '../../contexts/contextHooks.js'
@@ -374,6 +375,8 @@ function SettingsModal({ isOpen, onClose, initialTab = 'general' }) {
                                     <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
                                         Keys are saved locally and sent to their respective API providers when used.
                                     </p>
+
+                                    <DriveAccount clientId={settings.googleOAuthClientId} onClientIdChange={googleOAuthClientId => updateSettings({ googleOAuthClientId })} />
 
                                     {/* Google API Key */}
                                     <div className="p-4 rounded-lg border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-bg">

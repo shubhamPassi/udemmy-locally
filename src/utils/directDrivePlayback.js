@@ -1,7 +1,8 @@
 const idPattern = /^[a-zA-Z0-9_-]{8,160}$/
 
-export function directDriveVideoUrl(id, apiKey = '') {
+export function directDriveVideoUrl(id, apiKey = '', account = false) {
     if (!idPattern.test(id || '')) return ''
+    if (account) return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media&tutin_account=1`
     const key = String(apiKey || '').trim()
     if (key) {
         const query = new URLSearchParams({ alt: 'media', key })

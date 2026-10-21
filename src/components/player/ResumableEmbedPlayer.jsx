@@ -2,12 +2,12 @@ import useEventCallback from '../../hooks/useEventCallback.js'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { updateVideoProgress, updateVideo, markVideoComplete } from '../../utils/db'
 import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks'
-import { IS_BROWSER_MODE } from '../../utils/api'
 import { playerShortcut } from '../../utils/playerShortcuts'
 import StreamPlayerControls from './StreamPlayerControls'
 import PlayerLearningTools from './PlayerLearningTools.jsx'
 import useStudyTime from '../../hooks/useStudyTime'
-import { disableHostedDriveBackground } from '../../utils/hostedVideoPolicy'
+import DriveAccount from '../settings/DriveAccount.jsx'
+import { driveSession, subscribeDriveSession } from '../../utils/driveAuthorization'
 import { directDriveVideoUrl, directDriveFailureMessage } from '../../utils/directDrivePlayback'
 
 let youtubeApi
@@ -39,7 +39,8 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     const persistedDuration = useRef(video.duration || 0)
     const nativeReady = useRef(false)
     const lastCachedSecond = useRef(null)
-    const disableBackground = disableHostedDriveBackground(video, IS_BROWSER_MODE)
+    const [account, setAccount] = useState(driveSession)
+    useEffect(() => subscribeDriveSession(value => { setAccount(value); setAttempt(attempt => attempt + 1) }), [])
     const [error, setError] = useState('')
     const [retrying, setRetrying] = useState(false), [attempt, setAttempt] = useState(0)
     const [mediaLoading,setMediaLoading]=useState(true)
@@ -51,7 +52,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     const isYouTube = !!(video.youtubeId || /youtu(?:be\.com|\.be)/.test(video.url || ''))
     const youtubeId = video.youtubeId || video.url?.match(/(?:[?&]v=|youtu\.be\/)([^?&/]+)/)?.[1]
     const driveId = video.driveFileId || video.url?.match(/(?:\/d\/|[?&]id=)([a-zA-Z0-9_-]+)/)?.[1]
-    const driveSource = directDriveVideoUrl(driveId, settings.googleApiKey)
+    const driveSource = directDriveVideoUrl(driveId, settings.googleApiKey, !!account)
     useEffect(() => { retryCount.current = 0 }, [driveSource])
     useEffect(() => {
         if (isYouTube) return
@@ -105,7 +106,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
             remember(true)
             setRetrying(false)
             setMediaLoading(false)
-            setError(directDriveFailureMessage(media.error?.code, !!settings.googleApiKey?.trim()))
+            setError(directDriveFailureMessage(media.error?.code, !!account || !!settings.googleApiKey?.trim()))
         }
     }
     const flushStudyTime=useStudyTime(()=>{
@@ -277,10 +278,10 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
             onEnded={event => { sample(event.currentTarget.currentTime, event.currentTarget.duration, true); if (settings.autoPlayNext&&event.currentTarget.dataset.repeatSection!=='true') callbacks.current.onNext?.() }}
             onError={handleDriveError} />}
         {isYouTube&&!error&&<div className="absolute right-3 top-3 z-20 rounded-full bg-black/70"><PlayerLearningTools youtubeRef={player} hostRef={container} video={video} onRepeatChange={repeatChanged}/></div>}
-        {!isYouTube && !error && !retrying && <StreamPlayerControls key={`controls-${attempt}`} mediaRef={native} containerRef={container} video={video} allowFramePreviews={!disableBackground || !!settings.googleApiKey?.trim()} showLoadingIndicator={!mediaLoading} />}
+        {!isYouTube && !error && !retrying && <StreamPlayerControls key={`controls-${attempt}`} mediaRef={native} containerRef={container} video={video} allowFramePreviews={false} showLoadingIndicator={!mediaLoading} />}
         {(retrying || mediaLoading) && !error && <div role="status" aria-label="Loading video" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40"><span className="h-11 w-11 rounded-full border-4 border-white/20 border-t-white animate-spin" /></div>}
         {slowBuffer&&!error&&<div className="absolute bottom-24 inset-x-4 z-30 rounded-lg bg-black/85 p-3 text-center text-xs text-white">Drive is taking longer to respond. Your progress is saved.<button onClick={()=>{remember(true);retryDrive(true)}} className="ml-3 rounded bg-blue-600 px-3 py-2">Reconnect</button></div>}
-        {error && (isYouTube ? <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p> : <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-5"><div className="max-w-md text-center text-white"><p role="alert" className="text-sm leading-6">{error}</p><div className="mt-4 flex flex-wrap justify-center gap-3"><button onClick={() => retryDrive(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium">Retry video</button><button onClick={() => window.dispatchEvent(new CustomEvent('tutin-open-settings', { detail: { tab: 'ai_keys' } }))} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Google API settings</button></div></div></div>)}
+        {error && (isYouTube ? <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p> : <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-5"><div className="max-w-md text-center text-white"><p role="alert" className="text-sm leading-6">{error}</p><div className="mt-4 flex flex-wrap justify-center gap-3"><button onClick={() => retryDrive(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium">Retry video</button><button onClick={() => window.dispatchEvent(new CustomEvent('tutin-open-settings', { detail: { tab: 'ai_keys' } }))} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Google API settings</button></div><div className="mt-4"><DriveAccount clientId={settings.googleOAuthClientId} /></div></div></div>)}
     </div>
 })
 export default ResumableEmbedPlayer
