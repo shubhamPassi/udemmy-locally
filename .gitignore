@@ -90,3 +90,11 @@ docs/*.resolved
 docs/PRD.md
 docs/notes.md
 docs/showcase.psd
+
+# Generated Windows packages and unpacked build output
+*.exe
+*.msi
+*.msix
+*.asar
+*.blockmap
+win-unpacked*/
