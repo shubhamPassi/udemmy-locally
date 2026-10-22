@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSettings } from '../../contexts/contextHooks.js'
 import { activeTranscriptIndex, cachedTranscript, loadLessonTranscript } from '../../utils/lessonTranscript.js'
-import { formatPreviewTime } from '../../utils/timelinePreview.js'
 
 export default function TranscriptPanel({ video, currentTime=0, onSeek }) {
     const {settings}=useSettings()
@@ -45,7 +44,7 @@ export default function TranscriptPanel({ video, currentTime=0, onSeek }) {
             <button disabled={loading} onClick={()=>setAttempt(value=>value+1)} className="text-xs text-blue-500 disabled:opacity-50">Refresh transcription</button>
         </div>
         <div ref={lines} data-transcript-lines className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
-            {cues.map((cue,index)=>({cue,index})).filter(({cue})=>!query||cue.text.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(({cue,index})=><button key={`${cue.start}-${index}`} ref={index===active?activeRow:null} aria-current={index===active?'true':undefined} onClick={()=>onSeek?.(cue.start)} className={`w-full rounded-lg p-3 text-left text-sm ${index===active?'bg-blue-500/15 text-blue-600 dark:text-blue-300':'hover:bg-black/5 dark:hover:bg-white/5'}`}><span className="block text-xs text-blue-500 mb-1">{formatPreviewTime(cue.start)}</span>{cue.text}</button>)}
+            {cues.map((cue,index)=>({cue,index})).filter(({cue})=>!query||cue.text.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(({cue,index})=><button key={`${cue.start}-${index}`} ref={index===active?activeRow:null} aria-current={index===active?'true':undefined} onClick={()=>onSeek?.(cue.start)} className={`w-full rounded-lg p-3 text-left text-sm ${index===active?'bg-blue-500/15 text-blue-600 dark:text-blue-300':'hover:bg-black/5 dark:hover:bg-white/5'}`}>{cue.text}</button>)}
             {!loading&&!error&&!cues.length&&<p className="p-3 text-sm text-neutral-500">No transcription available for this lesson.</p>}
             {query&&cues.length>0&&!cues.some(cue=>cue.text.toLocaleLowerCase().includes(query.toLocaleLowerCase()))&&<p className="p-3 text-sm text-neutral-500">No matching text.</p>}
         </div>
