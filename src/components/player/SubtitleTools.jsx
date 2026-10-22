@@ -5,7 +5,7 @@ import {parseSubtitles} from '../../utils/subtitles'
 import {readProgressValue,writeProgressValue} from '../../utils/progressStorage.js'
 import { loadLessonTranscript, needsTranscriptRefresh } from '../../utils/lessonTranscript.js'
 import { balancedCaption, captionAppearance, captionFontSize, captionPlacement, defaultCaptionAppearance } from '../../utils/captionAppearance.js'
-import FullscreenSubtitles from './FullscreenSubtitles.jsx'
+import PlayerSubtitleOverlay from './PlayerSubtitleOverlay.jsx'
 
 function savedAppearance(){
     try{return captionAppearance(JSON.parse(localStorage.getItem('tutin_caption_appearance')))}catch{return {...defaultCaptionAppearance}}
@@ -16,7 +16,7 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
     const [showAppearance,setShowAppearance]=useState(false),[panelHeight,setPanelHeight]=useState(360)
     const [loadingDrive,setLoadingDrive]=useState(false),[driveAttempt,setDriveAttempt]=useState(0)
     const [videoHeight,setVideoHeight]=useState(540)
-    const [fullscreenTarget,setFullscreenTarget]=useState(null)
+    const [captionTarget,setCaptionTarget]=useState(null)
     const driveChecked=useRef(null)
     const input=useRef(null),menu=useRef(null),importedTrack=useRef(null),trackVideo=useRef(null),appliedCues=useRef(null),enabledRef=useRef(enabled)
     enabledRef.current=enabled
@@ -49,8 +49,12 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
             const video=host.current?.querySelector('video'),Cue=window.VTTCue||window.WebKitVTTCue
             if(!video||!Cue||!video.addTextTrack)return
             const full=document.fullscreenElement
-            const overlayTarget=full&&full!==video&&full.contains(video)?full:null
-            setFullscreenTarget(previous=>previous===overlayTarget?previous:overlayTarget)
+            const visible=target?.closest('[data-controls-visible]')?.dataset.controlsVisible!=='false'
+            // Native captions remain at their original bottom position when the
+            // embedded controls hide. While controls are visible, use a layer
+            // above their gradient, as we already do in fullscreen.
+            const overlayTarget=full?(full!==video&&full.contains(video)?full:null):(visible?host.current:null)
+            setCaptionTarget(previous=>previous===overlayTarget?previous:overlayTarget)
             if(trackVideo.current!==video){
                 if(importedTrack.current)importedTrack.current.mode='disabled'
                 trackVideo.current=video;importedTrack.current=null;appliedCues.current=null
@@ -66,7 +70,6 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
                 for(const cue of cues){const item=new Cue(cue.start,cue.end,balancedCaption(cue.text));item.align='center';item.position=50;item.size=78;track.addCue(item)}
                 appliedCues.current=cues
             }
-            const visible=target?.closest('[data-controls-visible]')?.dataset.controlsVisible!=='false'
             const bar=host.current?.querySelector('[data-player-controls-bar]')
             const placement=captionPlacement(video.getBoundingClientRect(),bar?.getBoundingClientRect().top,visible,video.videoWidth,video.videoHeight)
             for(const cue of [...(track.cues||[])])Object.assign(cue,placement)
@@ -86,7 +89,7 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
         if(host.current)observer.observe(host.current,{childList:true,subtree:true,attributes:true,attributeFilter:['data-controls-visible']})
         return()=>{observer.disconnect();resize?.disconnect();window.removeEventListener('resize',measure);document.removeEventListener('fullscreenchange',measure)}
     },[cues,host,videoId])
-    useEffect(()=>{if(importedTrack.current)importedTrack.current.mode=enabled&&cues.length?(fullscreenTarget?'hidden':'showing'):'disabled'},[enabled,cues,fullscreenTarget])
+    useEffect(()=>{if(importedTrack.current)importedTrack.current.mode=enabled&&cues.length?(captionTarget?'hidden':'showing'):'disabled'},[enabled,cues,captionTarget])
     useEffect(()=>{
         if(!open)return
         const resize=()=>setPanelHeight(Math.max(120,Math.min(360,(host.current?.getBoundingClientRect().height||440)-80)))
@@ -122,7 +125,7 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
     if(!slot)return null
     const marker=videoId.replace(/[^a-zA-Z0-9_-]/g,'_')
     const button='relative h-10 w-7 sm:w-10 flex shrink-0 items-center justify-center rounded text-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white'
-    return <>{fullscreenTarget&&<FullscreenSubtitles target={fullscreenTarget} media={trackVideo.current} cues={cues} enabled={enabled} appearance={appearance}/>}{createPortal(<div ref={menu} data-subtitle-menu-open={open?'true':'false'} className="relative flex shrink-0 items-center">
+    return <>{captionTarget&&<PlayerSubtitleOverlay target={captionTarget} media={trackVideo.current} cues={cues} enabled={enabled} appearance={appearance}/>}{createPortal(<div ref={menu} data-subtitle-menu-open={open?'true':'false'} className="relative flex shrink-0 items-center">
         <style>{`video[data-subtitle-player="${marker}"]::cue{color:#fff;background-color:${appearance.background==='dark'?'rgba(0,0,0,.62)':'transparent'};font-family:Arial,Helvetica,sans-serif;font-size:${captionFontSize(appearance.size,videoHeight)}px;font-weight:500;line-height:1.35;text-shadow:0 1px 3px rgba(0,0,0,.85);}`}</style>
         <input ref={input} type="file" accept=".srt,.vtt" onChange={upload} className="hidden"/>
         <button onClick={()=>setOpen(!open)} className={button} aria-label="Subtitle settings" aria-expanded={open} title="Subtitles (C)"><MessageSquare className="h-6 w-6" strokeWidth={1.8}/></button>
