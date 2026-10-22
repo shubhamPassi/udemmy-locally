@@ -45,6 +45,10 @@ export async function scanRemoteSource(source) {
     const result = await fetchPublicImport('youtube', source.id, source.type, true)
     return { modules: [{ title: 'Videos', originalTitle: 'Videos', videos: result.videos }] }
 }
+export async function rememberRemoteSource(courseId, source, store = db) {
+    const { course } = await store.getCourseContent(courseId)
+    await store.updateCourse(courseId, { customMetadata: { ...course.customMetadata, remoteSource: source } })
+}
 const syncing = new Set()
 export async function applyRemoteSync(courseId, preview, store = db) {
     if (syncing.has(courseId)) throw Error('This course is already syncing.')
