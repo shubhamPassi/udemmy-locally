@@ -1,7 +1,7 @@
 import useModalFocus from '../../hooks/useModalFocus'
 import InstructorPicker from './InstructorPicker'
 import { useState, useRef, useEffect } from 'react'
-import { X, Upload, Image, Trash2, Folder, Video, Clock, Link2, Loader2 } from 'lucide-react'
+import { X, Upload, Image, Trash2, Folder, Video, Clock, Link2, Loader2, Search, ClipboardPaste } from 'lucide-react'
 import { updateCourse, formatDuration } from '../../utils/db'
 import * as api from '../../utils/api'
 
@@ -29,6 +29,7 @@ function EditCourseModal({ course, isOpen, onClose, onSave }) {
     const [isSaving, setIsSaving] = useState(false)
     const [errors, setErrors] = useState({})
     const [isDragging, setIsDragging] = useState(false)
+    const [imageSearchOpened, setImageSearchOpened] = useState(false)
     const fileInputRef = useRef(null)
 
     useEffect(() => {
@@ -49,6 +50,7 @@ function EditCourseModal({ course, isOpen, onClose, onSave }) {
             setErrors({})
             setNewTag('')
             setThumbnailUrl('')
+            setImageSearchOpened(false)
         }
     }, [course, isOpen])
 
@@ -147,6 +149,27 @@ function EditCourseModal({ course, isOpen, onClose, onSave }) {
     function removeThumbnail() {
         setFormData(prev => ({ ...prev, thumbnailData: null }))
         if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    function browseImages() {
+        const title = formData.title.trim()
+        if (!title) { setErrors(prev => ({ ...prev, thumbnail: 'Enter the course title before searching for images.' })); return }
+        const popup = window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(title)}`, 'course-thumbnail-search', 'popup=yes,width=1000,height=750,scrollbars=yes,resizable=yes')
+        if (!popup) { setErrors(prev => ({ ...prev, thumbnail: 'Allow pop-ups for this site to browse Google Images.' })); return }
+        popup.opener = null
+        setImageSearchOpened(true)
+        setErrors(prev => ({ ...prev, thumbnail: null }))
+    }
+
+    async function pasteImageUrl() {
+        try {
+            const text = (await navigator.clipboard.readText()).trim()
+            if (!/^https?:\/\/\S+$/i.test(text)) throw new Error('In Google Images, right-click the image and choose Copy image address.')
+            setThumbnailUrl(text)
+            setErrors(prev => ({ ...prev, thumbnail: null }))
+        } catch (error) {
+            setErrors(prev => ({ ...prev, thumbnail: error.message || 'Paste the copied image address into the URL field with Ctrl+V / Cmd+V.' }))
+        }
     }
 
     async function handleThumbnailUrlDownload() {
@@ -296,14 +319,15 @@ function EditCourseModal({ course, isOpen, onClose, onSave }) {
                                 )}
                             </div>
                             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileInputChange} className="hidden" />
-                            {formData.thumbnailData && (
-                                <button onClick={removeThumbnail} className="text-sm text-error hover:underline flex items-center gap-1">
-                                    <Trash2 className="w-3 h-3" />Remove
-                                </button>
-                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg border border-light-border dark:border-dark-border px-3 py-2 text-sm"><Upload className="w-4 h-4" />Upload Image</button>
+                                <button type="button" onClick={browseImages} className="inline-flex items-center gap-2 rounded-lg border border-light-border dark:border-dark-border px-3 py-2 text-sm"><Search className="w-4 h-4" />Browse images</button>
+                                <button type="button" onClick={pasteImageUrl} className="inline-flex items-center gap-2 rounded-lg border border-light-border dark:border-dark-border px-3 py-2 text-sm"><ClipboardPaste className="w-4 h-4" />Paste image URL</button>
+                                {formData.thumbnailData && <button type="button" onClick={removeThumbnail} className="text-sm text-error hover:underline flex items-center gap-1"><Trash2 className="w-3 h-3" />Remove</button>}
+                            </div>
                         </div>
-                        <div className="mt-3 flex gap-2">
-                            <div className="relative flex-1">
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            <div className="relative flex-1 min-w-0">
                                 <Link2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-light-text-secondary dark:text-dark-text-secondary" />
                                 <input
                                     type="url"
@@ -316,6 +340,7 @@ function EditCourseModal({ course, isOpen, onClose, onSave }) {
                                         }
                                     }}
                                     className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-light-border dark:border-dark-border bg-white dark:bg-dark-bg focus:border-primary dark:focus:border-blue-400 outline-none focus:outline-none ring-0 focus:ring-0"
+                                    aria-label="Thumbnail image URL"
                                     placeholder="Paste image URL"
                                     disabled={isDownloadingThumbnail}
                                 />
@@ -330,6 +355,7 @@ function EditCourseModal({ course, isOpen, onClose, onSave }) {
                                 Use URL
                             </button>
                         </div>
+                        {imageSearchOpened && <p className="mt-2 text-xs text-light-text-secondary dark:text-dark-text-secondary">In Google Images, right-click an image → Copy image address. Return here → Paste image URL → Use URL.</p>}
                         {errors.thumbnail && <p className="text-error text-sm mt-1">{errors.thumbnail}</p>}
                     </div>
 
