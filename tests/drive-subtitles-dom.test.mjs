@@ -8,7 +8,7 @@ import {tmpdir} from 'node:os'
 import {join,resolve} from 'node:path'
 
 test('Drive subtitle menu loads matching imported captions and keeps them off until selected',async()=>{
- const dom=new JSDOM('<div id="root"></div><div id="player"><video></video><div data-subtitle-controls></div></div>',{url:'https://app.test'}),saved=new Map()
+ const dom=new JSDOM('<div id="root"></div><div id="player"><video></video><div data-controls-visible="true"><div data-subtitle-controls></div></div></div>',{url:'https://app.test'}),saved=new Map()
  for(const key of ['window','document','navigator','localStorage','Event','MutationObserver','IS_REACT_ACT_ENVIRONMENT','MessageChannel']){
   saved.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{configurable:true,value:key==='IS_REACT_ACT_ENVIRONMENT'?true:key==='MessageChannel'?class{constructor(){this.port1={onmessage:null};this.port2={postMessage:()=>setImmediate(()=>this.port1.onmessage?.())}}}:dom.window[key]})
  }
@@ -19,13 +19,21 @@ test('Drive subtitle menu loads matching imported captions and keeps them off un
    b.onLoad({filter:/[\\/]utils[\\/]api\.js$/},()=>({contents:'export const IS_BROWSER_MODE=true;export const get=async()=>[],fetchYoutubeTranscript=async()=>({chunks:[]});'}))
    b.onLoad({filter:/driveSubtitles\.js$/},()=>({contents:'export const discoverDriveSubtitles=async()=>[{driveFileId:"subtitle01"}];export const loadDriveSubtitle=async()=>[{start:1,end:3,text:"Hello course"}];'}))
   }}]})
+  const track={cues:[],mode:'disabled',addCue(cue){this.cues.push(cue)},removeCue(cue){this.cues.splice(this.cues.indexOf(cue),1)}}
+  window.VTTCue=class{constructor(start,end,text){this.startTime=start;this.endTime=end;this.text=text}}
+  document.querySelector('video').addTextTrack=()=>track
   api=createRequire(import.meta.url)(out);root=api.createRoot(document.getElementById('root'))
   await api.act(async()=>root.render(api.element(api.Subtitles,{videoId:'lesson',video:{driveFileId:'video0001'},googleApiKey:'test-key',host:{current:document.getElementById('player')}})))
   await api.act(async()=>document.querySelector('[aria-label="Subtitle settings"]').click())
   const button=[...document.querySelectorAll('button')].find(b=>b.textContent==='Imported subtitles')
   assert.ok(button);assert.equal(button.getAttribute('aria-pressed'),'false')
   assert.equal(JSON.parse(api.saved.get('tutin_subtitles_lesson'))[0].text,'Hello course')
+  assert.equal(track.mode,'disabled');assert.equal(track.cues[0].size,78);assert.equal(track.cues[0].line,-3)
   await api.act(async()=>button.click())
+  assert.equal(track.mode,'showing')
+  await api.act(async()=>{document.querySelector('[data-controls-visible]').dataset.controlsVisible='false'})
+  assert.equal(track.cues[0].line,-1)
+  assert.match(document.querySelector('style').textContent,/font-weight:500/)
   await api.act(async()=>document.querySelector('[aria-label="Subtitle settings"]').click())
   assert.equal([...document.querySelectorAll('button')].find(b=>b.textContent==='Imported subtitles').getAttribute('aria-pressed'),'true')
  }finally{if(root)await api.act(async()=>root.unmount());dom.window.close();for(const[key,value]of saved)value?Object.defineProperty(globalThis,key,value):delete globalThis[key];rmSync(dir,{recursive:true,force:true})}

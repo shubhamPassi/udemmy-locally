@@ -4,17 +4,17 @@ import {MessageSquare,Upload,Settings,Check,X,ChevronDown} from 'lucide-react'
 import {parseSubtitles} from '../../utils/subtitles'
 import {readProgressValue,writeProgressValue} from '../../utils/progressStorage.js'
 import { loadLessonTranscript, needsTranscriptRefresh } from '../../utils/lessonTranscript.js'
+import { balancedCaption, captionAppearance, captionFontSize, defaultCaptionAppearance } from '../../utils/captionAppearance.js'
 
 function savedAppearance(){
-    try{const saved=JSON.parse(localStorage.getItem('tutin_caption_appearance'));
-        return {size:[14,18,22,26,32].includes(saved?.size)?saved.size:26,background:saved?.background==='dark'?'dark':'transparent'}
-    }catch{return {size:26,background:'transparent'}}
+    try{return captionAppearance(JSON.parse(localStorage.getItem('tutin_caption_appearance')))}catch{return {...defaultCaptionAppearance}}
 }
 export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardShortcuts=true}){
     const [cues,setCues]=useState([]),[enabled,setEnabled]=useState(false),[open,setOpen]=useState(false),[error,setError]=useState('')
     const [slot,setSlot]=useState(null),[appearance,setAppearance]=useState(savedAppearance)
     const [showAppearance,setShowAppearance]=useState(false),[panelHeight,setPanelHeight]=useState(360)
     const [loadingDrive,setLoadingDrive]=useState(false),[driveAttempt,setDriveAttempt]=useState(0)
+    const [videoHeight,setVideoHeight]=useState(540)
     const driveChecked=useRef(null)
     const input=useRef(null),menu=useRef(null),importedTrack=useRef(null),trackVideo=useRef(null),appliedCues=useRef(null),enabledRef=useRef(enabled)
     enabledRef.current=enabled
@@ -58,17 +58,22 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
             if(appliedCues.current!==cues){
                 track.mode='hidden'
                 for(const existing of [...(track.cues||[])])track.removeCue(existing)
-                for(const cue of cues){const item=new Cue(cue.start,cue.end,cue.text);item.align='center';item.position=50;item.size=88;track.addCue(item)}
+                for(const cue of cues){const item=new Cue(cue.start,cue.end,balancedCaption(cue.text));item.align='center';item.position=50;item.size=78;track.addCue(item)}
                 appliedCues.current=cues
             }
             const visible=target?.closest('[data-controls-visible]')?.dataset.controlsVisible!=='false'
-            for(const cue of [...(track.cues||[])])cue.line=visible?-4:-2
+            for(const cue of [...(track.cues||[])])cue.line=visible?-3:-1
             track.mode=enabledRef.current&&cues.length?'showing':'disabled'
         }
         attach()
-        const observer=new MutationObserver(attach)
+        const measure=()=>{const media=host.current?.querySelector('video');const height=media?.getBoundingClientRect().height;if(height>0)setVideoHeight(height)}
+        measure()
+        const resize=typeof ResizeObserver!=='undefined'?new ResizeObserver(measure):null
+        if(host.current)resize?.observe(host.current)
+        window.addEventListener('resize',measure);document.addEventListener('fullscreenchange',measure)
+        const observer=new MutationObserver(()=>{attach();measure()})
         if(host.current)observer.observe(host.current,{childList:true,subtree:true,attributes:true,attributeFilter:['data-controls-visible']})
-        return()=>observer.disconnect()
+        return()=>{observer.disconnect();resize?.disconnect();window.removeEventListener('resize',measure);document.removeEventListener('fullscreenchange',measure)}
     },[cues,host,videoId])
     useEffect(()=>{if(importedTrack.current)importedTrack.current.mode=enabled&&cues.length?'showing':'disabled'},[enabled,cues])
     useEffect(()=>{
@@ -107,7 +112,7 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
     const marker=videoId.replace(/[^a-zA-Z0-9_-]/g,'_')
     const button='relative h-10 w-7 sm:w-10 flex shrink-0 items-center justify-center rounded text-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white'
     return createPortal(<div ref={menu} data-subtitle-menu-open={open?'true':'false'} className="relative flex shrink-0 items-center">
-        <style>{`video[data-subtitle-player="${marker}"]::cue{color:#fff;background-color:${appearance.background==='dark'?'rgba(0,0,0,.78)':'transparent'};font-family:Arial,Helvetica,sans-serif;font-size:${appearance.size}px;font-weight:600;text-shadow:0 2px 4px #000,1px 1px 2px #000,-1px -1px 2px #000;}`}</style>
+        <style>{`video[data-subtitle-player="${marker}"]::cue{color:#fff;background-color:${appearance.background==='dark'?'rgba(0,0,0,.62)':'transparent'};font-family:Arial,Helvetica,sans-serif;font-size:${captionFontSize(appearance.size,videoHeight)}px;font-weight:500;line-height:1.35;text-shadow:0 1px 3px rgba(0,0,0,.85);}`}</style>
         <input ref={input} type="file" accept=".srt,.vtt" onChange={upload} className="hidden"/>
         <button onClick={()=>setOpen(!open)} className={button} aria-label="Subtitle settings" aria-expanded={open} title="Subtitles (C)"><MessageSquare className="h-6 w-6" strokeWidth={1.8}/></button>
         {open&&<div role="dialog" aria-label="Subtitle settings" style={{maxHeight:panelHeight}} className="absolute bottom-14 right-0 z-40 w-72 max-w-[calc(100vw-32px)] overflow-y-auto rounded-md border border-white/10 bg-black/95 text-sm text-white shadow-2xl">
@@ -120,8 +125,8 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
             <button aria-expanded={showAppearance} onClick={()=>setShowAppearance(!showAppearance)} className="flex w-full items-center gap-3 border-t border-white/10 px-5 py-3 text-left text-xs text-neutral-300 hover:bg-white/10"><Settings className="h-4 w-4"/>Caption appearance<ChevronDown className={`ml-auto h-4 w-4 transition-transform ${showAppearance?'rotate-180':''}`}/></button>
             {showAppearance&&<div className="space-y-3 bg-white/5 px-5 py-4 text-xs">
                 <label className="flex items-center justify-between gap-3"><span>Text size</span><select aria-label="Caption font size" value={appearance.size} onChange={event=>changeAppearance({size:Number(event.target.value)})} className="rounded bg-neutral-800 px-2 py-1 text-xs text-white">{[14,18,22,26,32].map(size=><option key={size} value={size}>{size}px</option>)}</select></label>
-                <label className="flex items-center justify-between gap-3"><span>Background</span><select aria-label="Caption background" value={appearance.background} onChange={event=>changeAppearance({background:event.target.value})} className="rounded bg-neutral-800 px-2 py-1 text-xs text-white"><option value="transparent">None</option><option value="dark">Dark</option></select></label>
-                <button onClick={()=>changeAppearance({size:26,background:'transparent'})} className="text-neutral-400 hover:text-white">Reset appearance</button>
+                <label className="flex items-center justify-between gap-3"><span>Background</span><select aria-label="Caption background" value={appearance.background} onChange={event=>changeAppearance({background:event.target.value})} className="rounded bg-neutral-800 px-2 py-1 text-xs text-white"><option value="transparent">None</option><option value="dark">Soft dark</option></select></label>
+                <button onClick={()=>changeAppearance({...defaultCaptionAppearance})} className="text-neutral-400 hover:text-white">Reset appearance</button>
             </div>}
             {cues.length>0&&<button onClick={()=>{writeProgressValue('tutin_subtitles_'+videoId,null);setCues([]);setOpen(false)}} className="w-full border-t border-white/10 px-5 py-3 text-left text-xs text-neutral-500 hover:bg-white/10 hover:text-neutral-300">Remove imported subtitles</button>}
             {!cues.length&&<p role="status" className="px-5 pb-4 text-xs leading-5 text-neutral-400">{loadingDrive?'Looking for matching course subtitles in Google Drive…':'Add an SRT or VTT file to display subtitles.'}</p>}
