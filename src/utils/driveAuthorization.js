@@ -1,15 +1,16 @@
-// Only the short-lived access token is retained in this tab's sessionStorage
-// across reloads. Never store refresh tokens or copy credentials to settings,
-// localStorage, URLs, backups, IndexedDB, media caches or the hosting backend.
+// Short-lived access tokens stay in tab storage. Remembered connections use an
+// encrypted HttpOnly cookie; only the Worker can renew its refresh token.
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
 import { googleClientId } from './googleClientConfig.js'
 const sessionKey = 'tutin_drive_session_v1'
 let session = null, identityPromise
-let restoring = null, generation = 0
+let restoring = null, generation = 0, renewalTimer, renewalRetries=0, backendClient = '', preparation
 const listeners = new Set()
 let listening = false
 export function driveSession() { return session }
 export function subscribeDriveSession(listener) { listeners.add(listener); return () => listeners.delete(listener) }
+function rememberedOrigin(){return typeof window!=='undefined'&&!!googleClientId('',window.location?.origin)}
+export function hasRestorableDriveSession(){return !!savedDriveSession()||rememberedOrigin()}
 export function savedDriveSession() {
     try {
         const value = JSON.parse(window.sessionStorage?.getItem(sessionKey) || 'null')
@@ -18,28 +19,84 @@ export function savedDriveSession() {
     } catch { try { window.sessionStorage?.removeItem(sessionKey) } catch {} }
     return null
 }
-function publish(value) {
+function publish(value,{renewal=false}={}) {
+    clearTimeout(renewalTimer)
+    renewalRetries=0
     session = value
-    try { if(value)window.sessionStorage?.setItem(sessionKey,JSON.stringify({token:value.token,expiresAt:value.expiresAt}));else window.sessionStorage?.removeItem(sessionKey) } catch {}
-    listeners.forEach(listener => listener(value))
+    try { if(value)window.sessionStorage?.setItem(sessionKey,JSON.stringify({token:value.token,expiresAt:value.expiresAt,...(value.persistent?{persistent:true}:{})}));else window.sessionStorage?.removeItem(sessionKey) } catch {}
+    listeners.forEach(listener => listener(value,{renewal}))
+    if(value?.persistent){
+        renewalTimer=setTimeout(()=>restoreDriveAuthorization({renew:true}),Math.max(1000,value.expiresAt-Date.now()-60000))
+        renewalTimer.unref?.()
+    }
 }
-export async function restoreDriveAuthorization() {
-    if (session?.expiresAt > Date.now()+5000) return session
+async function rememberedSession(attempt=''){
+    const result=await fetch('/api/google/auth/session',{credentials:'same-origin',cache:'no-store',headers:{'X-TutIn-Session':'1'},signal:AbortSignal.timeout(15000)})
+    if(result.status===401)return null
+    if(!result.ok)throw Error('Google connection is temporarily unavailable.')
+    const value=await result.json()
+    if(typeof value.token!=='string'||!Number.isFinite(value.expiresAt)||value.expiresAt<=Date.now()+5000||attempt&&value.connectionId!==attempt)return null
+    return {...value,persistent:true}
+}
+export async function restoreDriveAuthorization({renew=false}={}) {
+    if (!renew&&session?.expiresAt > Date.now()+5000) return session
     if (restoring) return restoring
-    const saved = savedDriveSession()
-    if (!saved) return null
+    const saved = !renew&&savedDriveSession()
+    if (!saved&&!rememberedOrigin()) return null
     const epoch = generation
     restoring = (async()=>{
         try {
-            await sendDriveAuthorization(saved)
+            const value=saved||await rememberedSession()
+            if(!value){if(renew)publish(null);return null}
+            await sendDriveAuthorization(value)
             if(epoch !== generation){await sendDriveAuthorization(session);return session}
-            if(saved.expiresAt <= Date.now()+5000)return null
-            publish(saved)
-            return saved
-        } catch { return null }
+            if(value.expiresAt <= Date.now()+5000)return null
+            publish(value,{renewal:renew})
+            return value
+        } catch {
+            if(renew&&session?.persistent&&renewalRetries<3){renewalRetries++;renewalTimer=setTimeout(()=>restoreDriveAuthorization({renew:true}),30000*renewalRetries);renewalTimer.unref?.()}
+            return null
+        }
         finally { restoring = null }
     })()
     return restoring
+}
+
+export async function prepareDriveConnection(clientId){
+    if(rememberedOrigin()){
+        try{
+            preparation ||= fetch('/api/google/auth/config',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)}).then(result=>result.json())
+            const config=await preparation
+            if(config.enabled&&config.clientId===googleClientId(clientId)){backendClient=config.clientId;return}
+        }catch{}
+    }
+    await loadGoogleIdentity()
+}
+
+function connectRememberedDrive(){
+    const attempt=crypto.randomUUID().replace(/-/g,'')
+    const popup=window.open('/api/google/auth/start?attempt='+attempt,'tutin-google-connection','popup=yes,width=520,height=700,resizable=yes,scrollbars=yes')
+    if(!popup)return Promise.reject(Error('Allow the Google sign-in popup, then try again.'))
+    return new Promise((resolve,reject)=>{
+        let finished=false,checking=false
+        const cleanup=()=>{finished=true;clearInterval(poll);clearTimeout(timer);window.removeEventListener('message',message)}
+        const check=async()=>{
+            if(checking||finished)return
+            checking=true
+            try{
+                const value=await rememberedSession(attempt)
+                if(value&&!finished){await sendDriveAuthorization(value);if(finished)return;publish(value);cleanup();try{popup.close()}catch{}resolve(value)}
+            }catch{}finally{checking=false}
+        }
+        const message=event=>{
+            if(event.origin!==window.location.origin||event.source!==popup||event.data?.type!=='tutin-google-connected'||event.data.attempt!==attempt)return
+            if(!event.data.ok){cleanup();reject(Error('Google connection failed. Try connecting again.'));return}
+            check()
+        }
+        const poll=setInterval(check,2000)
+        const timer=setTimeout(()=>{cleanup();reject(Error('Google sign-in timed out. Please try again.'))},300000)
+        window.addEventListener('message',message)
+    })
 }
 
 export function loadGoogleIdentity() {
@@ -65,6 +122,7 @@ export async function sendDriveAuthorization(value) {
             event.ports[0]?.postMessage({ token: active?.token || '', expiresAt: active?.expiresAt || 0 })
         })
         listening = true
+        if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&session?.persistent&&session.expiresAt<Date.now()+90000)restoreDriveAuthorization({renew:true})})
     }
     let startupTimer
     try {
@@ -91,6 +149,7 @@ export async function sendDriveAuthorization(value) {
 export function connectGoogleDrive(clientId) {
     clientId = googleClientId(clientId)
     if (!/^\d+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId?.trim() || '')) return Promise.reject(new Error('Add a Google OAuth Web Client ID in Settings first. An API key is not a Client ID.'))
+    if(backendClient&&clientId===backendClient){generation++;return connectRememberedDrive()}
     const oauth = window.google?.accounts?.oauth2
     if (!oauth) return Promise.reject(new Error('Google sign-in is still loading. Try Connect Google Drive again.'))
     generation++
@@ -112,6 +171,9 @@ export async function disconnectGoogleDrive() {
     const previous = session
     generation++
     publish(null)
-    try { await sendDriveAuthorization(null) }
+    try {
+        if(previous?.persistent)await fetch('/api/google/auth/disconnect',{method:'POST',credentials:'same-origin',headers:{'X-TutIn-Session':'1'},signal:AbortSignal.timeout(15000)})
+        await sendDriveAuthorization(null)
+    }
     finally { if (previous?.token) window.google?.accounts?.oauth2?.revoke(previous.token, () => {}) }
 }

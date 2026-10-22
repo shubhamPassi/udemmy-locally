@@ -5,6 +5,9 @@
   "main": "cloudflare/worker.js",
   "compatibility_date": "2026-10-20",
   "workers_dev": true,
+  "vars": {
+    "GOOGLE_OAUTH_CLIENT_ID": "175015546102-a4pluug69ph7haeki986590hghcj1ho3.apps.googleusercontent.com"
+  },
   "routes": [
     { "pattern": "udemy.chaigallery.in", "zone_name": "chaigallery.in", "custom_domain": true }
   ],

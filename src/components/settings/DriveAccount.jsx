@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { googleClientId } from '../../utils/googleClientConfig.js'
-import { connectGoogleDrive, disconnectGoogleDrive, driveSession, loadGoogleIdentity, subscribeDriveSession, restoreDriveAuthorization } from '../../utils/driveAuthorization'
+import { connectGoogleDrive, disconnectGoogleDrive, driveSession, prepareDriveConnection, subscribeDriveSession, restoreDriveAuthorization } from '../../utils/driveAuthorization'
 
 export default function DriveAccount({ clientId, onClientIdChange }) {
     const [session, setSession] = useState(driveSession)
     const [ready, setReady] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('')
-    useEffect(() => { let active = true; loadGoogleIdentity().then(() => { if (active) setReady(true) }).catch(err => { if (active) setError(err.message) }); return () => { active = false } }, [])
+    useEffect(() => { let active = true; setReady(false); prepareDriveConnection(clientId).then(() => { if (active) setReady(true) }).catch(err => { if (active) setError(err.message) }); return () => { active = false } }, [clientId])
     useEffect(() => subscribeDriveSession(setSession), [])
     useEffect(()=>{restoreDriveAuthorization()},[])
     const expired = session && session.expiresAt <= Date.now()
@@ -20,7 +20,7 @@ export default function DriveAccount({ clientId, onClientIdChange }) {
         <p className="text-xs leading-5">Public videos need no API key. Connect your account to play using read-only Drive access.</p>
         {onClientIdChange && <details className="text-xs leading-5"><summary className="cursor-pointer">Set up Google sign-in</summary><p className="mt-2">In Google Cloud, enable Drive API, configure the OAuth consent screen and add your account as a test user. Create a Web application OAuth Client ID with this authorized JavaScript origin: <code>{window.location.origin}</code>. Add the drive.readonly scope. Paste the Client ID above; no client secret is needed. Sign-in opens Google's consent popup.</p></details>}
         <button type="button" disabled={!ready || busy} onClick={connect} className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm disabled:opacity-50">{busy ? 'Connecting…' : session && !expired ? 'Disconnect Google Drive' : 'Connect Google Drive'}</button>
-        <p className="text-xs" role="status">{session && !expired ? 'Connected. Refreshes keep this session until it expires.' : 'Not connected.'}</p>
+        <p className="text-xs" role="status">{session && !expired ? session.persistent?'Connected. Remembered on this browser.':'Connected for this tab.' : 'Not connected.'}</p>
         {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
     </section>
 }

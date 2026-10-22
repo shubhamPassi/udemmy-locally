@@ -129,6 +129,7 @@ The hosted Worker is deliberately small. It uses Web `Request`/`Response` APIs r
 | `GET /api/public-import?provider=youtube&type=video&id=VIDEO_ID` | Read public YouTube video metadata | Title, author, thumbnail, and video reference |
 | `GET /api/public-import?provider=youtube&type=playlist&id=PLAYLIST_ID` | Read public YouTube playlist metadata | Playlist and lesson references |
 | `/api/drive-video` | Retired compatibility endpoint | `410 Gone`; no upstream video request and no `Location` header |
+| `/api/google/auth/*` | Optional remembered Google sign-in, token renewal and disconnect | Authorization metadata only; no video relay |
 | Other `/api/*` paths | Reject unsupported hosted endpoints | `404` JSON response |
 
 Successful public import metadata can be cached for five minutes using Cloudflare's Cache API. This cache is not a durable database and never stores browser progress or video content. The Worker reuses the parser/import logic in [api/public-import.js](api/public-import.js).
@@ -523,6 +524,17 @@ The sidebar's **Transcription** tab replaces Notes. It displays saved or source 
 
 Full note creation, editing, images, deletion and timestamp seeking are available under the player's **Learning tools → Notes**. Notes stay attached to their existing lesson IDs, so moving the controls does not require moving or rewriting user data.
 
-Google Drive connections survive ordinary refreshes in the same tab using sessionStorage for the access token and its original expiry. Restoration waits for browser-worker authorization before starting playback; expired or revoked grants still need reconnection. Disconnect clears the saved tab session. No refresh token, account credential, or video is stored on the hosting backend.
+When remembered sign-in is configured, a persistent encrypted HttpOnly cookie restores the Google connection after browser restarts. Cloudflare exchanges OAuth authorization codes and renews short-lived access tokens; the browser service worker still sends video requests directly to Google. The refresh token is never exposed to JavaScript, localStorage, IndexedDB, backups or URLs. Without backend configuration, the existing per-tab token flow remains available.
 
 Public Drive playback first tries the direct Google download without a key or forced CORS mode. If Google rejects that stream, the error offers account authorization rather than claiming an API key is mandatory. The two deployed TutIn origins provide their public OAuth Client ID automatically, including fresh/Incognito profiles; self-hosted origins require their own Web Client ID. The Client ID is an application identifier, not an API key or secret. Account authorization does not override Google download, traffic, or codec restrictions.
+
+### Remember Google Drive after closing the browser
+
+The optional Worker authorization-code flow requests read-only Drive access with offline renewal. After one consent, a 30-day `Secure; HttpOnly; SameSite=Lax` cookie holds an AES-GCM-encrypted session. Its refresh token is handled only by the Worker. Normal browser restarts restore access from this cookie; the app renews access tokens before expiry without reloading a healthy video. Disconnect clears the cookie/tab session and revokes the Google grant. Clearing cookies or closing an Incognito session removes the remembered connection.
+
+Deployment requires two secrets via Wrangler: `GOOGLE_OAUTH_CLIENT_SECRET` (the OAuth Web application's secret) and `GOOGLE_SESSION_SECRET` (a cryptographically random value of at least 32 characters). `GOOGLE_OAUTH_CLIENT_ID` is public Worker configuration. Never commit the secret values. Add these exact authorized redirect URIs to the existing Google OAuth client:
+
+- `https://udemy.chaigallery.in/api/google/auth/callback`
+- `https://tutin-learning.passishubham1.workers.dev/api/google/auth/callback`
+
+No KV, database, media storage, or video proxy is needed for this flow. The cookie is origin-bound and encrypted/authenticated with the Worker secret. OAuth state, PKCE, same-origin session headers and disconnect checks protect the flow. Refresh-token revocation and provider errors clear or pause renewal without inventing playback time. Cookie expiry is an upper limit, not a guarantee: Google OAuth apps in **Testing** issue Drive refresh tokens expiring after seven days. User revocation and Google's account policies can also require reconnection. See [Google's web-server OAuth guide](https://developers.google.com/identity/protocols/oauth2/web-server) and [refresh-token expiration](https://developers.google.com/identity/protocols/oauth2/#expiration).

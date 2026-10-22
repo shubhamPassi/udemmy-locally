@@ -1,4 +1,5 @@
 import publicImport from '../api/public-import.js'
+import { googleAuth } from './googleAuth.js'
 
 function json(body, status = 200, headers = {}) {
     return Response.json(body, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers } })
@@ -7,6 +8,7 @@ function json(body, status = 200, headers = {}) {
 export default {
     async fetch(request, env, context) {
         const url = new URL(request.url)
+        if(url.pathname.startsWith('/api/google/auth/'))return googleAuth(request,env,context)
         if (url.pathname === '/api/health') return json({ status: 'ok', hosting: 'cloudflare', drivePlayback: 'google-to-browser', videoRelay: false, videoRedirect: false })
         if (url.pathname === '/api/drive-video') {
             return json({ error: 'Video relays and redirects have been removed. The custom player connects directly to Google Drive.' }, 410)

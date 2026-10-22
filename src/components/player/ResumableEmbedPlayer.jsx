@@ -7,7 +7,7 @@ import StreamPlayerControls from './StreamPlayerControls'
 import PlayerLearningTools from './PlayerLearningTools.jsx'
 import useStudyTime from '../../hooks/useStudyTime'
 import DriveAccount from '../settings/DriveAccount.jsx'
-import { driveSession, subscribeDriveSession, savedDriveSession, restoreDriveAuthorization } from '../../utils/driveAuthorization'
+import { driveSession, subscribeDriveSession, hasRestorableDriveSession, restoreDriveAuthorization } from '../../utils/driveAuthorization'
 import { directDriveVideoUrl, directDriveFailureMessage } from '../../utils/directDrivePlayback'
 
 let youtubeApi
@@ -40,8 +40,8 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     const nativeReady = useRef(false)
     const lastCachedSecond = useRef(null)
     const [account, setAccount] = useState(driveSession)
-    const [restoringAccount,setRestoringAccount]=useState(()=>!!savedDriveSession()&&!driveSession())
-    useEffect(() => subscribeDriveSession(value => { setAccount(value); setAttempt(attempt => attempt + 1) }), [])
+    const [restoringAccount,setRestoringAccount]=useState(()=>hasRestorableDriveSession()&&!driveSession())
+    useEffect(() => subscribeDriveSession((value,meta) => { setAccount(value); if(!meta?.renewal||native.current?.error)setAttempt(attempt => attempt + 1) }), [])
     useEffect(()=>{let active=true;restoreDriveAuthorization().finally(()=>{if(active)setRestoringAccount(false)});return()=>{active=false}},[])
     const [error, setError] = useState('')
     const [retrying, setRetrying] = useState(false), [attempt, setAttempt] = useState(0)
