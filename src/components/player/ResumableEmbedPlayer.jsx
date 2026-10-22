@@ -7,7 +7,7 @@ import StreamPlayerControls from './StreamPlayerControls'
 import PlayerLearningTools from './PlayerLearningTools.jsx'
 import useStudyTime from '../../hooks/useStudyTime'
 import DriveAccount from '../settings/DriveAccount.jsx'
-import { driveSession, subscribeDriveSession } from '../../utils/driveAuthorization'
+import { driveSession, subscribeDriveSession, savedDriveSession, restoreDriveAuthorization } from '../../utils/driveAuthorization'
 import { directDriveVideoUrl, directDriveFailureMessage } from '../../utils/directDrivePlayback'
 
 let youtubeApi
@@ -40,7 +40,9 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     const nativeReady = useRef(false)
     const lastCachedSecond = useRef(null)
     const [account, setAccount] = useState(driveSession)
+    const [restoringAccount,setRestoringAccount]=useState(()=>!!savedDriveSession()&&!driveSession())
     useEffect(() => subscribeDriveSession(value => { setAccount(value); setAttempt(attempt => attempt + 1) }), [])
+    useEffect(()=>{let active=true;restoreDriveAuthorization().finally(()=>{if(active)setRestoringAccount(false)});return()=>{active=false}},[])
     const [error, setError] = useState('')
     const [retrying, setRetrying] = useState(false), [attempt, setAttempt] = useState(0)
     const [mediaLoading,setMediaLoading]=useState(true)
@@ -52,7 +54,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     const isYouTube = !!(video.youtubeId || /youtu(?:be\.com|\.be)/.test(video.url || ''))
     const youtubeId = video.youtubeId || video.url?.match(/(?:[?&]v=|youtu\.be\/)([^?&/]+)/)?.[1]
     const driveId = video.driveFileId || video.url?.match(/(?:\/d\/|[?&]id=)([a-zA-Z0-9_-]+)/)?.[1]
-    const driveSource = directDriveVideoUrl(driveId, settings.googleApiKey, !!account)
+    const driveSource = restoringAccount ? '' : directDriveVideoUrl(driveId, settings.googleApiKey, !!account)
     useEffect(() => { retryCount.current = 0 }, [driveSource])
     useEffect(() => {
         if (isYouTube) return
@@ -250,7 +252,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
     }, [video.id,isYouTube,youtubeId,flushStudyTime,sampleEvent, rememberEvent])
     return <div ref={container} className="w-full h-full relative bg-black">
         {isYouTube ? <div ref={host} className="w-full h-full" /> : <video key={`media-${attempt}`} ref={native} className="w-full h-full object-contain" playsInline crossOrigin="anonymous" autoPlay={continuePlaying.current}
-            src={driveSource}
+            src={driveSource || undefined}
             onLoadedMetadata={event => {
                 const element = event.currentTarget
                 duration.current = element.duration

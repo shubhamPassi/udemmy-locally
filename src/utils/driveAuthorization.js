@@ -1,12 +1,45 @@
-// OAuth tokens live only in this tab and its browser service worker, never in
-// settings, URLs, IndexedDB, caches, or the hosting backend.
+// Only the short-lived access token is retained in this tab's sessionStorage
+// across reloads. Never store refresh tokens or copy credentials to settings,
+// localStorage, URLs, backups, IndexedDB, media caches or the hosting backend.
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
+const sessionKey = 'tutin_drive_session_v1'
 let session = null, identityPromise
+let restoring = null, generation = 0
 const listeners = new Set()
 let listening = false
 export function driveSession() { return session }
 export function subscribeDriveSession(listener) { listeners.add(listener); return () => listeners.delete(listener) }
-function publish(value) { session = value; listeners.forEach(listener => listener(value)) }
+export function savedDriveSession() {
+    try {
+        const value = JSON.parse(window.sessionStorage?.getItem(sessionKey) || 'null')
+        if (typeof value?.token === 'string' && value.token && Number.isFinite(value.expiresAt) && value.expiresAt > Date.now()+5000 && value.expiresAt <= Date.now()+3605000) return value
+        window.sessionStorage?.removeItem(sessionKey)
+    } catch { try { window.sessionStorage?.removeItem(sessionKey) } catch {} }
+    return null
+}
+function publish(value) {
+    session = value
+    try { if(value)window.sessionStorage?.setItem(sessionKey,JSON.stringify({token:value.token,expiresAt:value.expiresAt}));else window.sessionStorage?.removeItem(sessionKey) } catch {}
+    listeners.forEach(listener => listener(value))
+}
+export async function restoreDriveAuthorization() {
+    if (session?.expiresAt > Date.now()+5000) return session
+    if (restoring) return restoring
+    const saved = savedDriveSession()
+    if (!saved) return null
+    const epoch = generation
+    restoring = (async()=>{
+        try {
+            await sendDriveAuthorization(saved)
+            if(epoch !== generation){await sendDriveAuthorization(session);return session}
+            if(saved.expiresAt <= Date.now()+5000)return null
+            publish(saved)
+            return saved
+        } catch { return null }
+        finally { restoring = null }
+    })()
+    return restoring
+}
 
 export function loadGoogleIdentity() {
     if (window.google?.accounts?.oauth2) return Promise.resolve(window.google.accounts.oauth2)
@@ -58,6 +91,7 @@ export function connectGoogleDrive(clientId) {
     if (!/^\d+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId?.trim() || '')) return Promise.reject(new Error('Add a Google OAuth Web Client ID in Settings first. An API key is not a Client ID.'))
     const oauth = window.google?.accounts?.oauth2
     if (!oauth) return Promise.reject(new Error('Google sign-in is still loading. Try Connect Google Drive again.'))
+    generation++
     return new Promise((resolve, reject) => {
         const client = oauth.initTokenClient({
             client_id: clientId.trim(), scope: DRIVE_SCOPE, include_granted_scopes: false,
@@ -74,7 +108,8 @@ export function connectGoogleDrive(clientId) {
 
 export async function disconnectGoogleDrive() {
     const previous = session
-    await sendDriveAuthorization(null)
+    generation++
     publish(null)
-    if (previous?.token) window.google?.accounts?.oauth2?.revoke(previous.token, () => {})
+    try { await sendDriveAuthorization(null) }
+    finally { if (previous?.token) window.google?.accounts?.oauth2?.revoke(previous.token, () => {}) }
 }
