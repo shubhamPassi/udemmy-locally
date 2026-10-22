@@ -251,7 +251,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
         return () => { cancelled = true; clearInterval(timer); rememberEvent(true); player.current?.destroy?.(); player.current = null }
     }, [video.id,isYouTube,youtubeId,flushStudyTime,sampleEvent, rememberEvent])
     return <div ref={container} className="w-full h-full relative bg-black">
-        {isYouTube ? <div ref={host} className="w-full h-full" /> : <video key={`media-${attempt}`} ref={native} className="w-full h-full object-contain" playsInline crossOrigin="anonymous" autoPlay={continuePlaying.current}
+        {isYouTube ? <div ref={host} className="w-full h-full" /> : <video key={`media-${attempt}`} ref={native} className="w-full h-full object-contain" playsInline crossOrigin={account || settings.googleApiKey?.trim() ? 'anonymous' : undefined} autoPlay={continuePlaying.current}
             src={driveSource || undefined}
             onLoadedMetadata={event => {
                 const element = event.currentTarget

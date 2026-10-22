@@ -37,6 +37,7 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
             assert.equal(new URL(media.src).hostname,'www.googleapis.com')
             assert.equal(new URL(media.src).searchParams.get('alt'),'media')
             assert.equal(new URL(media.src).searchParams.get('key'),'test-key')
+            assert.equal(media.getAttribute('crossorigin'),'anonymous')
             assert.equal(api.renderedControls.at(-1).allowFramePreviews,false)
             assert.equal(document.querySelector('iframe'),null)
             let paused=false,seeking=false
@@ -73,6 +74,7 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
             return
         }
         let media=document.querySelector('video')
+        assert.equal(media.hasAttribute('crossorigin'),false,'Keyless public playback must not require a CORS-enabled media response')
         Object.defineProperty(media,'duration',{value:600,configurable:true})
         await api.act(async()=>media.dispatchEvent(new Event('loadedmetadata')))
         media.currentTime=150
@@ -87,7 +89,7 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
         assert.ok(document.querySelector('[role="alert"]'))
         assert.equal(timers.length,0)
         assert.equal(document.querySelector('iframe'),null)
-        assert.match(document.querySelector('[role="alert"]').textContent,/Add a Google API key/)
+        assert.match(document.querySelector('[role="alert"]').textContent,/An API key is not required/)
         assert.equal(api.writes.at(-1)[1],150)
         await api.act(async()=>document.querySelector('button').click())
         assert.equal(document.querySelector('iframe'),null)

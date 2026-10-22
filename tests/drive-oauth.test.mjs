@@ -9,7 +9,7 @@ test('Google consent installs credentials before publishing session, rejects mis
     const unsubscribe=subscribeDriveSession(value=>changes.push(value))
     try{
         Object.defineProperty(globalThis,'window',{configurable:true,value:{google:{accounts:{oauth2:{
-            initTokenClient:config=>{assert.equal(config.scope,DRIVE_SCOPE);return {requestAccessToken:()=>config.callback(result)}},
+            initTokenClient:config=>{assert.equal(config.scope,DRIVE_SCOPE);assert.match(config.client_id,/\.apps\.googleusercontent\.com$/);return {requestAccessToken:()=>config.callback(result)}},
             hasGrantedAllScopes:()=>granted,
             revoke:(_token,done)=>{revoked=true;done()},
         }}}}})
@@ -38,5 +38,10 @@ test('Google consent installs credentials before publishing session, rejects mis
         result={error:'access_denied'}
         await assert.rejects(connectGoogleDrive(clientId),/permission was not granted/)
         assert.equal(driveSession(),null)
+        window.location={origin:'https://udemy.chaigallery.in'}
+        granted=true;result={access_token:'fresh-profile-access',expires_in:3600}
+        await connectGoogleDrive('')
+        assert.equal(driveSession().token,'fresh-profile-access','A fresh profile on the deployed site should not need to paste a Client ID')
+        await disconnectGoogleDrive()
     }finally{unsubscribe();for(const [key,descriptor]of saved)descriptor?Object.defineProperty(globalThis,key,descriptor):delete globalThis[key]}
 })

@@ -415,7 +415,7 @@ function SettingsModal({ isOpen, onClose, initialTab = 'general' }) {
                                                 {showApiKeys.youtube ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </button>
                                         </div>
-                                        <p className="mt-3 text-xs leading-5 text-light-text-secondary dark:text-dark-text-secondary">For direct Drive playback with resume and statistics, enable Google Drive API for this key. Allow this site's origin in the key's website restrictions and allow the Drive API. The file must permit public downloads; private files require Google authorization. Video bytes go directly from Google to your browser.</p>
+                                        <p className="mt-3 text-xs leading-5 text-light-text-secondary dark:text-dark-text-secondary">Optional for Google API metadata and public API playback. TutIn already tries public Drive playback without a key. Connecting Google Drive uses account authorization instead and does not require an API key. Public sharing does not guarantee a playable direct stream. Video bytes go directly from Google to your browser.</p>
                                     </div>
 
                                     {/* OpenRouter */}

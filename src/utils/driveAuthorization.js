@@ -2,6 +2,7 @@
 // across reloads. Never store refresh tokens or copy credentials to settings,
 // localStorage, URLs, backups, IndexedDB, media caches or the hosting backend.
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
+import { googleClientId } from './googleClientConfig.js'
 const sessionKey = 'tutin_drive_session_v1'
 let session = null, identityPromise
 let restoring = null, generation = 0
@@ -88,6 +89,7 @@ export async function sendDriveAuthorization(value) {
 
 // Called directly from a user click after preloading GIS to preserve popup activation.
 export function connectGoogleDrive(clientId) {
+    clientId = googleClientId(clientId)
     if (!/^\d+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId?.trim() || '')) return Promise.reject(new Error('Add a Google OAuth Web Client ID in Settings first. An API key is not a Client ID.'))
     const oauth = window.google?.accounts?.oauth2
     if (!oauth) return Promise.reject(new Error('Google sign-in is still loading. Try Connect Google Drive again.'))
