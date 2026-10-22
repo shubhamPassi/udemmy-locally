@@ -724,7 +724,7 @@ const saveCourseStructureToDatabaseEvent=useEventCallback(saveCourseStructureToD
                     />
                 )}
 
-                {remoteSyncCourse && <RemoteSyncModal course={remoteSyncCourse} onClose={()=>setRemoteSyncCourse(null)} onSynced={loadCourses} />}
+                {remoteSyncCourse && <RemoteSyncModal course={remoteSyncCourse} onClose={()=>setRemoteSyncCourse(null)} onSynced={()=>loadCourses(true)} />}
 
                 {syncPreview && (
                     <SyncPreviewModal
