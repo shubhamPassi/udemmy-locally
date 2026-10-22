@@ -25,7 +25,7 @@ test('Drive subtitle menu loads matching imported captions and keeps them off un
   api=createRequire(import.meta.url)(out);root=api.createRoot(document.getElementById('root'))
   await api.act(async()=>root.render(api.element(api.Subtitles,{videoId:'lesson',video:{driveFileId:'video0001'},googleApiKey:'test-key',host:{current:document.getElementById('player')}})))
   await api.act(async()=>document.querySelector('[aria-label="Subtitle settings"]').click())
-  const button=[...document.querySelectorAll('button')].find(b=>b.textContent==='Imported subtitles')
+  const button=[...document.querySelectorAll('button')].find(b=>b.textContent==='On')
   assert.ok(button);assert.equal(button.getAttribute('aria-pressed'),'false')
   assert.equal(JSON.parse(api.saved.get('tutin_subtitles_lesson'))[0].text,'Hello course')
   assert.equal(track.mode,'disabled');assert.equal(track.cues[0].size,78);assert.equal(track.cues[0].line,-3)
@@ -35,6 +35,6 @@ test('Drive subtitle menu loads matching imported captions and keeps them off un
   assert.equal(track.cues[0].line,-1)
   assert.match(document.querySelector('style').textContent,/font-weight:500/)
   await api.act(async()=>document.querySelector('[aria-label="Subtitle settings"]').click())
-  assert.equal([...document.querySelectorAll('button')].find(b=>b.textContent==='Imported subtitles').getAttribute('aria-pressed'),'true')
+  assert.equal([...document.querySelectorAll('button')].find(b=>b.textContent==='On').getAttribute('aria-pressed'),'true')
  }finally{if(root)await api.act(async()=>root.unmount());dom.window.close();for(const[key,value]of saved)value?Object.defineProperty(globalThis,key,value):delete globalThis[key];rmSync(dir,{recursive:true,force:true})}
 })
