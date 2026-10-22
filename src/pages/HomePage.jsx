@@ -511,6 +511,8 @@ const saveCourseStructureToDatabaseEvent=useEventCallback(saveCourseStructureToD
                             title: video.title,
                             originalTitle: video.originalTitle,
                             driveFileId: video.driveFileId,
+                            driveFolderId: video.driveFolderId,
+                            subtitleSources: video.subtitleSources || [],
                             url: getDriveVideoUrl(video.driveFileId),
                             duration: video.duration || 0,
                             order: j

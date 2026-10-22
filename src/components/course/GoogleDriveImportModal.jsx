@@ -104,6 +104,8 @@ function GoogleDriveImportModal({ isOpen, onClose, onImport }) {
                     title: v.title,
                     originalTitle: v.originalTitle,
                     driveFileId: v.driveFileId,
+                    driveFolderId: v.driveFolderId,
+                    subtitleSources: v.subtitleSources || [],
                     duration: v.duration,
                     order: vidIdx
                 }))

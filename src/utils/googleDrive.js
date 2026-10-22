@@ -6,6 +6,7 @@
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'avi', 'mkv', 'ogg', 'm4v']
 import { fetchPublicImport } from './publicImport'
 import { IS_BROWSER_MODE } from './api'
+import { matchDriveSubtitles } from './driveSubtitles.js'
 
 /**
  * Parse Google Drive URL to extract folder or file ID
@@ -128,6 +129,7 @@ export async function scanDriveFolder(folderId, apiKey) {
                         title: cleanVideoTitle(v.name),
                         originalTitle: v.name,
                         driveFileId: v.id,
+                        subtitleSources: matchDriveSubtitles(v, moduleFiles),
                         duration: duration,
                         order: idx
                     }
@@ -158,6 +160,7 @@ export async function scanDriveFolder(folderId, apiKey) {
                     title: cleanVideoTitle(v.name),
                     originalTitle: v.name,
                     driveFileId: v.id,
+                    subtitleSources: matchDriveSubtitles(v, files),
                     duration: duration,
                     order: idx
                 }
@@ -193,7 +196,7 @@ export async function scanPublicDriveFolder(folderId) {
         visited.add(id)
         const folder = await fetchPublicImport('drive', id)
         if (!path) rootName = folder.name
-        const videos = folder.files.filter(isVideoFile).sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map((file, index) => ({ title: cleanVideoTitle(file.name), originalTitle: file.name, driveFileId: file.id, duration: 0, order: index }))
+        const videos = folder.files.filter(isVideoFile).sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map((file, index) => ({ title: cleanVideoTitle(file.name), originalTitle: file.name, driveFileId: file.id, driveFolderId: id, subtitleSources: matchDriveSubtitles(file, folder.files), duration: 0, order: index }))
         if (videos.length) modules.push({ title: path || 'Videos', originalTitle: path || 'Videos', videos, totalVideos: videos.length, totalDuration: 0 })
         for (const child of folder.files.filter(f => f.mimeType === 'application/vnd.google-apps.folder').sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
             await visit(child.id, path ? `${path} / ${child.name}` : child.name, depth + 1)

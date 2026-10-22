@@ -3,22 +3,48 @@ import {createPortal} from 'react-dom'
 import {MessageSquare,Upload,Settings,Check,X,ChevronDown} from 'lucide-react'
 import {parseSubtitles} from '../../utils/subtitles'
 import {readProgressValue,writeProgressValue} from '../../utils/progressStorage.js'
+import { discoverDriveSubtitles, loadDriveSubtitle } from '../../utils/driveSubtitles.js'
+import { fetchPublicImport } from '../../utils/publicImport.js'
 
 function savedAppearance(){
     try{const saved=JSON.parse(localStorage.getItem('tutin_caption_appearance'));
         return {size:[14,18,22,26,32].includes(saved?.size)?saved.size:26,background:saved?.background==='dark'?'dark':'transparent'}
     }catch{return {size:26,background:'transparent'}}
 }
-export default function SubtitleTools({videoId,host,keyboardShortcuts=true}){
+export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardShortcuts=true}){
     const [cues,setCues]=useState([]),[enabled,setEnabled]=useState(false),[open,setOpen]=useState(false),[error,setError]=useState('')
     const [slot,setSlot]=useState(null),[appearance,setAppearance]=useState(savedAppearance)
     const [showAppearance,setShowAppearance]=useState(false),[panelHeight,setPanelHeight]=useState(360)
+    const [loadingDrive,setLoadingDrive]=useState(false),[driveAttempt,setDriveAttempt]=useState(0)
+    const driveChecked=useRef(null)
     const input=useRef(null),menu=useRef(null),importedTrack=useRef(null),trackVideo=useRef(null),appliedCues=useRef(null),enabledRef=useRef(enabled)
     enabledRef.current=enabled
     useEffect(()=>{
         setError('');setOpen(false);setShowAppearance(false);setEnabled(false)
+        driveChecked.current=null
         try{const stored=JSON.parse(readProgressValue('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{setCues([])}
     },[videoId])
+    useEffect(()=>{
+        if (!open || cues.length || driveChecked.current === `${videoId}:${driveAttempt}` || !(video?.driveFileId || /drive\.google\.com/.test(video?.url || ''))) return
+        driveChecked.current = `${videoId}:${driveAttempt}`
+        const controller = new AbortController()
+        setLoadingDrive(true); setError('')
+        const timeout = setTimeout(() => { setError('Google subtitle lookup timed out. Retry Drive subtitles or import the file manually.'); setLoadingDrive(false); controller.abort() }, 20000)
+        discoverDriveSubtitles(video, googleApiKey, controller.signal, id => fetchPublicImport('drive', id))
+            .then(async sources => {
+                if (!sources.length) throw Error('No matching SRT or VTT file was found beside this lesson in Drive.')
+                const parsed = await loadDriveSubtitle(sources[0], googleApiKey, controller.signal)
+                if (controller.signal.aborted) return
+                // A manual import in another control takes priority.
+                if (!readProgressValue('tutin_subtitles_'+videoId)) {
+                    writeProgressValue('tutin_subtitles_'+videoId, JSON.stringify(parsed))
+                    setCues(parsed)
+                }
+            })
+            .catch(err => { if (!controller.signal.aborted) setError(err.message) })
+            .finally(() => { clearTimeout(timeout); if (!controller.signal.aborted) setLoadingDrive(false) })
+        return () => { clearTimeout(timeout); controller.abort(); setLoadingDrive(false); driveChecked.current=null }
+    },[open,videoId,video,googleApiKey,cues.length,driveAttempt])
     useEffect(()=>{
         const refresh=event=>{if(event.detail?.videoId!==videoId)return;try{const stored=JSON.parse(readProgressValue('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{}}
         window.addEventListener('tutin-subtitles-changed',refresh)
@@ -108,7 +134,8 @@ export default function SubtitleTools({videoId,host,keyboardShortcuts=true}){
                 <button onClick={()=>changeAppearance({size:26,background:'transparent'})} className="text-neutral-400 hover:text-white">Reset appearance</button>
             </div>}
             {cues.length>0&&<button onClick={()=>{writeProgressValue('tutin_subtitles_'+videoId,null);setCues([]);setOpen(false)}} className="w-full border-t border-white/10 px-5 py-3 text-left text-xs text-neutral-500 hover:bg-white/10 hover:text-neutral-300">Remove imported subtitles</button>}
-            {!cues.length&&<p className="px-5 pb-4 text-xs leading-5 text-neutral-400">Add an SRT or VTT file to display subtitles.</p>}
+            {!cues.length&&<p role="status" className="px-5 pb-4 text-xs leading-5 text-neutral-400">{loadingDrive?'Looking for matching course subtitles in Google Drive…':'Add an SRT or VTT file to display subtitles.'}</p>}
+            {!cues.length&&!loadingDrive&&(video?.driveFileId||/drive\.google\.com/.test(video?.url||''))&&<button onClick={()=>setDriveAttempt(value=>value+1)} className="px-5 pb-4 text-xs text-blue-400">Retry Drive subtitles</button>}
             {error&&<p role="alert" className="px-5 pb-4 text-xs text-red-400">{error}</p>}
         </div>}
     </div>,slot)

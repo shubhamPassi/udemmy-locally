@@ -71,8 +71,8 @@ router.post('/', (req, res) => {
                 id, course_id, module_id, title, original_title, description,
                 file_name, file_path, file_size, duration, thumbnail_data,
                 "order", is_required, is_completed, is_favorite, watch_progress,
-                last_watched_position, tags, bookmarks, youtube_id, url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                last_watched_position, tags, bookmarks, youtube_id, url, subtitle_sources
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             data.id, data.courseId, data.moduleId, data.title, data.originalTitle || null,
             data.description || '', data.fileName || '', data.filePath || null,
@@ -81,7 +81,7 @@ router.post('/', (req, res) => {
             data.isCompleted ? 1 : 0, data.isFavorite ? 1 : 0,
             data.watchProgress || 0, data.lastWatchedPosition || 0,
             JSON.stringify(data.tags || []), JSON.stringify(data.bookmarks || []),
-            data.youtubeId || null, data.url || null
+            data.youtubeId || null, data.url || null, JSON.stringify(data.subtitleSources || [])
         ])
         res.status(201).json({ success: true, id: data.id })
     } catch (err) {
