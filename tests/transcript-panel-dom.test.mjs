@@ -19,13 +19,22 @@ test('transcription follows real playback, seeks on cue click, filters text and 
    b.onLoad({filter:/lessonTranscript\.js$/},()=>({contents:'const cues=[{start:1,end:5,text:"First cue"},{start:10,end:15,text:"Second cue"}];export const cachedTranscript=()=>[];export const loadLessonTranscript=async()=>cues;export const activeTranscriptIndex=(rows,time)=>rows.findIndex(cue=>time>=cue.start&&time<cue.end);'}))
   }}]})
   api=createRequire(import.meta.url)(out);root=api.createRoot(document.getElementById('root'))
-  let seek,scrolls=0;dom.window.HTMLElement.prototype.scrollIntoView=()=>scrolls++
+  let seek,scrolls=0,lastScroll
+  dom.window.HTMLElement.prototype.scrollTo=function(options){scrolls++;lastScroll=options;this.scrollTop=options.top}
+  dom.window.HTMLElement.prototype.getBoundingClientRect=function(){
+   if(this.parentElement?.hasAttribute('data-transcript-lines'))return {top:200+8+[...this.parentElement.children].indexOf(this)*80-this.parentElement.scrollTop}
+   return {top:200}
+  }
+  Object.defineProperty(dom.window.HTMLElement.prototype,'clientHeight',{configurable:true,get:()=>300})
+  Object.defineProperty(dom.window.HTMLElement.prototype,'offsetHeight',{configurable:true,get:()=>64})
   const video={id:'lesson',driveFileId:'video0001'},render=async time=>api.act(async()=>root.render(api.element(api.Panel,{video,currentTime:time,onSeek:time=>seek=time})))
   await render(2)
   assert.match(document.querySelector('[aria-current="true"]').textContent,/First cue/)
   await render(11)
   assert.match(document.querySelector('[aria-current="true"]').textContent,/Second cue/)
   assert.ok(scrolls>=2)
+  assert.equal(lastScroll.top,80,'The active final cue should align with the list top, not merely enter the viewport')
+  assert.equal(document.querySelector('[data-transcript-lines]').style.paddingBottom,'228px')
   await api.act(async()=>document.querySelector('[aria-current="true"]').click());assert.equal(seek,10)
   await api.act(async()=>document.querySelector('input[type="checkbox"]').click());const before=scrolls
   await render(2);assert.equal(scrolls,before)
