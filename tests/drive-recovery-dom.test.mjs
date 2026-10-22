@@ -89,7 +89,7 @@ for (const hosted of [false, true]) test(hosted ? 'hosted Drive resumes native p
         assert.ok(document.querySelector('[role="alert"]'))
         assert.equal(timers.length,0)
         assert.equal(document.querySelector('iframe'),null)
-        assert.match(document.querySelector('[role="alert"]').textContent,/An API key is not required/)
+        assert.match(document.querySelector('[role="alert"]').textContent,/No API key needed/)
         assert.equal(api.writes.at(-1)[1],150)
         await api.act(async()=>document.querySelector('button').click())
         assert.equal(document.querySelector('iframe'),null)

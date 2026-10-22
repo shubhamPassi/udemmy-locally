@@ -12,7 +12,7 @@ export function directDriveVideoUrl(id, apiKey = '', account = false) {
 }
 
 export function directDriveFailureMessage(code, hasApiKey) {
-    if (!hasApiKey) return 'Google did not provide a playable public direct stream. An API key is not required to try public playback. Public sharing does not guarantee that Google will allow this custom player to stream the original file. Check download permissions or connect Google Drive to try account-authorized playback. Your saved position and study history are preserved.'
-    if (code === 3 || code === 4) return 'Google refused the media request or your browser cannot decode the original video. Google can temporarily block repeated video requests; wait before retrying. Also check Google Drive API access, website key restrictions, public download permission, and the original codec. Your saved position and study history are preserved.'
-    return 'The direct Google stream was interrupted. Retry playback, or check the connection and Google API access. Your saved position and study history are preserved.'
+    if (!hasApiKey) return 'This video could not load. Connect your Google account to try again. No API key needed. Your progress is saved.'
+    if (code === 3 || code === 4) return 'Google blocked playback or this video format is unsupported. Retry later. Your progress is saved.'
+    return 'Playback was interrupted. Retry the video. Your progress is saved.'
 }

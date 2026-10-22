@@ -15,8 +15,8 @@ test('Drive source URLs connect only to Google and encode browser API keys',()=>
 })
 
 test('direct playback failures explain required access without exposing API keys or inventing tracking',()=>{
-    assert.match(directDriveFailureMessage(4,false),/An API key is not required/)
-    assert.match(directDriveFailureMessage(4,true),/browser cannot decode/)
+    assert.match(directDriveFailureMessage(4,false),/No API key needed/)
+    assert.match(directDriveFailureMessage(4,true),/format is unsupported/)
     assert.match(directDriveFailureMessage(2,true),/interrupted/)
-    assert.match(directDriveFailureMessage(4,true),/saved position and study history are preserved/)
+    assert.match(directDriveFailureMessage(4,true),/progress is saved/)
 })

@@ -71,7 +71,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
             if (media === native.current && media?.readyState < 2 && !media.error) {
                 setMediaLoading(false)
                 setRetrying(false)
-                setError('Google is taking too long to load this video. It may be temporarily limiting requests. Your saved position is preserved. Please retry later.')
+                setError('Google is taking too long. Retry shortly. Your progress is saved.')
             }
         }, 30000)
         const events = ['loadeddata', 'canplay', 'playing']
@@ -283,7 +283,7 @@ autoplayRef.current=autoPlay;nextEnabled.current=settings.autoPlayNext
         {!isYouTube && !error && !retrying && <StreamPlayerControls key={`controls-${attempt}`} mediaRef={native} containerRef={container} video={video} allowFramePreviews={false} showLoadingIndicator={!mediaLoading} />}
         {(retrying || mediaLoading) && !error && <div role="status" aria-label="Loading video" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40"><span className="h-11 w-11 rounded-full border-4 border-white/20 border-t-white animate-spin" /></div>}
         {slowBuffer&&!error&&<div className="absolute bottom-24 inset-x-4 z-30 rounded-lg bg-black/85 p-3 text-center text-xs text-white">Drive is taking longer to respond. Your progress is saved.<button onClick={()=>{remember(true);retryDrive(true)}} className="ml-3 rounded bg-blue-600 px-3 py-2">Reconnect</button></div>}
-        {error && (isYouTube ? <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p> : <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-5"><div className="max-w-md text-center text-white"><p role="alert" className="text-sm leading-6">{error}</p><div className="mt-4 flex flex-wrap justify-center gap-3"><button onClick={() => retryDrive(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium">Retry video</button><button onClick={() => window.dispatchEvent(new CustomEvent('tutin-open-settings', { detail: { tab: 'ai_keys' } }))} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Google API settings</button></div><div className="mt-4"><DriveAccount clientId={settings.googleOAuthClientId} /></div></div></div>)}
+        {error && (isYouTube ? <p className="absolute top-0 inset-x-0 p-3 bg-black/90 text-white text-sm">{error}</p> : <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-5"><div className="max-w-md text-center text-white"><p role="alert" className="text-sm leading-6">{error}</p><div className="mt-4 flex flex-wrap justify-center gap-3"><button onClick={() => retryDrive(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium">Retry video</button><button onClick={() => window.dispatchEvent(new CustomEvent('tutin-open-settings', { detail: { tab: 'ai_keys' } }))} className="rounded-lg border border-white/20 px-4 py-2 text-sm">Connection settings</button></div><div className="mt-4"><DriveAccount clientId={settings.googleOAuthClientId} /></div></div></div>)}
     </div>
 })
 export default ResumableEmbedPlayer
