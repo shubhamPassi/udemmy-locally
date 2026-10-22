@@ -16,7 +16,8 @@ export default {
             const query = Object.fromEntries(['provider', 'id', 'type'].map(key => [key, url.searchParams.get(key) || (key === 'type' ? 'playlist' : '')]))
             const cacheKey = new Request(`${url.origin}${url.pathname}?${new URLSearchParams(query)}`)
             const cache = globalThis.caches?.default
-            const cached = await cache?.match(cacheKey).catch(() => undefined)
+            const fresh = url.searchParams.get('fresh') === '1'
+            const cached = fresh ? null : await cache?.match(cacheKey).catch(() => undefined)
             if (cached) return cached
             let status = 200, result
             const headers = { 'Content-Type': 'application/json', 'X-Content-Type-Options': 'nosniff' }
@@ -27,7 +28,8 @@ export default {
             }
             try {
                 await publicImport({ method: request.method, query }, response)
-                if (result?.ok && cache && context?.waitUntil) {
+                if (fresh && result) result.headers.set('Cache-Control', 'no-store')
+                if (result?.ok && !fresh && cache && context?.waitUntil) {
                     // Cache public metadata only, never video bytes or browser progress.
                     result.headers.set('Cache-Control', 'public, max-age=300')
                     context.waitUntil(cache.put(cacheKey, result.clone()).catch(() => {}))

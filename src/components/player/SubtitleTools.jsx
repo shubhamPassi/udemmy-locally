@@ -3,8 +3,7 @@ import {createPortal} from 'react-dom'
 import {MessageSquare,Upload,Settings,Check,X,ChevronDown} from 'lucide-react'
 import {parseSubtitles} from '../../utils/subtitles'
 import {readProgressValue,writeProgressValue} from '../../utils/progressStorage.js'
-import { discoverDriveSubtitles, loadDriveSubtitle } from '../../utils/driveSubtitles.js'
-import { fetchPublicImport } from '../../utils/publicImport.js'
+import { loadLessonTranscript, needsTranscriptRefresh } from '../../utils/lessonTranscript.js'
 
 function savedAppearance(){
     try{const saved=JSON.parse(localStorage.getItem('tutin_caption_appearance'));
@@ -25,26 +24,17 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
         try{const stored=JSON.parse(readProgressValue('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{setCues([])}
     },[videoId])
     useEffect(()=>{
-        if (!open || cues.length || driveChecked.current === `${videoId}:${driveAttempt}` || !(video?.driveFileId || /drive\.google\.com/.test(video?.url || ''))) return
+        if (!open || (cues.length && !needsTranscriptRefresh(video,cues)) || driveChecked.current === `${videoId}:${driveAttempt}` || !(video?.driveFileId || /drive\.google\.com/.test(video?.url || ''))) return
         driveChecked.current = `${videoId}:${driveAttempt}`
         const controller = new AbortController()
         setLoadingDrive(true); setError('')
         const timeout = setTimeout(() => { setError('Google subtitle lookup timed out. Retry Drive subtitles or import the file manually.'); setLoadingDrive(false); controller.abort() }, 20000)
-        discoverDriveSubtitles(video, googleApiKey, controller.signal, id => fetchPublicImport('drive', id))
-            .then(async sources => {
-                if (!sources.length) throw Error('No matching SRT or VTT file was found beside this lesson in Drive.')
-                const parsed = await loadDriveSubtitle(sources[0], googleApiKey, controller.signal)
-                if (controller.signal.aborted) return
-                // A manual import in another control takes priority.
-                if (!readProgressValue('tutin_subtitles_'+videoId)) {
-                    writeProgressValue('tutin_subtitles_'+videoId, JSON.stringify(parsed))
-                    setCues(parsed)
-                }
-            })
+        loadLessonTranscript({...video,id:videoId}, googleApiKey, {signal:controller.signal,force:driveAttempt>0})
+            .then(parsed => { if (!controller.signal.aborted) setCues(parsed) })
             .catch(err => { if (!controller.signal.aborted) setError(err.message) })
             .finally(() => { clearTimeout(timeout); if (!controller.signal.aborted) setLoadingDrive(false) })
         return () => { clearTimeout(timeout); controller.abort(); setLoadingDrive(false); driveChecked.current=null }
-    },[open,videoId,video,googleApiKey,cues.length,driveAttempt])
+    },[open,videoId,video,googleApiKey,cues,driveAttempt])
     useEffect(()=>{
         const refresh=event=>{if(event.detail?.videoId!==videoId)return;try{const stored=JSON.parse(readProgressValue('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{}}
         window.addEventListener('tutin-subtitles-changed',refresh)

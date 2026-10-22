@@ -53,3 +53,9 @@ The browser service worker attaches a short-lived bearer token to direct Google 
 Background **Drive** frame extraction is disabled to avoid repeated media requests competing with playback. Local-video previews remain available; the Drive timeline still shows hover timestamps. Google can still refuse a request because of account permissions, disabled downloads, quotas, or automated-traffic restrictions; OAuth does not bypass those restrictions. Original codecs must still be supported by the browser.
 
 References: [Google token model](https://developers.google.com/identity/oauth2/web/guides/use-token-model), [Drive downloads](https://developers.google.com/workspace/drive/api/guides/manage-downloads), [why media tokens must not be placed in URLs](https://workspace.google.com/blog/developers-practitioners/upcoming-changes-to-the-google-drive-api-and-google-picker-api).
+
+### Online course resync and transcripts
+
+`/api/public-import` accepts `fresh=1` for explicit resync requests, bypassing the five-minute public metadata cache. Google Drive folder scans collect video and SRT/VTT file references; the browser reconciles them with existing provider IDs. The new `type=transcript` YouTube metadata request retrieves caption text only, with a bounded timeout and an allowlist of YouTube player/watch/timedtext paths. It never proxies media streams. Private or unavailable captions return an explanatory failure.
+
+Caption cues and source revision markers stay in the existing durable subtitle progress records. The Transcription panel and Subtitle settings share the same loader; imported/manual subtitles remain authoritative. Google Drive subtitle bytes continue to go directly to the browser using the current short-lived account token or public API key. Companion SQLite adds nullable provider/revision columns so desktop source metadata and backup restoration retain the same associations.

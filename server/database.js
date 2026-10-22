@@ -444,6 +444,9 @@ function migration002() {
 
     // Add subtitle_sources to videos if it doesn't exist
     const columns = getAll("PRAGMA table_info(videos)")
+    for (const name of ['drive_file_id','drive_folder_id','subtitle_revision','transcript_refresh_at']) {
+        if (!columns.some(col => col.name === name)) db.run(`ALTER TABLE videos ADD COLUMN ${name} TEXT`)
+    }
     const hasSubtitleSources = columns.some(col => col.name === 'subtitle_sources')
     if (!hasSubtitleSources) {
         db.run("ALTER TABLE videos ADD COLUMN subtitle_sources TEXT DEFAULT '[]'")

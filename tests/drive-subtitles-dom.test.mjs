@@ -16,6 +16,7 @@ test('Drive subtitle menu loads matching imported captions and keeps them off un
  try{
   await build({stdin:{contents:"export {default as Subtitles} from './src/components/player/SubtitleTools.jsx';export {createRoot} from 'react-dom/client';export {act,createElement as element} from 'react';export {saved} from './src/utils/progressStorage.js';",resolveDir:resolve('.'),loader:'jsx'},bundle:true,jsx:'automatic',platform:'browser',format:'cjs',outfile:out,plugins:[{name:'isolate',setup(b){
    b.onLoad({filter:/progressStorage\.js$/},()=>({contents:'export const saved=new Map();export const readProgressValue=key=>saved.get(key)||null;export const writeProgressValue=(key,value)=>saved.set(key,value);'}))
+   b.onLoad({filter:/[\\/]utils[\\/]api\.js$/},()=>({contents:'export const IS_BROWSER_MODE=true;export const get=async()=>[],fetchYoutubeTranscript=async()=>({chunks:[]});'}))
    b.onLoad({filter:/driveSubtitles\.js$/},()=>({contents:'export const discoverDriveSubtitles=async()=>[{driveFileId:"subtitle01"}];export const loadDriveSubtitle=async()=>[{start:1,end:3,text:"Hello course"}];'}))
   }}]})
   api=createRequire(import.meta.url)(out);root=api.createRoot(document.getElementById('root'))

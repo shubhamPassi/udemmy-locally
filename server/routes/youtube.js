@@ -1,5 +1,5 @@
 import express from 'express'
-import { YoutubeTranscript } from 'youtube-transcript'
+import { importYouTubeTranscript } from '../../api/public-import.js'
 
 const router = express.Router()
 
@@ -11,28 +11,7 @@ router.get('/transcript', async (req, res) => {
             return res.status(400).json({ error: 'videoId is required' })
         }
 
-        // Fetch transcript using youtube-transcript
-        // Optional: specify lang if provided, otherwise defaults to english or video default
-        let transcriptList
-        try {
-            if (lang && lang !== 'none') {
-                transcriptList = await YoutubeTranscript.fetchTranscript(videoId, { lang })
-            } else {
-                transcriptList = await YoutubeTranscript.fetchTranscript(videoId)
-            }
-        } catch (fetchErr) {
-            console.error('[YouTube API] Failed to fetch transcript:', fetchErr.message)
-            return res.status(404).json({ error: 'Transcript not available for this video or language' })
-        }
-
-        // Format into our standard chunk format: [{ text, timestamp: [start, end] }]
-        const chunks = transcriptList.map(item => ({
-            text: item.text,
-            timestamp: [
-                item.offset / 1000, 
-                (item.offset + item.duration) / 1000
-            ]
-        }))
+        const {chunks} = await importYouTubeTranscript(videoId, lang && lang !== 'none' ? lang : undefined)
 
         res.json({ chunks })
 

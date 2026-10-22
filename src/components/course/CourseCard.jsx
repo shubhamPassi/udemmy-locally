@@ -103,7 +103,6 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
         }
     }
 
-    const isLocalCourse = !!(course.folderHandle || (course.originalTitle && !course.youtubePlaylistId && !course.driveFileId && course.sourceType !== 'external-link'))
     const isExternalCourse = course.sourceType === 'external-link' || !!course.courseUrl
 
     async function handleExternalClick() {
@@ -130,7 +129,7 @@ function CourseCard({ course, viewMode = 'grid', onRefresh, onEdit, onSync }) {
             >
                 <Pencil className="w-4 h-4" />
             </button>
-            {isLocalCourse && (
+            {!isExternalCourse && (
                 <button
                     onClick={handleSync}
                     disabled={isSyncing}

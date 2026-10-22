@@ -187,14 +187,14 @@ export async function scanDriveFolder(folderId, apiKey) {
 
 // Public folder pages include the same file listing shown to signed-out visitors.
 // Keep each leaf folder as a module, including folders several levels deep.
-export async function scanPublicDriveFolder(folderId) {
+export async function scanPublicDriveFolder(folderId, fresh = false) {
     const modules = [], visited = new Set()
     let rootName = 'Google Drive Course'
     async function visit(id, path = '', depth = 0) {
         if (visited.has(id)) return
         if (depth > 12 || visited.size >= 200) throw new Error('This folder collection is too large. Import one course folder at a time.')
         visited.add(id)
-        const folder = await fetchPublicImport('drive', id)
+        const folder = await fetchPublicImport('drive', id, undefined, fresh)
         if (!path) rootName = folder.name
         const videos = folder.files.filter(isVideoFile).sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map((file, index) => ({ title: cleanVideoTitle(file.name), originalTitle: file.name, driveFileId: file.id, driveFolderId: id, subtitleSources: matchDriveSubtitles(file, folder.files), duration: 0, order: index }))
         if (videos.length) modules.push({ title: path || 'Videos', originalTitle: path || 'Videos', videos, totalVideos: videos.length, totalDuration: 0 })

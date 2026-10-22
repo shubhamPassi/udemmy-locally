@@ -455,7 +455,8 @@ router.post('/import', (req, res) => {
                     'is_required','is_completed','is_favorite','watch_progress',
                     'last_watched_position','last_watched_at','completed_at','watch_count',
                     'tags','bookmarks','youtube_id','url','has_transcript','has_summary',
-                    'transcript_generated_at','summary_generated_at','subtitle_sources'
+                    'transcript_generated_at','summary_generated_at','subtitle_sources',
+                    'drive_file_id','drive_folder_id','subtitle_revision','transcript_refresh_at'
                 ])
             }
             if (data.notes) {

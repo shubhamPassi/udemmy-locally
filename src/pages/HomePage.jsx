@@ -15,6 +15,7 @@ import * as api from '../utils/api'
 
 const ImportPreviewModal = lazy(() => import('../components/course/ImportPreviewModal'))
 const EditCourseModal = lazy(() => import('../components/course/EditCourseModal'))
+const RemoteSyncModal = lazy(() => import('../components/course/RemoteSyncModal'))
 const SyncPreviewModal = lazy(() => import('../components/course/SyncPreviewModal'))
 
 function scheduleAfterFirstPaint(callback) {
@@ -42,6 +43,7 @@ const saveCourseStructureToDatabaseEvent=useEventCallback(saveCourseStructureToD
     const [isLoading, setIsLoading] = useState(true)
     const [importData, setImportData] = useState(null)
     const [editingCourse, setEditingCourse] = useState(null)
+    const [remoteSyncCourse, setRemoteSyncCourse] = useState(null)
     const [syncPreview, setSyncPreview] = useState(null)
     const [isApplyingSync, setIsApplyingSync] = useState(false)
     const { settings, updateSettings } = useSettings()
@@ -257,6 +259,14 @@ const saveCourseStructureToDatabaseEvent=useEventCallback(saveCourseStructureToD
 
     // Course sync handlers
     async function handleSyncCourse(course) {
+        if (!(course.folderHandle || course.folderPath || course.folder_path)) {
+            const { getCourseContent } = await import('../utils/db.js')
+            const { remoteVideoKey } = await import('../utils/remoteCourseSync.js')
+            try {
+                const content = await getCourseContent(course.id)
+                if (course.customMetadata?.remoteSource || content.videos.some(remoteVideoKey)) { setRemoteSyncCourse(course); return }
+            } catch (err) { showNotification('Could not load course: '+err.message,'error'); return }
+        }
         try {
             const { pickFolder, scanCourseFolder, syncCoursePreview } = await import('../utils/fileSystem')
             const folderPath = api.IS_BROWSER_MODE ? course.folderHandle : course.folderPath || course.folder_path
@@ -483,6 +493,7 @@ const saveCourseStructureToDatabaseEvent=useEventCallback(saveCourseStructureToD
                 }
 
                 const savedCourse = await addCourse({
+                    customMetadata: courseData.customMetadata || {},
                     title: courseData.title,
                     instructor: courseData.instructor || '',
                     description: courseData.description || 'Imported from Google Drive',
@@ -712,6 +723,8 @@ const saveCourseStructureToDatabaseEvent=useEventCallback(saveCourseStructureToD
                         onSave={loadCourses}
                     />
                 )}
+
+                {remoteSyncCourse && <RemoteSyncModal course={remoteSyncCourse} onClose={()=>setRemoteSyncCourse(null)} onSynced={loadCourses} />}
 
                 {syncPreview && (
                     <SyncPreviewModal

@@ -1,4 +1,25 @@
 const idPattern = /^[a-zA-Z0-9_-]{8,160}$/
+import { YoutubeTranscript } from 'youtube-transcript'
+
+export async function importYouTubeTranscript(id, lang) {
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000)
+    let captionScale = 1
+    try {
+        const rows = await YoutubeTranscript.fetchTranscript(id, { ...(lang ? {lang} : {}), fetch: async (value, options) => {
+            const url = new URL(value)
+            if (url.protocol !== 'https:' || !['www.youtube.com','youtube.com'].includes(url.hostname) || !['/watch','/youtubei/v1/player','/api/timedtext'].includes(url.pathname)) throw Error('Unsupported caption source')
+            const response = await fetch(url.href, { ...options, signal: controller.signal, redirect: 'error' })
+            const text = await response.text()
+            if (text.length > 8_000_000) throw Error('Caption response is too large')
+            if (url.pathname === '/api/timedtext') captionScale = /<p\s+t="/.test(text) ? 1000 : 1
+            return new Response(text, { status: response.status, headers: response.headers })
+        } })
+        const chunks = rows.map(row => ({ start: row.offset/captionScale, end: (row.offset+row.duration)/captionScale, text: row.text }))
+        if (!chunks.length) throw Error('Empty captions')
+        return { chunks }
+    } catch { throw Error('YouTube captions are unavailable or restricted for this video. Import an SRT/VTT file or generate a transcript in the AI tab.') }
+    finally { clearTimeout(timer) }
+}
 const text = value => value?.simpleText || value?.runs?.map(run => run.text).join('') || ''
 const decodeHtml = value => value.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
 async function page(url) {
@@ -84,6 +105,7 @@ export default async function handler(req, res) {
     if (typeof id !== 'string' || !idPattern.test(id)) return res.status(400).json({ error: 'Invalid source ID' })
     try {
         if (provider === 'drive') return res.json(parseDrivePage(await page(`https://drive.google.com/drive/folders/${id}`)))
+        if (provider === 'youtube' && type === 'transcript') return res.json(await importYouTubeTranscript(id))
         if (provider === 'youtube' && ['video', 'playlist'].includes(type)) return res.json(await importYouTube(id, type))
         return res.status(400).json({ error: 'Unsupported public source' })
     } catch (error) {

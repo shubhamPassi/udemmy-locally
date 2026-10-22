@@ -223,6 +223,7 @@ function YouTubeImportModal({ isOpen, onClose, onImport, targetCourseTitle }) {
         setIsSaving(true);setError(null)
         try {
         await onImport({
+            customMetadata: { remoteSource: { provider: 'youtube', type: importType, url, id: new URL(url).searchParams.get(importType === 'playlist' ? 'list' : 'v') || previewData.videos[0]?.youtubeId } },
             title: previewData.title,
             instructor: previewData.author,
             channelAvatar: previewData.channelAvatar, // Passed separately for instructors store

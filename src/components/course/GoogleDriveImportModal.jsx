@@ -92,6 +92,7 @@ function GoogleDriveImportModal({ isOpen, onClose, onImport }) {
             instructor: '',
             thumbnailData: thumbnail,
             description: 'Imported from Google Drive',
+            customMetadata: { remoteSource: { provider: 'drive', type: 'folder', id: parseGoogleDriveUrl(url).id, url } },
             totalDuration: previewData.totalDuration,
             totalVideos: previewData.totalVideos,
             modules: previewData.modules.map((m, idx) => ({

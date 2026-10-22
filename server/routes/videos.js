@@ -33,6 +33,10 @@ function mapVideoRow(video) {
         bookmarks: JSON.parse(video.bookmarks || '[]'),
         youtubeId: video.youtube_id,
         url: video.url,
+        driveFileId: video.drive_file_id,
+        driveFolderId: video.drive_folder_id,
+        subtitleRevision: video.subtitle_revision,
+        transcriptRefreshAt: video.transcript_refresh_at,
         hasTranscript: video.has_transcript === 1,
         subtitleSources: JSON.parse(video.subtitle_sources || '[]')
     }
@@ -71,8 +75,8 @@ router.post('/', (req, res) => {
                 id, course_id, module_id, title, original_title, description,
                 file_name, file_path, file_size, duration, thumbnail_data,
                 "order", is_required, is_completed, is_favorite, watch_progress,
-                last_watched_position, tags, bookmarks, youtube_id, url, subtitle_sources
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                last_watched_position, tags, bookmarks, youtube_id, url, subtitle_sources, drive_file_id, drive_folder_id, subtitle_revision, transcript_refresh_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             data.id, data.courseId, data.moduleId, data.title, data.originalTitle || null,
             data.description || '', data.fileName || '', data.filePath || null,
@@ -81,7 +85,7 @@ router.post('/', (req, res) => {
             data.isCompleted ? 1 : 0, data.isFavorite ? 1 : 0,
             data.watchProgress || 0, data.lastWatchedPosition || 0,
             JSON.stringify(data.tags || []), JSON.stringify(data.bookmarks || []),
-            data.youtubeId || null, data.url || null, JSON.stringify(data.subtitleSources || [])
+            data.youtubeId || null, data.url || null, JSON.stringify(data.subtitleSources || []), data.driveFileId || null, data.driveFolderId || null, data.subtitleRevision || null, data.transcriptRefreshAt || null
         ])
         res.status(201).json({ success: true, id: data.id })
     } catch (err) {
@@ -132,6 +136,7 @@ router.put('/:id', (req, res) => {
             completedAt: 'completed_at',
             watchCount: 'watch_count',
             youtubeId: 'youtube_id',
+            driveFileId: 'drive_file_id', driveFolderId: 'drive_folder_id', subtitleRevision: 'subtitle_revision', transcriptRefreshAt: 'transcript_refresh_at',
             url: 'url'
         }
 
@@ -144,6 +149,8 @@ router.put('/:id', (req, res) => {
                 params.push(val)
             }
         }
+
+        if (data.subtitleSources !== undefined) { updateFields.push('subtitle_sources = ?'); params.push(JSON.stringify(data.subtitleSources || [])) }
 
         if (data.tags !== undefined) {
             updateFields.push('tags = ?')

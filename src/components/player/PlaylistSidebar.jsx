@@ -11,7 +11,7 @@ import { playlistDisplay } from '../../utils/playlistDisplay'
 
 const YouTubeImportModal = lazy(() => import('../course/YouTubeImportModal'))
 const EditModuleModal = lazy(() => import('./EditModuleModal'))
-const NotesPanel = lazy(() => import('./NotesPanel'))
+const TranscriptPanel = lazy(() => import('./TranscriptPanel'))
 const BulkEditPlaylist = lazy(() => import('./BulkEditPlaylist'))
 const AISummaryPanel = lazy(() => import('./AISummaryPanel'))
 
@@ -391,13 +391,13 @@ function PlaylistSidebar({
                             Playlist
                         </button>
                         <button
-                            onClick={() => setActiveTab('notes')}
-                            className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'notes'
+                            onClick={() => setActiveTab('transcript')}
+                            className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'transcript'
                                 ? 'border-blue-600 text-primary-fg dark:border-white dark:text-white'
                                 : 'border-transparent text-light-text-secondary dark:text-dark-text-secondary hover:text-light-text-primary dark:hover:text-dark-text-primary'
                                 }`}
                         >
-                            Notes
+                            Transcription
                         </button>
                         <button
                             onClick={() => setActiveTab('ai')}
@@ -444,11 +444,11 @@ function PlaylistSidebar({
                     </div>
 
                     {/* Notes Tab */}
-                    <div className={`flex-1 overflow-hidden flex-col ${activeTab === 'notes' ? 'flex' : 'hidden'}`}>
+                    <div className={`flex-1 overflow-hidden flex-col ${activeTab === 'transcript' ? 'flex' : 'hidden'}`}>
                         <div className="h-full overflow-y-auto">
-                            {activeTab === 'notes' && (
+                            {activeTab === 'transcript' && (
                                 <Suspense fallback={null}>
-                                    <TimestampPanel component={NotesPanel} playbackClock={playbackClock}
+                                    <TimestampPanel component={TranscriptPanel} playbackClock={playbackClock}
                                         video={currentVideo}
                                         courseId={courseId}
                                         onSeek={onSeek}
