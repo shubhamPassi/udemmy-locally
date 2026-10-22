@@ -11,6 +11,18 @@ export function captionFontSize(size, height) {
     return Math.round(Math.max(14, Math.min(size * 1.25, size * Math.max(0.65, (height || 540) / 540))))
 }
 
+export function captionPlacement(frame, controlsTop, visible, videoWidth=0, videoHeight=0) {
+    if (!visible) return { snapToLines: true, line: -1, lineAlign: 'start' }
+    const height=frame.height || 540
+    const scale=videoWidth>0&&videoHeight>0 ? Math.min((frame.width || videoWidth)/videoWidth,height/videoHeight) : 1
+    const pictureHeight=videoHeight>0 ? videoHeight*scale : height
+    const pictureTop=(frame.top || 0)+(height-pictureHeight)/2
+    const top=Number.isFinite(controlsTop)&&controlsTop>=(frame.top || 0) ? controlsTop : (frame.top || 0)+height-96
+    // Anchor the *bottom* of the whole caption above the controls, rather than
+    // guessing a line count (which fails for multiline or resized captions).
+    return { snapToLines: false, line: Math.max(5,Math.min(95,(top-12-pictureTop)/pictureHeight*100)), lineAlign: 'end' }
+}
+
 export function balancedCaption(text) {
     const clean = String(text || '').replace(/\s+/g,' ').trim()
     if (clean.length <= 54) return clean

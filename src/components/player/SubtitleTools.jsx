@@ -4,7 +4,7 @@ import {MessageSquare,Upload,Settings,Check,X,ChevronDown} from 'lucide-react'
 import {parseSubtitles} from '../../utils/subtitles'
 import {readProgressValue,writeProgressValue} from '../../utils/progressStorage.js'
 import { loadLessonTranscript, needsTranscriptRefresh } from '../../utils/lessonTranscript.js'
-import { balancedCaption, captionAppearance, captionFontSize, defaultCaptionAppearance } from '../../utils/captionAppearance.js'
+import { balancedCaption, captionAppearance, captionFontSize, captionPlacement, defaultCaptionAppearance } from '../../utils/captionAppearance.js'
 
 function savedAppearance(){
     try{return captionAppearance(JSON.parse(localStorage.getItem('tutin_caption_appearance')))}catch{return {...defaultCaptionAppearance}}
@@ -62,14 +62,18 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
                 appliedCues.current=cues
             }
             const visible=target?.closest('[data-controls-visible]')?.dataset.controlsVisible!=='false'
-            for(const cue of [...(track.cues||[])])cue.line=visible?-3:-1
+            const bar=host.current?.querySelector('[data-player-controls-bar]')
+            const placement=captionPlacement(video.getBoundingClientRect(),bar?.getBoundingClientRect().top,visible,video.videoWidth,video.videoHeight)
+            for(const cue of [...(track.cues||[])])Object.assign(cue,placement)
             track.mode=enabledRef.current&&cues.length?'showing':'disabled'
         }
         attach()
-        const measure=()=>{const media=host.current?.querySelector('video');const height=media?.getBoundingClientRect().height;if(height>0)setVideoHeight(height)}
+        const measure=()=>{const media=host.current?.querySelector('video');const height=media?.getBoundingClientRect().height;if(height>0)setVideoHeight(height);attach()}
         measure()
         const resize=typeof ResizeObserver!=='undefined'?new ResizeObserver(measure):null
         if(host.current)resize?.observe(host.current)
+        const bar=host.current?.querySelector('[data-player-controls-bar]')
+        if(bar)resize?.observe(bar)
         window.addEventListener('resize',measure);document.addEventListener('fullscreenchange',measure)
         const observer=new MutationObserver(()=>{attach();measure()})
         if(host.current)observer.observe(host.current,{childList:true,subtree:true,attributes:true,attributeFilter:['data-controls-visible']})
