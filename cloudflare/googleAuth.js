@@ -26,15 +26,19 @@ export async function readGoogleSession(value,env,purpose){
 }
 function configured(env){return !!(env.GOOGLE_OAUTH_CLIENT_ID&&env.GOOGLE_OAUTH_CLIENT_SECRET&&env.GOOGLE_SESSION_SECRET?.length>=32)}
 async function tokenRequest(env,fields){
-    const result=await fetch('https://oauth2.googleapis.com/token',{method:'POST',redirect:'error',signal:AbortSignal.timeout(10000),headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env.GOOGLE_OAUTH_CLIENT_ID,client_secret:env.GOOGLE_OAUTH_CLIENT_SECRET,...fields})})
+    let result
+    // Workers supports manual/follow only. Never follow redirects carrying credentials.
+    try{result=await fetch('https://oauth2.googleapis.com/token',{method:'POST',redirect:'manual',signal:AbortSignal.timeout(10000),headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env.GOOGLE_OAUTH_CLIENT_ID,client_secret:env.GOOGLE_OAUTH_CLIENT_SECRET,...fields})})}
+    catch{const error=Error('Google token service could not be reached.');error.oauthCode='token_network_error';throw error}
     const value=await result.json().catch(()=>({}))
-    if(!result.ok||!value.access_token){const error=Error('Google connection could not be renewed.');error.revoked=value.error==='invalid_grant';throw error}
+    if(!result.ok||!value.access_token){const error=Error('Google connection could not be renewed.');error.revoked=value.error==='invalid_grant';error.oauthCode=['invalid_client','invalid_grant','redirect_uri_mismatch','unauthorized_client','invalid_scope','invalid_request'].includes(value.error)?value.error:'token_service_unavailable';throw error}
     return value
 }
-function callbackPage(origin,ok,attempt){
+function callbackPage(origin,ok,attempt,errorCode=''){
     const nonce=random()
     const payload=JSON.stringify({type:'tutin-google-connected',ok,attempt}).replace(/</g,'\\u003c')
-    return new Response(`<!doctype html><meta charset="utf-8"><title>TutIn Google connection</title><p>${ok?'Google Drive connected. You can close this window.':'Google connection failed. Close this window and try again.'}</p><script nonce="${nonce}">if(window.opener){window.opener.postMessage(${payload},${JSON.stringify(origin)});window.close()}</script>`,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Referrer-Policy':'no-referrer','Content-Security-Policy':`default-src 'none'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'`}})
+    const messages={invalid_client:'Google sign-in configuration needs repair. Please contact the app owner.',invalid_grant:'This sign-in link expired or was already used. Close this window and connect again.',redirect_uri_mismatch:'Google sign-in callback settings do not match this website.',unauthorized_client:'Google has not authorized this sign-in client.',invalid_scope:'Google did not accept the requested Drive permission.',token_service_unavailable:'Google could not complete sign-in. Close this window and try again.'}
+    return new Response(`<!doctype html><meta charset="utf-8"><title>TutIn Google connection</title><p>${ok?'Google Drive connected. You can close this window.':messages[errorCode]||'Google connection failed. Close this window and try again.'}</p>${errorCode?'<p>Reference: '+errorCode+'</p>':''}<script nonce="${nonce}">if(window.opener){window.opener.postMessage(${payload},${JSON.stringify(origin)});${ok?'window.close()':''}}</script>`,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Referrer-Policy':'no-referrer','Content-Security-Policy':`default-src 'none'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'`}})
 }
 
 export async function googleAuth(request,env,context){
@@ -58,7 +62,9 @@ export async function googleAuth(request,env,context){
         if(path==='/api/google/auth/callback'){
             const saved=await readGoogleSession(readCookie(request,stateCookie),env,origin+':state')
             if(!saved||saved.state!==url.searchParams.get('state')||!url.searchParams.get('code')||url.searchParams.has('error'))return callbackPage(origin,false,saved?.attempt||'')
-            const tokens=await tokenRequest(env,{grant_type:'authorization_code',code:url.searchParams.get('code'),redirect_uri:origin+'/api/google/auth/callback',code_verifier:saved.verifier})
+            let tokens
+            try{tokens=await tokenRequest(env,{grant_type:'authorization_code',code:url.searchParams.get('code'),redirect_uri:origin+'/api/google/auth/callback',code_verifier:saved.verifier})}
+            catch(error){return callbackPage(origin,false,saved.attempt,error.oauthCode||'token_service_unavailable')}
             if(!tokens.refresh_token||!String(tokens.scope||'').split(' ').includes(scope))return callbackPage(origin,false,saved.attempt)
             const payload={refreshToken:tokens.refresh_token,token:tokens.access_token,expiresAt:Date.now()+Math.min(3600,Number(tokens.expires_in)||3600)*1000,connectionId:saved.attempt,exp:Date.now()+maxAge*1000}
             const encrypted=await sealGoogleSession(payload,env,origin+':session')

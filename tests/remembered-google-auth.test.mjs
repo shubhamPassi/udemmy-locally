@@ -7,9 +7,27 @@ const scope='https://www.googleapis.com/auth/drive.readonly'
 const cookieName='__Host-tutin-drive-session'
 const sessionRequest=cookie=>new Request(origin+'/api/google/auth/session',{headers:{Cookie:cookie,'X-TutIn-Session':'1'}})
 
+test('callback token failures show safe actionable errors without leaking Google response data',async()=>{
+ const previous=globalThis.fetch
+ try{
+  for(const code of ['invalid_client','invalid_grant','redirect_uri_mismatch','untrusted-error']){
+   const start=await googleAuth(new Request(origin+'/api/google/auth/start?attempt=attempt123456789'),env)
+   const state=new URL(start.headers.get('location')).searchParams.get('state')
+   globalThis.fetch=async()=>Response.json({error:code,error_description:'private-client-secret-and-authorization-code'},{status:400})
+   const result=await googleAuth(new Request(origin+'/api/google/auth/callback?state='+state+'&code=private-code',{headers:{Cookie:start.headers.get('set-cookie').split(';')[0]}}),env)
+   const html=await result.text()
+   assert.match(result.headers.get('content-type'),/text\/html/)
+   assert.ok(html.includes('Reference: '+(code==='untrusted-error'?'token_service_unavailable':code)))
+   assert.ok(!html.includes('private-client-secret'));assert.ok(!html.includes('private-code'))
+   assert.ok(!html.includes('window.close()'));assert.equal(result.headers.get('set-cookie'),null)
+  }
+ }finally{globalThis.fetch=previous}
+})
+
 test('remembered Google flow binds state and PKCE, encrypts persistent cookies, restores and renews without media requests',async()=>{
  const previous=globalThis.fetch,calls=[]
  globalThis.fetch=async(url,options)=>{
+  assert.equal(options.redirect,'manual','OAuth credentials must not follow redirects; Workers does not support redirect:error')
   calls.push({url,body:new URLSearchParams(options.body)})
   if(String(url).endsWith('/revoke'))return new Response('')
   const refresh=calls.at(-1).body.get('grant_type')==='refresh_token'
