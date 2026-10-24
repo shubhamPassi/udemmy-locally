@@ -98,3 +98,7 @@ docs/showcase.psd
 *.asar
 *.blockmap
 win-unpacked*/
+
+# Generated per-video preview bundles
+*.tutin-previews.json
+!scripts/generate-drive-previews.py

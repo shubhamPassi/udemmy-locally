@@ -538,3 +538,7 @@ Deployment requires two secrets via Wrangler: `GOOGLE_OAUTH_CLIENT_SECRET` (the 
 - `https://tutin-learning.passishubham1.workers.dev/api/google/auth/callback`
 
 No KV, database, media storage, or video proxy is needed for this flow. The cookie is origin-bound and encrypted/authenticated with the Worker secret. OAuth state, PKCE, same-origin session headers and disconnect checks protect the flow. Refresh-token revocation and provider errors clear or pause renewal without inventing playback time. Cookie expiry is an upper limit, not a guarantee: Google OAuth apps in **Testing** issue Drive refresh tokens expiring after seven days. User revocation and Google's account policies can also require reconnection. See [Google's web-server OAuth guide](https://developers.google.com/identity/protocols/oauth2/web-server) and [refresh-token expiration](https://developers.google.com/identity/protocols/oauth2/#expiration).
+
+### Drive timeline previews
+
+Pre-generated images provide cached previews every ten seconds without extra video streams. See [setup and generation instructions](docs/DRIVE-PREVIEWS.md). Existing Drive lessons need a one-time sidecar upload.

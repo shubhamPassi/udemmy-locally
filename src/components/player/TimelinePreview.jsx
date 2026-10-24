@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { warmTimelinePreviews, previewBucket, formatPreviewTime, canPrepareTimeline, previewWorkload } from '../../utils/timelinePreview'
 import { previewCacheKey, loadPreviewFrames, storePreviewFrames } from '../../utils/previewCache.js'
 import { isDriveVideo } from '../../utils/hostedVideoPolicy.js'
+import { loadDrivePreviews } from '../../utils/drivePreviews.js'
 
 function previewVideo(source, crossOrigin) {
     const video = document.createElement('video')
@@ -39,7 +40,7 @@ function frameCapture() {
     }
 }
 
-export default function TimelinePreview({ mediaRef, position, duration, video, prepareFrames = true }) {
+export default function TimelinePreview({ mediaRef, position, duration, video, prepareFrames = true, googleApiKey = '' }) {
     const background = useRef(null)
     const [, setCacheVersion] = useState(0)
     const [loadedMedia, setLoadedMedia] = useState(null)
@@ -66,6 +67,43 @@ export default function TimelinePreview({ mediaRef, position, duration, video, p
     const sampleTime = position ? previewBucket(position.time, previewDuration) : null
     const hoveredBucket = useRef(sampleTime)
     hoveredBucket.current = sampleTime
+    useEffect(() => {
+        if (!drive || !source || !previewDuration) return
+        const media = mediaRef.current
+        let disposed = false, loading = false, completed = false, timer, controller
+        const publish = frames => {
+            if (disposed || !frames.length) return
+            const cache = new Map(frames.map(([time,image]) => [time,{image}]))
+            background.current = {source,duration:previewDuration,cache:{get:time=>cache.get(time)}}
+            setCacheVersion(version=>version+1)
+        }
+        const ready = () => canPrepareTimeline(media,document.hidden,30)
+        const start = async () => {
+            if (loading || completed || disposed || !ready()) return
+            loading = true
+            controller = new AbortController()
+            try {
+                const cached = await loadPreviewFrames(cacheIdentity).catch(()=>[])
+                publish(cached)
+                if (cached.length === Math.ceil(previewDuration/10)) { completed = true; return }
+                const frames = await loadDrivePreviews(video,previewDuration,googleApiKey,controller.signal)
+                if (disposed) return
+                publish(frames)
+                await storePreviewFrames(cacheIdentity,frames).catch(()=>{})
+                completed = true
+            } catch { if (!controller.signal.aborted) completed = true } // A missing sidecar must never affect playback.
+            finally { loading = false }
+        }
+        const schedule = () => {
+            if (!ready()) { clearTimeout(timer);timer=null;controller?.abort();return }
+            if (!timer && !loading && !completed) timer=setTimeout(()=>{timer=null;void start()},1500)
+        }
+        const events=['canplay','progress','pause','seeked','timeupdate','waiting','stalled','seeking','error']
+        events.forEach(event=>media.addEventListener(event,schedule))
+        document.addEventListener('visibilitychange',schedule)
+        schedule()
+        return () => { disposed=true;clearTimeout(timer);controller?.abort();events.forEach(event=>media.removeEventListener(event,schedule));document.removeEventListener('visibilitychange',schedule);background.current=null }
+    },[drive,source,previewDuration,mediaRef,cacheIdentity,video,googleApiKey])
     useEffect(() => {
         if (!prepareFrames || drive || !source || !previewDuration) return
         const media = mediaRef.current
