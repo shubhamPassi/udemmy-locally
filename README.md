@@ -542,3 +542,7 @@ No KV, database, media storage, or video proxy is needed for this flow. The cook
 ### Drive timeline previews
 
 Pre-generated images provide cached previews every ten seconds without extra video streams. See [setup and generation instructions](docs/DRIVE-PREVIEWS.md). Existing Drive lessons need a one-time sidecar upload.
+
+### Drag a local course folder onto Home
+
+On the hosted site in desktop Chrome or Edge, drop one course folder anywhere on Home. TutIn scans nested folders for supported videos and opens the same review screen as Add Course. Nothing is added until you confirm; video files stay on your computer. Empty folders and individual files are rejected. Other browsers and the companion-server version can use the existing Add Course folder picker.

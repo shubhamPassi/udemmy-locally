@@ -10,6 +10,7 @@ import {useNotification} from '../contexts/contextHooks.js'
 import {useImport} from '../contexts/contextHooks.js'
 import CourseCard from '../components/course/CourseCard'
 import LoadingSpinner from '../components/common/LoadingSpinner'
+import LocalCourseDrop from '../components/course/LocalCourseDrop.jsx'
 import { getDriveVideoUrl } from '../utils/googleDrive'
 import * as api from '../utils/api'
 
@@ -327,7 +328,7 @@ const saveCourseStructureToDatabaseEvent=useEventCallback(saveCourseStructureToD
 
     // ─── Import handlers via ImportContext (replaces window.__homePageHandlers) ───
     const {
-        pendingImport, clearImport,
+        pendingImport, clearImport, dispatchImport,
         pendingYouTube, clearYouTube,
         pendingGoogleDrive, clearGoogleDrive,
         pendingExternalLink, clearExternalLink,
@@ -580,6 +581,7 @@ const saveCourseStructureToDatabaseEvent=useEventCallback(saveCourseStructureToD
 
     return (
         <div className="container mx-auto px-4 py-6">
+            <LocalCourseDrop onCourse={dispatchImport} onError={message=>showNotification(message,'error')} autoDetectThumbnails={settings.autoDetectThumbnails} disabled={!!(importData || editingCourse || remoteSyncCourse || syncPreview || pendingImport)} />
             {/* Filter Tabs + Sort/View Controls */}
             {courses.length > 0 && (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
