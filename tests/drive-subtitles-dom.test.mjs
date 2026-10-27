@@ -70,6 +70,13 @@ test('Drive subtitle menu loads matching imported captions and keeps them off un
   assert.ok(document.querySelector('[data-player-subtitles]'));assert.equal(track.mode,'hidden')
   await api.act(async()=>{document.querySelector('[data-controls-visible]').dataset.controlsVisible='false'})
   assert.equal(document.querySelector('[data-player-subtitles]'),null);assert.equal(track.mode,'showing')
+  await api.act(async()=>root.render(api.element(api.Subtitles,{videoId:'next-lesson',video:{driveFileId:'video0002'},googleApiKey:'test-key',host:{current:document.getElementById('player')}})))
+  assert.equal(track.mode,'showing','Next lesson should automatically load captions and preserve On')
+  assert.ok(api.saved.get('tutin_subtitles_next-lesson'))
+  await api.act(async()=>document.querySelector('[aria-label="Subtitle settings"]').click())
+  await api.act(async()=>[...document.querySelectorAll('button')].find(button=>button.textContent==='Off').click())
+  await api.act(async()=>root.render(api.element(api.Subtitles,{videoId:'third-lesson',video:{driveFileId:'video0003'},googleApiKey:'test-key',host:{current:document.getElementById('player')}})))
+  assert.equal(track.mode,'disabled','Explicit Off must also carry to the next lesson')
 
  }finally{if(root)await api.act(async()=>root.unmount());dom.window.close();for(const[key,value]of saved)value?Object.defineProperty(globalThis,key,value):delete globalThis[key];rmSync(dir,{recursive:true,force:true})}
 })

@@ -6,12 +6,14 @@ import {readProgressValue,writeProgressValue} from '../../utils/progressStorage.
 import { loadLessonTranscript, needsTranscriptRefresh } from '../../utils/lessonTranscript.js'
 import { balancedCaption, captionAppearance, captionFontSize, captionPlacement, defaultCaptionAppearance } from '../../utils/captionAppearance.js'
 import PlayerSubtitleOverlay from './PlayerSubtitleOverlay.jsx'
+import { playerPreferences, savePlayerPreferences } from '../../utils/playerPreferences.js'
+import useEventCallback from '../../hooks/useEventCallback.js'
 
 function savedAppearance(){
     try{return captionAppearance(JSON.parse(localStorage.getItem('tutin_caption_appearance')))}catch{return {...defaultCaptionAppearance}}
 }
 export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardShortcuts=true}){
-    const [cues,setCues]=useState([]),[enabled,setEnabled]=useState(false),[open,setOpen]=useState(false),[error,setError]=useState('')
+    const [cues,setCues]=useState([]),[enabled,setEnabled]=useState(()=>playerPreferences().subtitles),[open,setOpen]=useState(false),[error,setError]=useState('')
     const [slot,setSlot]=useState(null),[appearance,setAppearance]=useState(savedAppearance)
     const [showAppearance,setShowAppearance]=useState(false),[panelHeight,setPanelHeight]=useState(360)
     const [loadingDrive,setLoadingDrive]=useState(false),[driveAttempt,setDriveAttempt]=useState(0)
@@ -20,13 +22,14 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
     const driveChecked=useRef(null)
     const input=useRef(null),menu=useRef(null),importedTrack=useRef(null),trackVideo=useRef(null),appliedCues=useRef(null),enabledRef=useRef(enabled)
     enabledRef.current=enabled
+    const chooseEnabled=useEventCallback(value=>{savePlayerPreferences({subtitles:value});setEnabled(value)})
     useEffect(()=>{
-        setError('');setOpen(false);setShowAppearance(false);setEnabled(false)
+        setError('');setOpen(false);setShowAppearance(false);setEnabled(playerPreferences().subtitles)
         driveChecked.current=null
         try{const stored=JSON.parse(readProgressValue('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{setCues([])}
     },[videoId])
     useEffect(()=>{
-        if (!open || (cues.length && !needsTranscriptRefresh(video,cues)) || driveChecked.current === `${videoId}:${driveAttempt}` || !(video?.driveFileId || /drive\.google\.com/.test(video?.url || ''))) return
+        if ((!open && !enabled) || (cues.length && !needsTranscriptRefresh(video,cues)) || driveChecked.current === `${videoId}:${driveAttempt}` || !(video?.driveFileId || /drive\.google\.com/.test(video?.url || ''))) return
         driveChecked.current = `${videoId}:${driveAttempt}`
         const controller = new AbortController()
         setLoadingDrive(true); setError('')
@@ -36,7 +39,7 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
             .catch(err => { if (!controller.signal.aborted) setError(err.message) })
             .finally(() => { clearTimeout(timeout); if (!controller.signal.aborted) setLoadingDrive(false) })
         return () => { clearTimeout(timeout); controller.abort(); setLoadingDrive(false); driveChecked.current=null }
-    },[open,videoId,video,googleApiKey,cues,driveAttempt])
+    },[open,enabled,videoId,video,googleApiKey,cues,driveAttempt])
     useEffect(()=>{
         const refresh=event=>{if(event.detail?.videoId!==videoId)return;try{const stored=JSON.parse(readProgressValue('tutin_subtitles_'+videoId));setCues(Array.isArray(stored)?stored:[])}catch{}}
         window.addEventListener('tutin-subtitles-changed',refresh)
@@ -106,11 +109,11 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
             if(event.key.toLowerCase()!=='c'||event.ctrlKey||event.metaKey||event.altKey||event.repeat)return
             if(event.target.closest?.('input,textarea,select,[contenteditable="true"],[role="dialog"],[role="alertdialog"]'))return
             event.preventDefault();event.stopImmediatePropagation()
-            if(cues.length)setEnabled(previous=>!previous)
+            if(cues.length)chooseEnabled(!enabledRef.current)
             else setOpen(previous=>!previous)
         }
         window.addEventListener('keydown',keydown,true);return()=>window.removeEventListener('keydown',keydown,true)
-    },[keyboardShortcuts,cues.length,slot])
+    },[keyboardShortcuts,cues.length,slot,chooseEnabled])
     function changeAppearance(updates){const next={...appearance,...updates};setAppearance(next);try{localStorage.setItem('tutin_caption_appearance',JSON.stringify(next))}catch{}}
     async function upload(event){
         const file=event.target.files?.[0];if(!file)return
@@ -132,8 +135,8 @@ export default function SubtitleTools({videoId,video,googleApiKey,host,keyboardS
         {open&&<div role="dialog" aria-label="Subtitle settings" style={{maxHeight:panelHeight}} className="absolute bottom-14 right-0 z-40 w-72 max-w-[calc(100vw-32px)] overflow-y-auto rounded-md border border-white/10 bg-black/95 text-sm text-white shadow-2xl">
             <div className="flex items-center justify-between px-5 pt-4 pb-2"><span className="text-base font-semibold tracking-wide">Subtitles</span><button onClick={()=>setOpen(false)} className="rounded p-1 text-neutral-400 hover:text-white" aria-label="Close subtitle settings"><X className="h-4 w-4"/></button></div>
             <div role="group" aria-label="Subtitle selection" className="pb-2">
-                <button aria-pressed={!enabled||!cues.length} onClick={()=>{setEnabled(false);setOpen(false)}} className="flex w-full items-center gap-3 px-5 py-2.5 text-left hover:bg-white/10"><span className="w-4">{(!enabled||!cues.length)&&<Check className="h-4 w-4"/>}</span><span className={!enabled||!cues.length?'font-semibold text-white':'text-neutral-300'}>Off</span></button>
-                {cues.length>0&&<button aria-pressed={enabled} onClick={()=>{setEnabled(true);setOpen(false)}} className="flex w-full items-center gap-3 px-5 py-2.5 text-left hover:bg-white/10"><span className="w-4">{enabled&&<Check className="h-4 w-4"/>}</span><span className={enabled?'font-semibold text-white':'text-neutral-300'}>On</span></button>}
+                <button aria-pressed={!enabled||!cues.length} onClick={()=>{chooseEnabled(false);setOpen(false)}} className="flex w-full items-center gap-3 px-5 py-2.5 text-left hover:bg-white/10"><span className="w-4">{(!enabled||!cues.length)&&<Check className="h-4 w-4"/>}</span><span className={!enabled||!cues.length?'font-semibold text-white':'text-neutral-300'}>Off</span></button>
+                {cues.length>0&&<button aria-pressed={enabled} onClick={()=>{chooseEnabled(true);setOpen(false)}} className="flex w-full items-center gap-3 px-5 py-2.5 text-left hover:bg-white/10"><span className="w-4">{enabled&&<Check className="h-4 w-4"/>}</span><span className={enabled?'font-semibold text-white':'text-neutral-300'}>On</span></button>}
             </div>
             <button onClick={()=>input.current.click()} className="flex w-full items-center gap-3 border-t border-white/10 px-5 py-3 text-left text-xs text-neutral-300 hover:bg-white/10"><Upload className="h-4 w-4"/>Import subtitle file</button>
             <button aria-expanded={showAppearance} onClick={()=>setShowAppearance(!showAppearance)} className="flex w-full items-center gap-3 border-t border-white/10 px-5 py-3 text-left text-xs text-neutral-300 hover:bg-white/10"><Settings className="h-4 w-4"/>Caption appearance<ChevronDown className={`ml-auto h-4 w-4 transition-transform ${showAppearance?'rotate-180':''}`}/></button>

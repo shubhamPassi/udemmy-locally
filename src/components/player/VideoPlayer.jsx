@@ -15,6 +15,7 @@ import ResumableEmbedPlayer from './ResumableEmbedPlayer'
 import { resumeTime, writePlaybackBookmark } from '../../utils/playbackBookmarks'
 import useStudyTime from '../../hooks/useStudyTime'
 import StreamPlayerControls from './StreamPlayerControls'
+import { playerPreferences } from '../../utils/playerPreferences.js'
 
 
 const VideoPlayer = forwardRef(function VideoPlayer({ video, onComplete, onNext, onPrevious, courseId, onTimeUpdate, autoPlay, onAspectRatioChange, onLocalAccessError }, ref) {
@@ -44,13 +45,13 @@ const changeSpeedEvent=useEventCallback(changeSpeed)
     const durationRef = useRef(duration)
     useEffect(() => { currentTimeRef.current = currentTime }, [currentTime])
     useEffect(() => { durationRef.current = duration }, [duration])
-    const [volume, setVolume] = useState(() => settings.volume)
-    const [isMuted, setIsMuted] = useState(false)
+    const [volume, setVolume] = useState(() => playerPreferences({volume:settings.volume}).volume)
+    const [isMuted, setIsMuted] = useState(() => playerPreferences().muted)
     const [, setIsFullscreen] = useState(false)
     const [showControls, setShowControls] = useState(true)
     const [, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
-    const [playbackSpeed, setPlaybackSpeed] = useState(() => settings.playbackSpeed)
+    const [playbackSpeed, setPlaybackSpeed] = useState(() => playerPreferences({rate:settings.playbackSpeed}).rate)
     const [showSpeedMenu, setShowSpeedMenu] = useState(false)
     const [isPiP, setIsPiP] = useState(false)
     const [showAutoPlayCountdown, setShowAutoPlayCountdown] = useState(false)

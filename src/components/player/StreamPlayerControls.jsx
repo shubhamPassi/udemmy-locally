@@ -5,6 +5,7 @@ import TimelinePreview from './TimelinePreview'
 import PlayerLearningTools from './PlayerLearningTools.jsx'
 import useEventCallback from '../../hooks/useEventCallback.js'
 import { timelinePosition } from '../../utils/timelinePreview'
+import { rememberMediaPreferences } from '../../utils/playerPreferences.js'
 
 export default function StreamPlayerControls({ mediaRef, containerRef, video, showLoadingIndicator = true, allowFramePreviews = true, googleApiKey = '' }) {
     const [state, setState] = useState({ time: 0, duration: 0, paused: true, muted: false, volume: 1, rate: 1, buffering: true })
@@ -55,14 +56,15 @@ export default function StreamPlayerControls({ mediaRef, containerRef, video, sh
     useEffect(() => {
         const media = mediaRef.current
         if (!media) return
+        const stopRemembering = rememberMediaPreferences(media)
         const sync = () => setState(previous => {
             const next = { time: media.currentTime, duration: Number.isFinite(media.duration) ? media.duration : 0, paused: media.paused, muted: media.muted, volume: media.volume, rate: media.playbackRate, buffering: !media.paused && media.readyState < 3 }
             return Math.floor(previous.time) === Math.floor(next.time) && Object.keys(next).filter(key => key !== 'time').every(key => next[key] === previous[key]) ? previous : next
         })
         const events = ['timeupdate', 'loadedmetadata', 'loadeddata', 'durationchange', 'play', 'playing', 'pause', 'ended', 'volumechange', 'ratechange', 'waiting', 'canplay', 'seeking', 'seeked', 'progress', 'stalled', 'emptied']
         events.forEach(event => media.addEventListener(event, sync)); sync()
-        return () => { events.forEach(event => media.removeEventListener(event, sync)); clearTimeout(hideTimer.current) }
-    }, [mediaRef])
+        return () => { stopRemembering();events.forEach(event => media.removeEventListener(event, sync)); clearTimeout(hideTimer.current) }
+    }, [mediaRef,video?.id])
     function reveal() {
         setVisible(true)
         clearTimeout(hideTimer.current)
