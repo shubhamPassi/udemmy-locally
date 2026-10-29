@@ -336,7 +336,7 @@ function PlaylistSidebar({
                                             {video.title}
                                         </button>
                                         {(!hideUpcomingDurations || isCompleted) && <div className="flex items-center gap-2 mt-0.5 text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                                            <span>{contentDuration(video.duration)}</span>
+                                            <span>{video.duration > 0 ? contentDuration(video.duration) : 'Duration unavailable'}</span>
                                         </div>}
                                     </div>
                                 </div></WindowedLesson>

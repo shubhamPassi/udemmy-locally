@@ -36,3 +36,16 @@ test('a failed sync rolls back its additions and metadata updates without touchi
  assert.equal(f.videos.length,2)
  assert.equal(f.videos[0].originalTitle,before[0].originalTitle);assert.equal(f.videos[0].lastWatchedPosition,42);assert.equal(f.course.customMetadata.keep,'value')
 })
+
+test('resync adds new duration metadata to course totals and repairs existing unknown lessons',async()=>{
+ const f=fixture()
+ f.videos[0].duration=0
+ f.incoming.modules[0].videos[0].duration=90
+ const result=await applyRemoteSync('course',planRemoteSync(f,f.incoming,source),f.store)
+ assert.equal(f.videos[0].duration,90);assert.equal(f.course.totalDuration,115)
+ assert.equal(f.course.totalVideos,3);assert.equal(result.unknownDurations,1)
+ assert.equal(f.videos[0].lastWatchedPosition,42);assert.equal(f.videos[0].isCompleted,true)
+ f.incoming.modules[0].videos[0].duration=0
+ await applyRemoteSync('course',planRemoteSync(f,f.incoming,source),f.store)
+ assert.equal(f.videos[0].duration,90);assert.equal(f.course.totalDuration,115,'Missing remote metadata must not erase known durations')
+})

@@ -7,6 +7,7 @@ const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'avi', 'mkv', 'ogg', 'm4v']
 import { fetchPublicImport } from './publicImport'
 import { IS_BROWSER_MODE } from './api'
 import { matchDriveSubtitles } from './driveSubtitles.js'
+import { driveMetadataAccess, driveFolderDurations } from './driveDurationMetadata.js'
 
 /**
  * Parse Google Drive URL to extract folder or file ID
@@ -102,7 +103,7 @@ export function isVideoFile(file) {
  * @returns {Promise<Object>} Course structure
  */
 export async function scanDriveFolder(folderId, apiKey) {
-    if (IS_BROWSER_MODE || !apiKey) return scanPublicDriveFolder(folderId)
+    if (IS_BROWSER_MODE || !apiKey) return scanPublicDriveFolder(folderId,false,apiKey)
     const files = await listFilesInFolder(folderId, apiKey)
 
     const folders = files.filter(f => f.mimeType === 'application/vnd.google-apps.folder')
@@ -187,23 +188,25 @@ export async function scanDriveFolder(folderId, apiKey) {
 
 // Public folder pages include the same file listing shown to signed-out visitors.
 // Keep each leaf folder as a module, including folders several levels deep.
-export async function scanPublicDriveFolder(folderId, fresh = false) {
+export async function scanPublicDriveFolder(folderId, fresh = false, apiKey = '') {
     const modules = [], visited = new Set()
+    const access = await driveMetadataAccess(apiKey)
     let rootName = 'Google Drive Course'
     async function visit(id, path = '', depth = 0) {
         if (visited.has(id)) return
         if (depth > 12 || visited.size >= 200) throw new Error('This folder collection is too large. Import one course folder at a time.')
         visited.add(id)
         const folder = await fetchPublicImport('drive', id, undefined, fresh)
+        const durations = await driveFolderDurations(id,access)
         if (!path) rootName = folder.name
-        const videos = folder.files.filter(isVideoFile).sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map((file, index) => ({ title: cleanVideoTitle(file.name), originalTitle: file.name, driveFileId: file.id, driveFolderId: id, subtitleSources: matchDriveSubtitles(file, folder.files), duration: 0, order: index }))
-        if (videos.length) modules.push({ title: path || 'Videos', originalTitle: path || 'Videos', videos, totalVideos: videos.length, totalDuration: 0 })
+        const videos = folder.files.filter(isVideoFile).sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map((file, index) => ({ title: cleanVideoTitle(file.name), originalTitle: file.name, driveFileId: file.id, driveFolderId: id, subtitleSources: matchDriveSubtitles(file, folder.files), duration: durations.get(file.id) || 0, order: index }))
+        if (videos.length) modules.push({ title: path || 'Videos', originalTitle: path || 'Videos', videos, totalVideos: videos.length, totalDuration: videos.reduce((sum,video)=>sum+video.duration,0) })
         for (const child of folder.files.filter(f => f.mimeType === 'application/vnd.google-apps.folder').sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
             await visit(child.id, path ? `${path} / ${child.name}` : child.name, depth + 1)
         }
     }
     await visit(folderId)
-    return { title: rootName, modules, totalVideos: modules.reduce((sum, mod) => sum + mod.totalVideos, 0), totalDuration: 0 }
+    return { title: rootName, modules, totalVideos: modules.reduce((sum, mod) => sum + mod.totalVideos, 0), totalDuration: modules.reduce((sum,mod)=>sum+mod.totalDuration,0) }
 }
 
 /**

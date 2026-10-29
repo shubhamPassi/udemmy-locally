@@ -15,7 +15,7 @@ export default function RemoteSyncModal({ course, onClose, onSynced }) {
         setBusy(true);setError('');setPreview(null)
         try {
             const source=parseRemoteSource(url)
-            const [content,incoming]=await Promise.all([getCourseContent(course.id),scanRemoteSource(source)])
+            const [content,incoming]=await Promise.all([getCourseContent(course.id),scanRemoteSource(source,settings.googleApiKey)])
             const next=planRemoteSync(content,incoming,source)
             // Remember only after confirming this source matches the course.
             // Applying lesson updates is a separate, optional action.
@@ -37,6 +37,7 @@ export default function RemoteSyncModal({ course, onClose, onSynced }) {
         <button disabled={busy||!url.trim()} onClick={scan} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{busy?'Working…':preview?'Scan again':'Scan for updates'}</button>
         {preview&&<div role="status" aria-live="polite" aria-label="Scan results" className="text-sm space-y-2"><h3 className="font-semibold">Scan complete</h3><p>{preview.additions.length} new videos · {preview.updates.length} existing videos to refresh · {preview.subtitleFiles} subtitle files</p><p>{preview.missing} unlisted videos will be kept. Subtitle and transcript text refreshes when the lesson is opened; unavailable YouTube captions are reported without interrupting playback.</p><button onClick={apply} disabled={busy} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">Apply updates</button></div>}</>}
         {result&&<p role="status">Synced: {result.added} new videos, {result.updated} refreshed lessons, {result.subtitleFiles} subtitle files linked.</p>}
+        {result?.unknownDurations>0&&<p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">{result.unknownDurations} video durations are still unavailable. For Drive courses, connect Google Drive in Settings and sync again. Newly uploaded videos may still be processing.</p>}
         {error&&<p role="alert" className="text-sm text-red-500">{error}</p>}
         <button disabled={busy} onClick={onClose} className="rounded border border-light-border dark:border-dark-border px-4 py-2">{result?'Done':'Cancel'}</button>
     </section></div>

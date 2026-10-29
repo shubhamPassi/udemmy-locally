@@ -37,10 +37,10 @@ export function planRemoteSync(content, incoming, source) {
     if (existing.size && !updates.length) throw Error('This source does not match any existing lessons. Choose the original course source.')
     return { source, modules, additions, updates, missing: [...existing.keys()].filter(key => !seen.has(key)).length, subtitleFiles: updates.reduce((sum,item) => sum+(item.incoming.subtitleSources?.length || 0),0)+additions.reduce((sum,item) => sum+(item.video.subtitleSources?.length || 0),0) }
 }
-export async function scanRemoteSource(source) {
+export async function scanRemoteSource(source, apiKey = '') {
     if (source.provider === 'drive') {
         const { scanPublicDriveFolder } = await import('./googleDrive.js')
-        return scanPublicDriveFolder(source.id, true)
+        return scanPublicDriveFolder(source.id, true, apiKey)
     }
     const result = await fetchPublicImport('youtube', source.id, source.type, true)
     return { modules: [{ title: 'Videos', originalTitle: 'Videos', videos: result.videos }] }
@@ -90,7 +90,7 @@ export async function applyRemoteSync(courseId, preview, store = db) {
         }
         const refreshed = await store.getCourseContent(courseId)
         await store.updateCourse(courseId, { totalVideos: refreshed.videos.length, totalDuration: refreshed.videos.reduce((sum,video)=>sum+(Number(video.duration)||0),0), customMetadata: { ...content.course.customMetadata, remoteSource: plan.source, lastRemoteSyncAt: revision } })
-        return { added: addedVideos.length, updated: plan.updates.length, kept: plan.missing, subtitleFiles: plan.subtitleFiles }
+        return { added: addedVideos.length, updated: plan.updates.length, kept: plan.missing, subtitleFiles: plan.subtitleFiles, unknownDurations: refreshed.videos.filter(video=>!(Number(video.duration)>0)).length }
     } catch (error) {
         let incomplete = false
         for (const item of changed.reverse()) try { await store.updateVideo(item.id,item.before) } catch { incomplete = true }
